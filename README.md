@@ -95,6 +95,32 @@ Runs the unit tests (scoring, answer deadline and grace, clock offset, join code
 
 Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
 
+### Adaptive mode
+
+Every live session now keeps a skill rating per student (Elo) and a per-topic mastery estimate (Bayesian knowledge tracing), updated each time a question closes. Turning on **Adaptive mode** for a quiz (checkbox in the quiz editor, plus an optional number of rounds) changes only which questions students get: in synchronized rounds each student receives their own question, chosen by their current rating from the approved questions they have not seen. Scoring and the leaderboard stay points-based, and ratings and mastery are never sent to students. The host console shows a table with each student's rating and last question.
+
+Constants (all exported from `packages/shared`):
+
+| Constant              | Value                                                                         |
+| --------------------- | ----------------------------------------------------------------------------- |
+| Elo K factor          | 32 for both students and questions                                            |
+| Rating bounds         | 100 to 3000, students start at 1000                                           |
+| Starting question Elo | easy 800, medium 1000, hard 1200                                              |
+| Speed range           | a correct answer scores 0.9 (at the deadline) to 1.0 (instant); wrong scores 0 |
+| Selection sigma       | 200 (weight `exp(-(Q-P)^2 / (2*200^2))`, floor 0.01)                          |
+| BKT                   | p_init 0.3, p_learn 0.15, p_slip 0.1, p_guess 0.2                              |
+| Default rounds        | min(10, approved questions), never more than the approved count               |
+
+Run `supabase db reset` to apply migration 0005 (question ratings, the atomic rating function, rating snapshot columns on responses).
+
+See it work without a database:
+
+```sh
+npm run adaptive:sim
+```
+
+It simulates 10 rounds over 30 questions for a strong (ability 1400) and a weak (ability 600) student, prints both difficulty sequences and rating trajectories, and a summary over 200 seeds. It is not run in CI.
+
 ### AI question generation
 
 Hosts can generate multiple-choice questions into a quiz from a topic or a pasted passage (the "Generate with AI" panel in the quiz editor). Generated questions are saved as **pending** and tagged "AI generated". Review, edit and approve them under "Needs review"; only approved questions can ever be used in a live session.

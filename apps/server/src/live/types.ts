@@ -1,10 +1,19 @@
-import type { Participant, ServerToClientEvents, Session, SocketErrorCode } from '@quizup/shared';
+import type {
+  Difficulty,
+  Participant,
+  ServerToClientEvents,
+  Session,
+  SocketErrorCode,
+} from '@quizup/shared';
 
 export interface LiveQuestion {
   id: string;
   stem: string;
   options: string[];
   correctIndex: number;
+  topic: string;
+  difficulty: Difficulty;
+  eloRating: number;
 }
 
 export interface NewParticipantInput {
@@ -32,7 +41,10 @@ export interface SessionUpdate {
 }
 
 export interface LiveRepository {
-  findOwnedQuiz: (quizId: string, hostId: string) => Promise<{ id: string; title: string } | null>;
+  findOwnedQuiz: (
+    quizId: string,
+    hostId: string,
+  ) => Promise<{ id: string; title: string; settings: unknown } | null>;
   listApprovedQuestions: (quizId: string) => Promise<LiveQuestion[]>;
   loadQuestionsByIds: (questionIds: string[]) => Promise<(LiveQuestion & { approved: boolean })[]>;
   createSession: (input: {
@@ -44,6 +56,19 @@ export interface LiveRepository {
   updateSession: (sessionId: string, update: SessionUpdate) => Promise<void>;
   insertParticipant: (input: NewParticipantInput) => Promise<Participant | 'name_taken'>;
   insertResponse: (input: NewResponseInput) => Promise<'inserted' | 'duplicate'>;
+  recordResponseRatings: (input: {
+    participantId: string;
+    questionId: string;
+    participantEloBefore: number;
+    questionEloBefore: number;
+  }) => Promise<void>;
+  applyQuestionRatingDelta: (questionId: string, delta: number) => Promise<number>;
+  updateParticipantElo: (participantId: string, elo: number) => Promise<void>;
+  upsertKnowledgeState: (input: {
+    participantId: string;
+    topic: string;
+    pMastery: number;
+  }) => Promise<void>;
   endAllNonEndedSessions: (endedAtIso: string) => Promise<void>;
 }
 

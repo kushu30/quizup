@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { quizSettingsSchema } from './adaptive.js';
 import { difficultySchema, quizModeSchema } from './enums.js';
 import { QUESTION_OPTION_COUNT, questionSchema, quizSchema } from './tables.js';
 
@@ -12,12 +13,12 @@ const uuidSchema = z.string().uuid();
 export const quizFieldsSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(120),
   mode: quizModeSchema,
-  settings: z.record(z.string(), z.unknown()),
+  settings: quizSettingsSchema,
 });
 
 export const quizCreateSchema = quizFieldsSchema.extend({
   mode: quizModeSchema.default('live'),
-  settings: z.record(z.string(), z.unknown()).default({}),
+  settings: quizSettingsSchema.default({}),
 });
 export type QuizCreateInput = z.input<typeof quizCreateSchema>;
 

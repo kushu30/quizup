@@ -1,16 +1,28 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import {
   ANSWER_GRACE_MS,
+  DEFAULT_BKT_PARAMS,
+  INITIAL_PLAYER_RATING,
   LEADERBOARD_SIZE,
   QUESTION_OPTION_COUNT,
   QUESTION_START_DELAY_MS,
-  computePoints,
+  bktUpdate,
+  clampRating,
   clampResponseMs,
+  computePoints,
   generateJoinCode,
   getAnswerWindowStatus,
+  normalizeTopicKey,
+  pickWeighted,
+  quizSettingsSchema,
+  resolveAdaptiveRounds,
+  updateRatings,
   type Ack,
+  type AdaptiveRow,
   type AnswerSubmitPayload,
+  type Difficulty,
   type LeaderboardEntry,
+  type RandomSource,
   type QuestionResultPayload,
   type RoomJoinAck,
   type RoomStatePayload,
@@ -20,6 +32,7 @@ import {
   type StudentJoinPayload,
   type YourQuestionResult,
 } from '@quizup/shared';
+import { createCryptoRandomSource } from './randomSource.js';
 import {
   EngineError,
   type LiveQuestion,
@@ -40,6 +53,7 @@ export interface LiveEngineOptions {
   hostRefreshIntervalMs?: number;
   endedSessionRetentionMs?: number;
   randomIndex?: (exclusiveMax: number) => number;
+  random?: RandomSource;
 }
 
 interface AnswerRecord {
@@ -47,6 +61,12 @@ interface AnswerRecord {
   correct: boolean;
   points: number;
   responseMs: number;
+  answeredAtMs: number;
+}
+
+interface LastOutcome {
+  difficulty: Difficulty;
+  correct: boolean;
 }
 
 interface ParticipantState {
@@ -57,22 +77,38 @@ interface ParticipantState {
   connected: boolean;
   score: number;
   totalResponseMs: number;
+  elo: number;
   answers: Map<string, AnswerRecord>;
+  servedQuestionIds: Set<string>;
+  mastery: Map<string, number>;
+  lastOutcome: LastOutcome | null;
 }
 
 interface QuestionRun {
   index: number;
-  question: LiveQuestion;
+  assignments: Map<string, LiveQuestion>;
+  sharedQuestion: LiveQuestion | null;
   startsAtServerMs: number;
   durationMs: number;
   closed: boolean;
-  optionCounts: number[];
+  optionCounts: number[] | null;
   closeTimer: NodeJS.Timeout | null;
 }
 
 interface StoredResult {
-  base: Omit<QuestionResultPayload, 'you'>;
-  perParticipant: Map<string, YourQuestionResult>;
+  hostResult: QuestionResultPayload | null;
+  perParticipant: Map<string, QuestionResultPayload>;
+}
+
+interface RatingJob {
+  question: LiveQuestion;
+  participantId: string;
+  topicKey: string;
+  participantEloBefore: number;
+  participantEloAfter: number;
+  questionEloBefore: number;
+  questionDelta: number;
+  masteryAfter: number;
 }
 
 interface SessionState {
@@ -80,6 +116,9 @@ interface SessionState {
   hostId: string;
   durationMs: number;
   questions: LiveQuestion[];
+  adaptiveRounds: number | null;
+  totalRounds: number;
+  persistence: Promise<void>;
   participants: Map<string, ParticipantState>;
   participantIdByName: Map<string, string>;
   reservedNames: Set<string>;
@@ -110,6 +149,7 @@ export class LiveEngine {
   private readonly hostRefreshIntervalMs: number;
   private readonly endedSessionRetentionMs: number;
   private readonly randomIndex: (exclusiveMax: number) => number;
+  private readonly random: RandomSource;
   private readonly sessionsById = new Map<string, SessionState>();
   private readonly sessionIdByJoinCode = new Map<string, string>();
   private readonly sessionIdByParticipantId = new Map<string, string>();
@@ -123,6 +163,7 @@ export class LiveEngine {
     this.hostRefreshIntervalMs = options.hostRefreshIntervalMs ?? DEFAULT_HOST_REFRESH_INTERVAL_MS;
     this.endedSessionRetentionMs = options.endedSessionRetentionMs ?? DEFAULT_ENDED_RETENTION_MS;
     this.randomIndex = options.randomIndex ?? ((exclusiveMax) => randomInt(exclusiveMax));
+    this.random = options.random ?? createCryptoRandomSource();
   }
 
   async markAllStoredSessionsEnded(): Promise<void> {
@@ -148,6 +189,14 @@ export class LiveEngine {
 
     const questions = this.shuffle(approvedQuestions);
     const questionIds = questions.map((question) => question.id);
+    const parsedSettings = quizSettingsSchema.safeParse(quiz.settings);
+    const settings = parsedSettings.success ? parsedSettings.data : { adaptive: false };
+    const adaptiveRounds = settings.adaptive
+      ? resolveAdaptiveRounds(
+          'adaptiveRounds' in settings ? settings.adaptiveRounds : undefined,
+          questions.length,
+        )
+      : null;
 
     for (let attempt = 0; attempt < JOIN_CODE_ATTEMPTS; attempt += 1) {
       const joinCode = generateJoinCode(this.randomIndex);
@@ -167,6 +216,9 @@ export class LiveEngine {
         hostId: input.hostId,
         durationMs: input.questionDurationMs,
         questions,
+        adaptiveRounds,
+        totalRounds: adaptiveRounds ?? questions.length,
+        persistence: Promise.resolve(),
         participants: new Map(),
         participantIdByName: new Map(),
         reservedNames: new Set(),
@@ -195,6 +247,7 @@ export class LiveEngine {
     return {
       session: stored.session,
       joinCode: stored.session.join_code,
+      adaptive: false,
       questionDurationSeconds: null,
       questionCount: stored.session.question_ids.length,
       currentQuestionNumber: null,
@@ -217,7 +270,7 @@ export class LiveEngine {
       started_at: startedAtIso,
     });
     state.record = { ...state.record, status: 'running', started_at: startedAtIso };
-    this.showQuestion(state, 0);
+    await this.showRound(state, 0);
     return this.summarize(state);
   }
 
@@ -230,10 +283,10 @@ export class LiveEngine {
       throw new EngineError('question_still_open', 'The current question is still open');
     }
     const nextIndex = state.run.index + 1;
-    if (nextIndex >= state.questions.length) {
+    if (nextIndex >= state.totalRounds) {
       await this.finishSession(state);
     } else {
-      this.showQuestion(state, nextIndex);
+      await this.showRound(state, nextIndex);
     }
     return this.summarize(state);
   }
@@ -311,7 +364,11 @@ export class LiveEngine {
         connected: false,
         score: 0,
         totalResponseMs: 0,
+        elo: Number.isFinite(inserted.elo) ? inserted.elo : INITIAL_PLAYER_RATING,
         answers: new Map(),
+        servedQuestionIds: new Set(),
+        mastery: new Map(),
+        lastOutcome: null,
       };
       state.participants.set(participant.id, participant);
       state.participantIdByName.set(nameKey, participant.id);
@@ -353,7 +410,11 @@ export class LiveEngine {
     if (state.record.status !== 'running' || !run) {
       return { ok: false, error: 'no_active_question' };
     }
-    if (run.question.id !== payload.questionId) {
+    const question = run.assignments.get(participantId);
+    if (!question) {
+      return { ok: false, error: 'no_active_question' };
+    }
+    if (question.id !== payload.questionId) {
       return { ok: false, error: 'wrong_question' };
     }
     if (run.closed) {
@@ -368,27 +429,33 @@ export class LiveEngine {
     if (windowStatus !== 'ok') {
       return { ok: false, error: windowStatus };
     }
-    if (participant.answers.has(run.question.id)) {
+    if (participant.answers.has(question.id)) {
       return { ok: false, error: 'already_answered' };
     }
 
-    const correct = payload.chosenIndex === run.question.correctIndex;
+    const correct = payload.chosenIndex === question.correctIndex;
     const responseMs = Math.round(
       clampResponseMs(receivedAtMs - run.startsAtServerMs, run.durationMs),
     );
     const points = computePoints({ correct, responseMs, durationMs: run.durationMs });
-    const record: AnswerRecord = { chosenIndex: payload.chosenIndex, correct, points, responseMs };
+    const record: AnswerRecord = {
+      chosenIndex: payload.chosenIndex,
+      correct,
+      points,
+      responseMs,
+      answeredAtMs: receivedAtMs,
+    };
 
-    participant.answers.set(run.question.id, record);
+    participant.answers.set(question.id, record);
     participant.score += points;
     participant.totalResponseMs += responseMs;
-    run.optionCounts[payload.chosenIndex] = (run.optionCounts[payload.chosenIndex] ?? 0) + 1;
+    this.adjustOptionCount(run, payload.chosenIndex, 1);
 
     try {
       await this.repository.insertResponse({
         sessionId: state.record.id,
         participantId,
-        questionId: run.question.id,
+        questionId: question.id,
         chosenIndex: payload.chosenIndex,
         correct,
         responseMs,
@@ -398,10 +465,10 @@ export class LiveEngine {
       });
     } catch (error) {
       console.error(error);
-      participant.answers.delete(run.question.id);
+      participant.answers.delete(question.id);
       participant.score -= points;
       participant.totalResponseMs -= responseMs;
-      run.optionCounts[payload.chosenIndex] = (run.optionCounts[payload.chosenIndex] ?? 1) - 1;
+      this.adjustOptionCount(run, payload.chosenIndex, -1);
       return { ok: false, error: 'server_error' };
     }
 
@@ -420,6 +487,10 @@ export class LiveEngine {
 
   getSessionIdForParticipant(participantId: string): string | undefined {
     return this.sessionIdByParticipantId.get(participantId);
+  }
+
+  async settlePersistence(): Promise<void> {
+    await Promise.all([...this.sessionsById.values()].map((state) => state.persistence));
   }
 
   shutdown(): void {
@@ -457,6 +528,9 @@ export class LiveEngine {
         stem: question.stem,
         options: question.options,
         correctIndex: question.correctIndex,
+        topic: question.topic,
+        difficulty: question.difficulty,
+        eloRating: question.eloRating,
       });
     }
     return ordered;
@@ -486,37 +560,90 @@ export class LiveEngine {
     return {
       session: state.record,
       joinCode: state.record.join_code,
+      adaptive: state.adaptiveRounds !== null,
       questionDurationSeconds: Math.round(state.durationMs / 1000),
-      questionCount: state.questions.length,
+      questionCount: state.totalRounds,
       currentQuestionNumber: state.run ? state.run.index + 1 : null,
       participantCount: state.participants.size,
     };
   }
 
-  private showQuestion(state: SessionState, index: number) {
-    const question = state.questions[index];
-    if (!question) {
-      return;
+  private adjustOptionCount(run: QuestionRun, optionIndex: number, change: number) {
+    if (run.optionCounts) {
+      run.optionCounts[optionIndex] = Math.max((run.optionCounts[optionIndex] ?? 0) + change, 0);
     }
+  }
+
+  private pickAdaptiveQuestion(state: SessionState, participant: ParticipantState) {
+    const candidates = state.questions
+      .filter((question) => !participant.servedQuestionIds.has(question.id))
+      .map((question) => ({ question, rating: question.eloRating }));
+    return pickWeighted(candidates, participant.elo, this.random)?.question ?? null;
+  }
+
+  private async showRound(state: SessionState, index: number) {
+    const assignments = new Map<string, LiveQuestion>();
+    let sharedQuestion: LiveQuestion | null = null;
+
+    if (state.adaptiveRounds === null) {
+      sharedQuestion = state.questions[index] ?? null;
+      if (!sharedQuestion) {
+        return;
+      }
+      for (const participant of state.participants.values()) {
+        assignments.set(participant.id, sharedQuestion);
+      }
+    } else {
+      const inJoinOrder = [...state.participants.values()].sort(
+        (first, second) =>
+          first.joinedAtMs - second.joinedAtMs || first.id.localeCompare(second.id),
+      );
+      for (const participant of inJoinOrder) {
+        const picked = this.pickAdaptiveQuestion(state, participant);
+        if (picked) {
+          participant.servedQuestionIds.add(picked.id);
+          assignments.set(participant.id, picked);
+        }
+      }
+      if (assignments.size === 0) {
+        await this.finishSession(state);
+        return;
+      }
+    }
+
     const run: QuestionRun = {
       index,
-      question,
+      assignments,
+      sharedQuestion,
       startsAtServerMs: this.now() + this.startDelayMs,
       durationMs: state.durationMs,
       closed: false,
-      optionCounts: new Array<number>(QUESTION_OPTION_COUNT).fill(0),
+      optionCounts:
+        state.adaptiveRounds === null ? new Array<number>(QUESTION_OPTION_COUNT).fill(0) : null,
       closeTimer: null,
     };
     state.run = run;
     state.lastResult = null;
 
-    this.publisher.emitToSession(state.record.id, 'question:show', {
-      questionId: question.id,
-      stem: question.stem,
-      options: question.options,
-      startsAtServerMs: run.startsAtServerMs,
-      durationMs: run.durationMs,
-    });
+    if (sharedQuestion) {
+      this.publisher.emitToSession(state.record.id, 'question:show', {
+        questionId: sharedQuestion.id,
+        stem: sharedQuestion.stem,
+        options: sharedQuestion.options,
+        startsAtServerMs: run.startsAtServerMs,
+        durationMs: run.durationMs,
+      });
+    } else {
+      for (const [participantId, question] of assignments) {
+        this.publisher.emitToParticipant(participantId, 'question:show', {
+          questionId: question.id,
+          stem: question.stem,
+          options: question.options,
+          startsAtServerMs: run.startsAtServerMs,
+          durationMs: run.durationMs,
+        });
+      }
+    }
     this.flushHostState(state);
     this.armCloseTimer(state, run);
   }
@@ -546,13 +673,17 @@ export class LiveEngine {
     if (!run || run.closed || state.record.status !== 'running') {
       return;
     }
-    const connected = [...state.participants.values()].filter(
-      (participant) => participant.connected,
+    const connectedAssigned = [...state.participants.values()].filter(
+      (participant) => participant.connected && run.assignments.has(participant.id),
     );
-    if (connected.length === 0) {
+    if (connectedAssigned.length === 0) {
       return;
     }
-    if (connected.every((participant) => participant.answers.has(run.question.id))) {
+    if (
+      connectedAssigned.every((participant) =>
+        participant.answers.has(run.assignments.get(participant.id)?.id ?? ''),
+      )
+    ) {
       this.closeQuestion(state);
     }
   }
@@ -576,6 +707,99 @@ export class LiveEngine {
     }));
   }
 
+  private applyRatingUpdates(state: SessionState, run: QuestionRun): RatingJob[] {
+    const answered: {
+      participant: ParticipantState;
+      question: LiveQuestion;
+      answer: AnswerRecord;
+    }[] = [];
+    for (const [participantId, question] of run.assignments) {
+      const participant = state.participants.get(participantId);
+      if (!participant) {
+        continue;
+      }
+      const answer = participant.answers.get(question.id);
+      participant.lastOutcome = {
+        difficulty: question.difficulty,
+        correct: answer?.correct ?? false,
+      };
+      if (answer) {
+        answered.push({ participant, question, answer });
+      }
+    }
+    answered.sort(
+      (first, second) =>
+        first.answer.answeredAtMs - second.answer.answeredAtMs ||
+        first.participant.id.localeCompare(second.participant.id),
+    );
+
+    const questionRatingSnapshot = new Map<string, number>();
+    for (const { question } of answered) {
+      if (!questionRatingSnapshot.has(question.id)) {
+        questionRatingSnapshot.set(question.id, question.eloRating);
+      }
+    }
+
+    const jobs: RatingJob[] = [];
+    for (const { participant, question, answer } of answered) {
+      const questionEloBefore = questionRatingSnapshot.get(question.id) ?? question.eloRating;
+      const participantEloBefore = participant.elo;
+      const update = updateRatings({
+        playerRating: participantEloBefore,
+        questionRating: questionEloBefore,
+        correct: answer.correct,
+        responseMs: answer.responseMs,
+        durationMs: run.durationMs,
+      });
+      const questionDelta = update.questionRating - questionEloBefore;
+      participant.elo = update.playerRating;
+      question.eloRating = clampRating(question.eloRating + questionDelta);
+
+      const topicKey = normalizeTopicKey(question.topic);
+      const masteryAfter = bktUpdate(
+        participant.mastery.get(topicKey) ?? DEFAULT_BKT_PARAMS.pInit,
+        answer.correct,
+      );
+      participant.mastery.set(topicKey, masteryAfter);
+
+      jobs.push({
+        question,
+        participantId: participant.id,
+        topicKey,
+        participantEloBefore,
+        participantEloAfter: update.playerRating,
+        questionEloBefore,
+        questionDelta,
+        masteryAfter,
+      });
+    }
+    return jobs;
+  }
+
+  private enqueueRatingPersistence(state: SessionState, jobs: RatingJob[]) {
+    for (const job of jobs) {
+      state.persistence = state.persistence.then(async () => {
+        try {
+          await this.repository.recordResponseRatings({
+            participantId: job.participantId,
+            questionId: job.question.id,
+            participantEloBefore: job.participantEloBefore,
+            questionEloBefore: job.questionEloBefore,
+          });
+          await this.repository.applyQuestionRatingDelta(job.question.id, job.questionDelta);
+          await this.repository.updateParticipantElo(job.participantId, job.participantEloAfter);
+          await this.repository.upsertKnowledgeState({
+            participantId: job.participantId,
+            topic: job.topicKey,
+            pMastery: job.masteryAfter,
+          });
+        } catch (error) {
+          console.error('Rating persistence failed', error);
+        }
+      });
+    }
+  }
+
   private closeQuestion(state: SessionState) {
     const run = state.run;
     if (!run || run.closed) {
@@ -587,42 +811,64 @@ export class LiveEngine {
       run.closeTimer = null;
     }
 
+    const ratingJobs = this.applyRatingUpdates(state, run);
+
     const ranked = this.rankParticipants(state);
     const rankById = new Map(ranked.map((participant, position) => [participant.id, position + 1]));
     const entries = this.buildLeaderboard(ranked);
+    const optionCounts = run.optionCounts ? [...run.optionCounts] : null;
 
-    const base: Omit<QuestionResultPayload, 'you'> = {
-      questionId: run.question.id,
-      correctIndex: run.question.correctIndex,
-      optionCounts: [...run.optionCounts],
-    };
-    const perParticipant = new Map<string, YourQuestionResult>();
-
+    const perParticipant = new Map<string, QuestionResultPayload>();
     for (const participant of ranked) {
-      const answer = participant.answers.get(run.question.id);
-      perParticipant.set(participant.id, {
+      const question = run.assignments.get(participant.id);
+      if (!question) {
+        continue;
+      }
+      const answer = participant.answers.get(question.id);
+      const you: YourQuestionResult = {
         chosenIndex: answer?.chosenIndex ?? null,
         correct: answer?.correct ?? false,
         pointsAwarded: answer?.points ?? 0,
         totalPoints: participant.score,
         rank: rankById.get(participant.id) ?? ranked.length,
+      };
+      perParticipant.set(participant.id, {
+        questionId: question.id,
+        correctIndex: question.correctIndex,
+        optionCounts,
+        you,
       });
     }
-    state.lastResult = { base, perParticipant };
+    const hostResult: QuestionResultPayload | null = run.sharedQuestion
+      ? {
+          questionId: run.sharedQuestion.id,
+          correctIndex: run.sharedQuestion.correctIndex,
+          optionCounts,
+          you: null,
+        }
+      : null;
+    state.lastResult = { hostResult, perParticipant };
 
-    this.publisher.emitToHost(state.record.id, 'question:result', { ...base, you: null });
+    if (hostResult) {
+      this.publisher.emitToHost(state.record.id, 'question:result', hostResult);
+    }
     this.publisher.emitToHost(state.record.id, 'leaderboard:update', { entries, you: null });
     for (const participant of ranked) {
-      this.publisher.emitToParticipant(participant.id, 'question:result', {
-        ...base,
-        you: perParticipant.get(participant.id) ?? null,
-      });
+      const personal = perParticipant.get(participant.id);
+      if (personal) {
+        this.publisher.emitToParticipant(participant.id, 'question:result', personal);
+      }
       this.publisher.emitToParticipant(participant.id, 'leaderboard:update', {
         entries,
         you: { rank: rankById.get(participant.id) ?? ranked.length, score: participant.score },
       });
     }
+    this.enqueueRatingPersistence(state, ratingJobs);
     this.flushHostState(state);
+  }
+
+  private hasEnded(state: SessionState): boolean {
+    return state.record.status === 'ended';
   }
 
   private async finishSession(state: SessionState) {
@@ -633,6 +879,10 @@ export class LiveEngine {
       state.run.closed = true;
     }
     this.clearTimers(state);
+    await state.persistence;
+    if (this.hasEnded(state)) {
+      return;
+    }
 
     const endedAtMs = this.now();
     const endedAtIso = new Date(endedAtMs).toISOString();
@@ -714,25 +964,40 @@ export class LiveEngine {
     );
   }
 
+  private buildAdaptiveTable(state: SessionState): AdaptiveRow[] {
+    return [...state.participants.values()]
+      .sort((first, second) => first.joinedAtMs - second.joinedAtMs)
+      .map((participant) => ({
+        participantId: participant.id,
+        displayName: participant.displayName,
+        rating: participant.elo,
+        lastDifficulty: participant.lastOutcome?.difficulty ?? null,
+        lastCorrect: participant.lastOutcome?.correct ?? null,
+      }));
+  }
+
   private buildRoomState(state: SessionState, viewer: RoomViewer): RoomStatePayload {
     const run = state.record.status === 'ended' ? null : state.run;
     const ranked = this.rankParticipants(state);
     const status: SessionStatus = state.record.status;
+    const adaptive = state.adaptiveRounds !== null;
 
     let you: RoomStatePayload['you'] = null;
     let youAnswered = false;
     let lastResult: QuestionResultPayload | null = null;
+    let visibleQuestion: LiveQuestion | null = null;
 
-    if (state.lastResult && run?.closed) {
-      const personal =
-        viewer.role === 'student'
-          ? (state.lastResult.perParticipant.get(viewer.participantId) ?? null)
-          : null;
-      lastResult = { ...state.lastResult.base, you: personal };
-    }
-
-    if (viewer.role === 'student') {
+    if (viewer.role === 'host') {
+      visibleQuestion = run?.sharedQuestion ?? null;
+      if (state.lastResult && run?.closed) {
+        lastResult = state.lastResult.hostResult;
+      }
+    } else {
       const participant = state.participants.get(viewer.participantId);
+      visibleQuestion = run?.assignments.get(viewer.participantId) ?? null;
+      if (state.lastResult && run?.closed) {
+        lastResult = state.lastResult.perParticipant.get(viewer.participantId) ?? null;
+      }
       if (participant) {
         const position = ranked.findIndex((candidate) => candidate.id === participant.id);
         you = {
@@ -741,15 +1006,16 @@ export class LiveEngine {
           score: participant.score,
           rank: position + 1,
         };
-        youAnswered = run ? participant.answers.has(run.question.id) : false;
+        youAnswered = visibleQuestion ? participant.answers.has(visibleQuestion.id) : false;
       }
     }
 
     const answeredCount =
       viewer.role === 'host' && run
-        ? [...state.participants.values()].filter((participant) =>
-            participant.answers.has(run.question.id),
-          ).length
+        ? [...state.participants.values()].filter((participant) => {
+            const question = run.assignments.get(participant.id);
+            return question ? participant.answers.has(question.id) : false;
+          }).length
         : null;
 
     return {
@@ -765,18 +1031,30 @@ export class LiveEngine {
           displayName: participant.displayName,
           connected: participant.connected,
         })),
-      currentQuestion: run
-        ? {
-            questionId: run.question.id,
-            stem: run.question.stem,
-            options: run.question.options,
-            startsAtServerMs: run.startsAtServerMs,
-            durationMs: run.durationMs,
-            questionNumber: run.index + 1,
-            totalQuestions: state.questions.length,
-          }
-        : null,
+      currentQuestion:
+        run && visibleQuestion
+          ? {
+              questionId: visibleQuestion.id,
+              stem: visibleQuestion.stem,
+              options: visibleQuestion.options,
+              startsAtServerMs: run.startsAtServerMs,
+              durationMs: run.durationMs,
+              questionNumber: run.index + 1,
+              totalQuestions: state.totalRounds,
+            }
+          : null,
       questionClosed: run?.closed ?? false,
+      adaptive,
+      round:
+        viewer.role === 'host' && adaptive && run
+          ? {
+              roundNumber: run.index + 1,
+              totalRounds: state.totalRounds,
+              startsAtServerMs: run.startsAtServerMs,
+              durationMs: run.durationMs,
+            }
+          : null,
+      adaptiveTable: viewer.role === 'host' && adaptive ? this.buildAdaptiveTable(state) : null,
       youAnswered,
       answeredCount,
       lastResult,

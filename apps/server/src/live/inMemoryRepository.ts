@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type { Participant, Session } from '@quizup/shared';
+import {
+  ELO_MAX_RATING,
+  ELO_MIN_RATING,
+  initialQuestionRating,
+  type Participant,
+  type Session,
+} from '@quizup/shared';
 import type {
   LiveQuestion,
   LiveRepository,
@@ -12,36 +18,65 @@ interface StoredQuiz {
   id: string;
   title: string;
   hostId: string;
+  settings: unknown;
   questions: (LiveQuestion & { approved: boolean })[];
+}
+
+export type SeedQuestion = Pick<LiveQuestion, 'id' | 'stem' | 'options' | 'correctIndex'> &
+  Partial<Pick<LiveQuestion, 'topic' | 'difficulty' | 'eloRating'>> & { approved?: boolean };
+
+export interface StoredResponse extends NewResponseInput {
+  participantEloBefore?: number;
+  questionEloBefore?: number;
+}
+
+export interface StoredKnowledgeState {
+  participantId: string;
+  topic: string;
+  pMastery: number;
 }
 
 export class InMemoryLiveRepository implements LiveRepository {
   readonly quizzes = new Map<string, StoredQuiz>();
   readonly sessions = new Map<string, { session: Session; hostId: string }>();
   readonly participants: Participant[] = [];
-  readonly responses: NewResponseInput[] = [];
+  readonly responses: StoredResponse[] = [];
+  readonly knowledgeStates: StoredKnowledgeState[] = [];
 
   seedQuiz(input: {
     hostId: string;
     title?: string;
-    questions: (LiveQuestion & { approved?: boolean })[];
+    settings?: unknown;
+    questions: SeedQuestion[];
   }): string {
     const id = randomUUID();
     this.quizzes.set(id, {
       id,
       title: input.title ?? 'Seeded quiz',
       hostId: input.hostId,
-      questions: input.questions.map((question) => ({
-        ...question,
-        approved: question.approved ?? true,
-      })),
+      settings: input.settings ?? {},
+      questions: input.questions.map((question) => {
+        const difficulty = question.difficulty ?? 'medium';
+        return {
+          id: question.id,
+          stem: question.stem,
+          options: question.options,
+          correctIndex: question.correctIndex,
+          topic: question.topic ?? 'General',
+          difficulty,
+          eloRating: question.eloRating ?? initialQuestionRating(difficulty),
+          approved: question.approved ?? true,
+        };
+      }),
     });
     return id;
   }
 
   async findOwnedQuiz(quizId: string, hostId: string) {
     const quiz = this.quizzes.get(quizId);
-    return quiz && quiz.hostId === hostId ? { id: quiz.id, title: quiz.title } : null;
+    return quiz && quiz.hostId === hostId
+      ? { id: quiz.id, title: quiz.title, settings: quiz.settings }
+      : null;
   }
 
   async listApprovedQuestions(quizId: string): Promise<LiveQuestion[]> {
@@ -53,6 +88,9 @@ export class InMemoryLiveRepository implements LiveRepository {
         stem: question.stem,
         options: question.options,
         correctIndex: question.correctIndex,
+        topic: question.topic,
+        difficulty: question.difficulty,
+        eloRating: question.eloRating,
       }));
   }
 
@@ -134,6 +172,56 @@ export class InMemoryLiveRepository implements LiveRepository {
     }
     this.responses.push(input);
     return 'inserted';
+  }
+
+  async recordResponseRatings(input: {
+    participantId: string;
+    questionId: string;
+    participantEloBefore: number;
+    questionEloBefore: number;
+  }) {
+    const response = this.responses.find(
+      (candidate) =>
+        candidate.participantId === input.participantId &&
+        candidate.questionId === input.questionId,
+    );
+    if (response) {
+      response.participantEloBefore = input.participantEloBefore;
+      response.questionEloBefore = input.questionEloBefore;
+    }
+  }
+
+  async applyQuestionRatingDelta(questionId: string, delta: number) {
+    for (const quiz of this.quizzes.values()) {
+      const question = quiz.questions.find((candidate) => candidate.id === questionId);
+      if (question) {
+        question.eloRating = Math.min(
+          Math.max(question.eloRating + delta, ELO_MIN_RATING),
+          ELO_MAX_RATING,
+        );
+        return question.eloRating;
+      }
+    }
+    return Number.NaN;
+  }
+
+  async updateParticipantElo(participantId: string, elo: number) {
+    const index = this.participants.findIndex((participant) => participant.id === participantId);
+    const existing = this.participants[index];
+    if (existing) {
+      this.participants[index] = { ...existing, elo };
+    }
+  }
+
+  async upsertKnowledgeState(input: StoredKnowledgeState) {
+    const existing = this.knowledgeStates.find(
+      (state) => state.participantId === input.participantId && state.topic === input.topic,
+    );
+    if (existing) {
+      existing.pMastery = input.pMastery;
+    } else {
+      this.knowledgeStates.push({ ...input });
+    }
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

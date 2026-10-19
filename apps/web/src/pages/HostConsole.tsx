@@ -1,6 +1,7 @@
 import type { RoomStatePayload, SocketErrorCode } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AdaptiveTable } from '../components/AdaptiveTable';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
@@ -82,7 +83,9 @@ export function HostConsole() {
 
   const question = room.currentQuestion;
   const connectedCount = room.participants.filter((participant) => participant.connected).length;
+  const round = room.round;
   const isLastQuestion = question ? question.questionNumber === question.totalQuestions : false;
+  const isLastRound = round ? round.roundNumber === round.totalRounds : false;
 
   return (
     <div className="space-y-6">
@@ -124,7 +127,47 @@ export function HostConsole() {
         </section>
       )}
 
-      {room.status === 'running' && question && (
+      {room.status === 'running' && room.adaptive && round && (
+        <section className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Adaptive round {round.roundNumber} of {round.totalRounds}. Each student has their own
+            question.
+          </p>
+
+          {!room.questionClosed && (
+            <>
+              <QuestionTimer
+                serverNowMs={serverNowMs}
+                startsAtServerMs={round.startsAtServerMs}
+                durationMs={round.durationMs}
+              />
+              <p className="text-center text-lg">
+                {room.answeredCount ?? 0} of {room.participants.length} answered
+              </p>
+            </>
+          )}
+
+          <h3 className="text-lg font-semibold">Students</h3>
+          <AdaptiveTable rows={room.adaptiveTable ?? []} />
+
+          {room.questionClosed && (
+            <>
+              <h3 className="text-lg font-semibold">Leaderboard</h3>
+              <Leaderboard entries={room.leaderboard} />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void runCommand(() => api.nextQuestion(sessionId))}
+                className="rounded-md bg-slate-900 px-6 py-3 text-lg text-white disabled:opacity-50"
+              >
+                {isLastRound ? 'Show final results' : 'Next round'}
+              </button>
+            </>
+          )}
+        </section>
+      )}
+
+      {room.status === 'running' && !room.adaptive && question && (
         <section className="space-y-4">
           <p className="text-sm text-slate-600">
             Question {question.questionNumber} of {question.totalQuestions}
@@ -146,10 +189,11 @@ export function HostConsole() {
 
           <ul className="space-y-2">
             {question.options.map((option, optionIndex) => {
-              const count = room.lastResult?.optionCounts[optionIndex] ?? 0;
-              const total = room.lastResult
+              const optionCounts = room.lastResult?.optionCounts ?? null;
+              const count = optionCounts?.[optionIndex] ?? 0;
+              const total = optionCounts
                 ? Math.max(
-                    room.lastResult.optionCounts.reduce((sum, value) => sum + value, 0),
+                    optionCounts.reduce((sum, value) => sum + value, 0),
                     1,
                   )
                 : 1;
@@ -203,6 +247,7 @@ export function HostConsole() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Final results</h2>
           <Leaderboard entries={room.leaderboard} />
+          {room.adaptiveTable && <AdaptiveTable rows={room.adaptiveTable} />}
           <Link to="/host" className="inline-block underline">
             Back to dashboard
           </Link>

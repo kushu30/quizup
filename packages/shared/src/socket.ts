@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DISPLAY_NAME_MAX_LENGTH, JOIN_CODE_LENGTH, QUESTION_OPTION_COUNT } from './tables.js';
-import { sessionStatusSchema } from './enums.js';
+import { difficultySchema, sessionStatusSchema } from './enums.js';
 
 export const SOCKET_ERROR_CODES = [
   'invalid_payload',
@@ -100,7 +100,7 @@ export type YourQuestionResult = z.infer<typeof yourQuestionResultSchema>;
 export const questionResultPayloadSchema = z.object({
   questionId: z.string().uuid(),
   correctIndex: optionIndexSchema,
-  optionCounts: z.array(z.number().int().nonnegative()).length(QUESTION_OPTION_COUNT),
+  optionCounts: z.array(z.number().int().nonnegative()).length(QUESTION_OPTION_COUNT).nullable(),
   you: yourQuestionResultSchema.nullable(),
 });
 export type QuestionResultPayload = z.infer<typeof questionResultPayloadSchema>;
@@ -133,6 +133,23 @@ export const sessionEndPayloadSchema = z.object({
 });
 export type SessionEndPayload = z.infer<typeof sessionEndPayloadSchema>;
 
+export const adaptiveRowSchema = z.object({
+  participantId: z.string().uuid(),
+  displayName: z.string(),
+  rating: z.number(),
+  lastDifficulty: difficultySchema.nullable(),
+  lastCorrect: z.boolean().nullable(),
+});
+export type AdaptiveRow = z.infer<typeof adaptiveRowSchema>;
+
+export const adaptiveRoundSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  totalRounds: z.number().int().positive(),
+  startsAtServerMs: z.number(),
+  durationMs: z.number().int().positive(),
+});
+export type AdaptiveRound = z.infer<typeof adaptiveRoundSchema>;
+
 export const roomStatePayloadSchema = z.object({
   sessionId: z.string().uuid(),
   joinCode: z.string(),
@@ -147,6 +164,9 @@ export const roomStatePayloadSchema = z.object({
     })
     .nullable(),
   questionClosed: z.boolean(),
+  adaptive: z.boolean(),
+  round: adaptiveRoundSchema.nullable(),
+  adaptiveTable: z.array(adaptiveRowSchema).nullable(),
   youAnswered: z.boolean(),
   answeredCount: z.number().int().nonnegative().nullable(),
   lastResult: questionResultPayloadSchema.nullable(),

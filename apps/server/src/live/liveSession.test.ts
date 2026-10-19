@@ -223,7 +223,7 @@ describe('live session engine over sockets', () => {
     const hostOutcome = await hostResult;
 
     expect(aliceOutcome.correctIndex).toBe(correct);
-    expect(aliceOutcome.optionCounts.reduce((total, count) => total + count, 0)).toBe(2);
+    expect((aliceOutcome.optionCounts ?? []).reduce((total, count) => total + count, 0)).toBe(2);
     expect(aliceOutcome.you).toMatchObject({ correct: true, rank: 1, chosenIndex: correct });
     expect(aliceOutcome.you?.pointsAwarded).toBeGreaterThanOrEqual(500);
     expect(bobOutcome.you).toMatchObject({

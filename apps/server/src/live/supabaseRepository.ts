@@ -1,4 +1,10 @@
-import { participantSchema, sessionSchema, type Participant, type Session } from '@quizup/shared';
+import {
+  participantSchema,
+  sessionSchema,
+  type Difficulty,
+  type Participant,
+  type Session,
+} from '@quizup/shared';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import type {
   LiveQuestion,
@@ -26,33 +32,47 @@ interface QuestionRow {
   stem: string;
   options: string[];
   correct_index: number;
+  topic: string;
+  difficulty: Difficulty;
+  elo_rating: number;
 }
+
+function toLiveQuestion(row: QuestionRow): LiveQuestion {
+  return {
+    id: row.id,
+    stem: row.stem,
+    options: row.options,
+    correctIndex: row.correct_index,
+    topic: row.topic,
+    difficulty: row.difficulty,
+    eloRating: row.elo_rating,
+  };
+}
+
+const QUESTION_COLUMNS = 'id, stem, options, correct_index, topic, difficulty, elo_rating';
 
 export class SupabaseLiveRepository implements LiveRepository {
   async findOwnedQuiz(quizId: string, hostId: string) {
     const { data, error } = await supabaseAdmin
       .from('quizzes')
-      .select('id, title')
+      .select('id, title, settings')
       .eq('id', quizId)
       .eq('host_id', hostId)
       .maybeSingle();
     throwUnexpected(error);
-    return data ? { id: String(data.id), title: String(data.title) } : null;
+    return data
+      ? { id: String(data.id), title: String(data.title), settings: data.settings }
+      : null;
   }
 
   async listApprovedQuestions(quizId: string): Promise<LiveQuestion[]> {
     const { data, error } = await supabaseAdmin
       .from('questions')
-      .select('id, stem, options, correct_index')
+      .select(QUESTION_COLUMNS)
       .eq('quiz_id', quizId)
       .eq('approved', true);
     throwUnexpected(error);
-    return ((data ?? []) as QuestionRow[]).map((row) => ({
-      id: row.id,
-      stem: row.stem,
-      options: row.options,
-      correctIndex: row.correct_index,
-    }));
+    return ((data ?? []) as QuestionRow[]).map(toLiveQuestion);
   }
 
   async loadQuestionsByIds(questionIds: string[]) {
@@ -61,14 +81,11 @@ export class SupabaseLiveRepository implements LiveRepository {
     }
     const { data, error } = await supabaseAdmin
       .from('questions')
-      .select('id, stem, options, correct_index, approved')
+      .select(`${QUESTION_COLUMNS}, approved`)
       .in('id', questionIds);
     throwUnexpected(error);
     return ((data ?? []) as (QuestionRow & { approved: boolean })[]).map((row) => ({
-      id: row.id,
-      stem: row.stem,
-      options: row.options,
-      correctIndex: row.correct_index,
+      ...toLiveQuestion(row),
       approved: row.approved === true,
     }));
   }
@@ -147,6 +164,53 @@ export class SupabaseLiveRepository implements LiveRepository {
     }
     throwUnexpected(error);
     return 'inserted';
+  }
+
+  async recordResponseRatings(input: {
+    participantId: string;
+    questionId: string;
+    participantEloBefore: number;
+    questionEloBefore: number;
+  }) {
+    const { error } = await supabaseAdmin
+      .from('responses')
+      .update({
+        participant_elo_before: input.participantEloBefore,
+        question_elo_before: input.questionEloBefore,
+      })
+      .eq('participant_id', input.participantId)
+      .eq('question_id', input.questionId);
+    throwUnexpected(error);
+  }
+
+  async applyQuestionRatingDelta(questionId: string, delta: number) {
+    const { data, error } = await supabaseAdmin.rpc('apply_question_rating_delta', {
+      target_question_id: questionId,
+      rating_delta: delta,
+    });
+    throwUnexpected(error);
+    return Number(data);
+  }
+
+  async updateParticipantElo(participantId: string, elo: number) {
+    const { error } = await supabaseAdmin
+      .from('participants')
+      .update({ elo })
+      .eq('id', participantId);
+    throwUnexpected(error);
+  }
+
+  async upsertKnowledgeState(input: { participantId: string; topic: string; pMastery: number }) {
+    const { error } = await supabaseAdmin.from('knowledge_states').upsert(
+      {
+        participant_id: input.participantId,
+        topic: input.topic,
+        p_mastery: input.pMastery,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'participant_id,topic' },
+    );
+    throwUnexpected(error);
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

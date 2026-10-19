@@ -2,6 +2,9 @@ import {
   DEFAULT_QUESTION_DURATION_SECONDS,
   MAX_QUESTION_DURATION_SECONDS,
   MIN_QUESTION_DURATION_SECONDS,
+  MAX_ADAPTIVE_ROUNDS,
+  MIN_ADAPTIVE_ROUNDS,
+  quizSettingsSchema,
   quizUpdateSchema,
   sessionCreateSchema,
   type Quiz,
@@ -21,6 +24,8 @@ export function QuizEditor() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [title, setTitle] = useState('');
   const [mode, setMode] = useState<QuizMode>('live');
+  const [adaptive, setAdaptive] = useState(false);
+  const [adaptiveRounds, setAdaptiveRounds] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [counts, setCounts] = useState({ approved: 0, pending: 0 });
@@ -32,6 +37,13 @@ export function QuizEditor() {
       setQuiz(loaded);
       setTitle(loaded.title);
       setMode(loaded.mode);
+      const settings = quizSettingsSchema.safeParse(loaded.settings);
+      setAdaptive(settings.success ? settings.data.adaptive : false);
+      setAdaptiveRounds(
+        settings.success && settings.data.adaptiveRounds !== undefined
+          ? String(settings.data.adaptiveRounds)
+          : '',
+      );
     } catch (error) {
       setMessage(describeError(error));
     }
@@ -79,7 +91,15 @@ export function QuizEditor() {
 
   async function handleSaveDetails(event: FormEvent) {
     event.preventDefault();
-    const parsed = quizUpdateSchema.safeParse({ title, mode });
+    const parsed = quizUpdateSchema.safeParse({
+      title,
+      mode,
+      settings: {
+        adaptive,
+        adaptiveRounds:
+          adaptive && adaptiveRounds.trim() !== '' ? Number(adaptiveRounds) : undefined,
+      },
+    });
     if (!parsed.success) {
       setMessage(parsed.error.issues.map((issue) => issue.message).join('; '));
       return;
@@ -168,6 +188,35 @@ export function QuizEditor() {
           >
             Delete quiz
           </button>
+          <div className="flex w-full flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={adaptive}
+                onChange={(event) => setAdaptive(event.target.checked)}
+              />
+              Adaptive mode
+            </label>
+            {adaptive && (
+              <label className="flex items-center gap-2">
+                Rounds
+                <input
+                  type="number"
+                  min={MIN_ADAPTIVE_ROUNDS}
+                  max={MAX_ADAPTIVE_ROUNDS}
+                  placeholder="auto"
+                  className="w-24 rounded-md border border-slate-300 px-2 py-1"
+                  value={adaptiveRounds}
+                  onChange={(event) => setAdaptiveRounds(event.target.value)}
+                />
+              </label>
+            )}
+            <span className="text-slate-500">
+              {adaptive
+                ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
+                : 'Everyone gets the same questions in the same order.'}
+            </span>
+          </div>
         </form>
         {message && <p className="text-sm text-slate-700">{message}</p>}
       </div>
