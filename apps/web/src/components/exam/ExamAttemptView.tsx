@@ -1,9 +1,9 @@
 import type { ExamStudentView } from '@quizup/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useProctor } from '../../hooks/useProctor';
 import { useServerNow } from '../../hooks/useServerNow';
 import type { QuizSocket } from '../../lib/socket';
-import { Button, Notice } from '../ui';
+import { Button, Notice, buttonClasses } from '../ui';
 
 interface ExamAttemptViewProps {
   socket: QuizSocket;
@@ -15,6 +15,7 @@ interface ExamAttemptViewProps {
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 const SUBMIT_FALLBACK_AFTER_MS = 2000;
+const SUBMIT_ACK_TIMEOUT_MS = 10_000;
 
 function formatClock(milliseconds: number): string {
   const totalSeconds = Math.max(Math.ceil(milliseconds / 1000), 0);
@@ -39,9 +40,15 @@ export function ExamAttemptView({
   const offsetRef = useRef(offsetMs);
   offsetRef.current = offsetMs;
   const fallbackSent = useRef(false);
+  const submitInFlight = useRef(false);
+  const submitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmTitleId = useId();
+  const confirmBodyId = useId();
 
   const proctor = useProctor({
-    enabled: true,
+    enabled: !submitting,
     connected,
     now: () => Date.now() + offsetRef.current,
     send: (event) => socket.emit('proctor:event', event, () => undefined),
@@ -55,8 +62,27 @@ export function ExamAttemptView({
   const timeIsUp = remainingMs <= 0;
 
   const submit = useCallback(() => {
+    if (submitInFlight.current) {
+      return;
+    }
+    submitInFlight.current = true;
+    setConfirmOpen(false);
     setSubmitting(true);
+    setMessage(null);
+    submitTimer.current = setTimeout(() => {
+      submitTimer.current = null;
+      submitInFlight.current = false;
+      setSubmitting(false);
+      setMessage(
+        'The server did not confirm your submission. Check your connection and press Submit exam again. Your answers are saved.',
+      );
+    }, SUBMIT_ACK_TIMEOUT_MS);
     socket.emit('exam:submit', {}, (ack) => {
+      if (submitTimer.current) {
+        clearTimeout(submitTimer.current);
+        submitTimer.current = null;
+      }
+      submitInFlight.current = false;
       setSubmitting(false);
       if (ack.ok) {
         onViewChange(ack.view);
@@ -65,6 +91,20 @@ export function ExamAttemptView({
       }
     });
   }, [socket, onViewChange]);
+
+  useEffect(
+    () => () => {
+      if (submitTimer.current) {
+        clearTimeout(submitTimer.current);
+      }
+    },
+    [],
+  );
+
+  function closeConfirm() {
+    setConfirmOpen(false);
+    submitButtonRef.current?.focus();
+  }
 
   useEffect(() => {
     if (timeIsUp && remainingMs < -SUBMIT_FALLBACK_AFTER_MS && !fallbackSent.current) {
@@ -75,9 +115,10 @@ export function ExamAttemptView({
 
   const question = view.questions[currentIndex];
   const answeredCount = Object.keys(answers).length;
+  const unansweredCount = view.questions.length - answeredCount;
 
   function chooseOption(questionId: string, displayedIndex: number) {
-    if (timeIsUp) {
+    if (timeIsUp || submitting) {
       return;
     }
     const previous = answers[questionId];
@@ -191,7 +232,7 @@ export function ExamAttemptView({
                   type="button"
                   role="radio"
                   aria-checked={checked}
-                  disabled={timeIsUp}
+                  disabled={timeIsUp || submitting}
                   onClick={() => chooseOption(question.questionId, optionIndex)}
                   className={`flex items-center gap-4 rounded-lg border-2 px-4 py-3.5 text-left text-base break-words disabled:cursor-not-allowed disabled:opacity-60 ${
                     checked
@@ -234,24 +275,50 @@ export function ExamAttemptView({
         </Button>
       </div>
 
-      <Button
-        variant="brand"
-        size="lg"
-        className="w-full"
+      <button
+        ref={submitButtonRef}
+        type="button"
         disabled={submitting || timeIsUp}
-        onClick={() => {
-          const unanswered = view.questions.length - answeredCount;
-          const warning =
-            unanswered > 0
-              ? `You have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'}. Submit anyway?`
-              : 'Submit your exam? You cannot change answers afterwards.';
-          if (window.confirm(warning)) {
-            submit();
-          }
-        }}
+        onClick={() => setConfirmOpen(true)}
+        className={`${buttonClasses('brand', 'lg')} w-full`}
       >
-        Submit exam
-      </Button>
+        {submitting ? 'Submitting...' : 'Submit exam'}
+      </button>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmTitleId}
+            aria-describedby={confirmBodyId}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                closeConfirm();
+              }
+            }}
+            className="w-full max-w-sm space-y-4 rounded-lg bg-surface p-6"
+          >
+            <h2 id={confirmTitleId} className="text-xl font-semibold">
+              Submit your exam?
+            </h2>
+            <p id={confirmBodyId} className="text-muted">
+              {unansweredCount > 0
+                ? `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}. You cannot change answers after submitting.`
+                : 'You cannot change answers after submitting.'}
+            </p>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button variant="secondary" autoFocus onClick={closeConfirm}>
+                Keep working
+              </Button>
+              <Button variant="brand" disabled={submitting} onClick={submit}>
+                Submit now
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,10 +9,12 @@ import type {
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdaptiveTable } from '../components/AdaptiveTable';
+import { JoinQr } from '../components/JoinQr';
 import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
+import { StudentRoster } from '../components/StudentRoster';
 import { Button, Notice, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
@@ -147,6 +149,7 @@ export function HostConsole() {
   }
 
   const isExam = room.mode === 'exam';
+  const joinUrl = `${window.location.origin}/join/${room.joinCode}`;
   const selectedRow = examRows?.find((row) => row.participantId === selectedStudentId) ?? null;
   const selectedEvents = selectedStudentId
     ? mergeProctorEvents(
@@ -156,7 +159,6 @@ export function HostConsole() {
       )
     : [];
   const question = room.currentQuestion;
-  const connectedCount = room.participants.filter((participant) => participant.connected).length;
   const round = room.round;
   const isLastQuestion = question ? question.questionNumber === question.totalQuestions : false;
   const isLastRound = round ? round.roundNumber === round.totalRounds : false;
@@ -178,62 +180,47 @@ export function HostConsole() {
             <p className="mt-1 text-hero font-bold tracking-[0.18em] whitespace-nowrap tabular-nums sm:text-display lg:text-[3.5rem]">
               {room.joinCode}
             </p>
-            <p className="mt-3 text-sm break-words text-white/85">
-              Students join at{' '}
-              <span className="font-semibold text-white">{window.location.host}/join</span>
+            <div
+              className={`mx-auto mt-4 w-48 overflow-hidden rounded-md sm:w-56 ${
+                room.status === 'lobby' ? '' : 'hidden lg:block'
+              }`}
+            >
+              <JoinQr url={joinUrl} />
+            </div>
+            <p className="mt-4 text-sm text-white/85">Scan, or open</p>
+            <p className="text-sm font-semibold break-all text-white select-all">
+              {joinUrl.replace(/^https?:\/\//, '')}
             </p>
           </div>
-          <div className="rounded-lg border border-rule bg-surface p-4">
-            <h2 className="text-sm font-semibold">
-              Students{' '}
-              <span className="font-normal text-muted">
-                {connectedCount} connected of {room.participants.length}
-              </span>
-            </h2>
-            {room.participants.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">Nobody has joined yet.</p>
-            ) : (
-              <ul className="mt-3 flex max-h-64 flex-wrap gap-1.5 overflow-y-auto">
-                {room.participants.map((participant) => (
-                  <li
-                    key={participant.participantId}
-                    className={`max-w-full truncate rounded-md px-2 py-1 text-sm ${
-                      participant.connected
-                        ? 'bg-board-soft text-board'
-                        : 'bg-paper text-muted line-through decoration-muted/50'
-                    }`}
-                    title={participant.connected ? undefined : 'Disconnected'}
-                  >
-                    {participant.displayName}
-                    {!participant.connected && <span className="sr-only"> (disconnected)</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {room.status !== 'lobby' && <StudentRoster participants={room.participants} />}
         </aside>
 
         <div className="min-w-0 space-y-6 lg:col-start-1 lg:row-start-1">
           {message && <Notice tone="danger">{message}</Notice>}
 
           {room.status === 'lobby' && (
-            <section aria-labelledby="lobby-heading" className="space-y-4">
-              <h1 id="lobby-heading" className="text-title font-semibold tracking-tight">
-                Waiting for students
-              </h1>
-              <p className="max-w-prose text-muted">
-                {room.mode === 'exam'
-                  ? 'When everyone is in, open the exam. Each student starts their own timer after accepting the exam rules.'
-                  : 'Share the join code. Start the quiz when everyone you expect is on the list.'}
-              </p>
-              <Button
-                variant="brand"
-                size="lg"
-                disabled={busy || room.participants.length === 0}
-                onClick={() => void runCommand(() => api.startSession(sessionId))}
-              >
-                {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
-              </Button>
+            <section aria-labelledby="lobby-heading" className="space-y-8">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div className="min-w-0 space-y-2">
+                  <h1 id="lobby-heading" className="text-title font-semibold tracking-tight">
+                    Waiting for students
+                  </h1>
+                  <p className="max-w-prose text-muted">
+                    {room.mode === 'exam'
+                      ? 'When everyone is in, open the exam. Each student starts their own timer after accepting the exam rules.'
+                      : 'Students scan the QR code or enter the join code. Start the quiz when everyone you expect is on the list.'}
+                  </p>
+                </div>
+                <Button
+                  variant="brand"
+                  size="lg"
+                  disabled={busy || room.participants.length === 0}
+                  onClick={() => void runCommand(() => api.startSession(sessionId))}
+                >
+                  {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
+                </Button>
+              </div>
+              <StudentRoster participants={room.participants} size="large" />
             </section>
           )}
 

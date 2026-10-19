@@ -1,6 +1,6 @@
 import { joinFormSchema } from '@quizup/shared';
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, PageHeader, TextField } from '../components/ui';
 
 type FieldErrors = Partial<Record<'joinCode' | 'displayName', string>>;
@@ -8,7 +8,8 @@ type FieldErrors = Partial<Record<'joinCode' | 'displayName', string>>;
 export function Join() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const prefilledCode = (searchParams.get('code') ?? '').trim().toUpperCase();
+  const { code: pathCode } = useParams();
+  const prefilledCode = (pathCode ?? searchParams.get('code') ?? '').trim().toUpperCase();
   const [joinCode, setJoinCode] = useState(prefilledCode);
   const [displayName, setDisplayName] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});

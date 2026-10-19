@@ -19,6 +19,7 @@ function renderJoin(path = '/join') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/join" element={<Join />} />
+        <Route path="/join/:code" element={<Join />} />
         <Route path="/play/:code" element={<PlayProbe />} />
       </Routes>
     </MemoryRouter>,
@@ -30,6 +31,12 @@ afterEach(cleanup);
 describe('Join', () => {
   it('prefills the join code from the link and moves on to the name', () => {
     renderJoin('/join?code=k7m2qx');
+    expect((screen.getByLabelText('Join code') as HTMLInputElement).value).toBe('K7M2QX');
+    expect(document.activeElement).toBe(screen.getByLabelText('Display name'));
+  });
+
+  it('prefills the join code from a short link path', () => {
+    renderJoin('/join/k7m2qx');
     expect((screen.getByLabelText('Join code') as HTMLInputElement).value).toBe('K7M2QX');
     expect(document.activeElement).toBe(screen.getByLabelText('Display name'));
   });

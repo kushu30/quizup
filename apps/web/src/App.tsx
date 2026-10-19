@@ -28,6 +28,7 @@ export function App() {
           <Route path="/host/questions" element={<QuestionBankPage />} />
         </Route>
         <Route path="/join" element={<Join />} />
+        <Route path="/join/:code" element={<Join />} />
         <Route path="/me/learner-profile" element={<LearnerProfilePage />} />
         <Route path="/play/:code" element={<Play />} />
       </Route>

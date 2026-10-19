@@ -22,7 +22,7 @@ export function Landing() {
       setCodeError('Enter the code your host shows on screen.');
       return;
     }
-    navigate(`/join?code=${encodeURIComponent(code)}`);
+    navigate(`/join/${encodeURIComponent(code)}`);
   }
 
   return (

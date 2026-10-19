@@ -13,7 +13,7 @@ vi.mock('../components/ServerStatus', () => ({
 
 function JoinProbe() {
   const location = useLocation();
-  return <p>Join page {location.search}</p>;
+  return <p>Join page {location.pathname}</p>;
 }
 
 function renderLanding(state?: unknown) {
@@ -22,6 +22,7 @@ function renderLanding(state?: unknown) {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/join" element={<JoinProbe />} />
+        <Route path="/join/:code" element={<JoinProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -34,7 +35,7 @@ describe('Landing', () => {
     renderLanding();
     fireEvent.change(screen.getByLabelText('Join code'), { target: { value: ' k7m2qx ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.getByText('Join page ?code=K7M2QX')).toBeTruthy();
+    expect(screen.getByText('Join page /join/K7M2QX')).toBeTruthy();
   });
 
   it('asks for a code instead of navigating when the box is empty', () => {
