@@ -12,6 +12,7 @@ const timestampSchema = z.string().datetime({ offset: true });
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 export const JOIN_CODE_LENGTH = 6;
+export const DISPLAY_NAME_MAX_LENGTH = 24;
 export const QUESTION_OPTION_COUNT = 4;
 
 export const profileSchema = z.object({
@@ -59,6 +60,7 @@ export const sessionSchema = z.object({
   status: sessionStatusSchema,
   started_at: timestampSchema.nullable(),
   ended_at: timestampSchema.nullable(),
+  question_ids: z.array(uuidSchema),
 });
 export type Session = z.infer<typeof sessionSchema>;
 
@@ -69,6 +71,7 @@ export const participantSchema = z.object({
   display_name: z.string().min(1),
   elo: z.number(),
   joined_at: timestampSchema,
+  rejoin_token_hash: z.string().nullable(),
 });
 export type Participant = z.infer<typeof participantSchema>;
 
@@ -84,6 +87,7 @@ export const responseSchema = z.object({
     .max(QUESTION_OPTION_COUNT - 1),
   correct: z.boolean(),
   response_ms: z.number().int().nonnegative(),
+  points: z.number().int().nonnegative(),
   served_at: timestampSchema,
   answered_at: timestampSchema,
 });
@@ -160,7 +164,11 @@ export const joinFormSchema = z.object({
     .toUpperCase()
     .length(JOIN_CODE_LENGTH, `Join code is ${JOIN_CODE_LENGTH} characters`)
     .regex(/^[A-Z0-9]+$/, 'Join code uses letters and digits only'),
-  displayName: z.string().trim().min(1, 'Enter a display name').max(40, 'Max 40 characters'),
+  displayName: z
+    .string()
+    .trim()
+    .min(1, 'Enter a display name')
+    .max(DISPLAY_NAME_MAX_LENGTH, `Max ${DISPLAY_NAME_MAX_LENGTH} characters`),
 });
 export type JoinForm = z.infer<typeof joinFormSchema>;
 

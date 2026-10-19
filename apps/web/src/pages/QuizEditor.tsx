@@ -1,4 +1,12 @@
-import { quizUpdateSchema, type Quiz, type QuizMode } from '@quizup/shared';
+import {
+  DEFAULT_QUESTION_DURATION_SECONDS,
+  MAX_QUESTION_DURATION_SECONDS,
+  MIN_QUESTION_DURATION_SECONDS,
+  quizUpdateSchema,
+  sessionCreateSchema,
+  type Quiz,
+  type QuizMode,
+} from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CsvImport } from '../components/CsvImport';
@@ -14,6 +22,7 @@ export function QuizEditor() {
   const [mode, setMode] = useState<QuizMode>('live');
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(DEFAULT_QUESTION_DURATION_SECONDS);
 
   const loadQuiz = useCallback(async () => {
     try {
@@ -49,6 +58,23 @@ export function QuizEditor() {
     try {
       await api.deleteQuiz(quizId);
       navigate('/host');
+    } catch (error) {
+      setMessage(describeError(error));
+    }
+  }
+
+  async function handleStartLiveSession() {
+    const parsed = sessionCreateSchema.safeParse({
+      quizId,
+      questionDurationSeconds: durationSeconds,
+    });
+    if (!parsed.success) {
+      setMessage(parsed.error.issues.map((issue) => issue.message).join('; '));
+      return;
+    }
+    try {
+      const summary = await api.createSession(parsed.data);
+      navigate(`/host/sessions/${summary.session.id}`);
     } catch (error) {
       setMessage(describeError(error));
     }
@@ -107,6 +133,27 @@ export function QuizEditor() {
         </form>
         {message && <p className="text-sm text-slate-700">{message}</p>}
       </div>
+
+      <section className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
+        <label className="block text-sm">
+          Seconds per question
+          <input
+            type="number"
+            min={MIN_QUESTION_DURATION_SECONDS}
+            max={MAX_QUESTION_DURATION_SECONDS}
+            className="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-2"
+            value={durationSeconds}
+            onChange={(event) => setDurationSeconds(Number(event.target.value))}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => void handleStartLiveSession()}
+          className="rounded-md bg-emerald-600 px-4 py-2 text-white"
+        >
+          Start live session
+        </button>
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Add a question</h2>

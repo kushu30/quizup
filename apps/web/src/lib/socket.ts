@@ -4,6 +4,9 @@ import { webEnv } from './env';
 
 export type QuizSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function createQuizSocket(): QuizSocket {
-  return io(webEnv.VITE_SERVER_URL, { transports: ['websocket'] });
+export function createQuizSocket(accessToken?: string): QuizSocket {
+  return io(webEnv.VITE_SERVER_URL, {
+    transports: ['websocket'],
+    auth: accessToken ? { accessToken } : {},
+  });
 }

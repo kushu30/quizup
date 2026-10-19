@@ -1,13 +1,20 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { requireAuth } from './auth.js';
+import { requireAuth, type AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
 import { errorHandler } from './http.js';
+import type { LiveEngine } from './live/engine.js';
 import { questionsRouter } from './routes/questions.js';
 import { quizzesRouter } from './routes/quizzes.js';
+import { createSessionsRouter } from './routes/sessions.js';
 
-export function createApp() {
+export interface AppDependencies {
+  engine: LiveEngine;
+  verifier: AccessTokenVerifier;
+}
+
+export function createApp(dependencies: AppDependencies) {
   const app = express();
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -28,6 +35,7 @@ export function createApp() {
 
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);
+  app.use('/sessions', createSessionsRouter(dependencies));
   app.use(errorHandler);
 
   return app;

@@ -2,6 +2,7 @@ import {
   apiErrorSchema,
   csvImportResultSchema,
   questionListSchema,
+  sessionSummarySchema,
   quizWithCountListSchema,
   quizSchema,
   questionSchema,
@@ -16,6 +17,8 @@ import {
   type QuizUpdateInput,
   type QuizWithCount,
   type RowError,
+  type SessionCreateInput,
+  type SessionSummary,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -105,6 +108,14 @@ export const api = {
     requestJson(`/questions/${questionId}`, 'PATCH', questionSchema, changes),
   deleteQuestion: (questionId: string): Promise<void> =>
     requestNoContent(`/questions/${questionId}`, 'DELETE'),
+  createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
+    requestJson('/sessions', 'POST', sessionSummarySchema, input),
+  startSession: (sessionId: string): Promise<SessionSummary> =>
+    requestJson(`/sessions/${sessionId}/start`, 'POST', sessionSummarySchema),
+  nextQuestion: (sessionId: string): Promise<SessionSummary> =>
+    requestJson(`/sessions/${sessionId}/next`, 'POST', sessionSummarySchema),
+  endSession: (sessionId: string): Promise<SessionSummary> =>
+    requestJson(`/sessions/${sessionId}/end`, 'POST', sessionSummarySchema),
   importQuestions: (quizId: string, csv: string): Promise<CsvImportResult> =>
     requestJson(`/quizzes/${quizId}/questions/import`, 'POST', csvImportResultSchema, { csv }),
 };

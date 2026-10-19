@@ -74,6 +74,27 @@ CSV import: header row `topic,difficulty,stem,option_a,option_b,option_c,option_
 
 API (all need `Authorization: Bearer <access token>` from a host or admin): `GET/POST /quizzes`, `GET/PATCH/DELETE /quizzes/:quizId`, `POST /quizzes/:quizId/questions`, `POST /quizzes/:quizId/questions/import`, `GET /questions`, `GET /questions/topics`, `PATCH/DELETE /questions/:questionId`.
 
+### Live sessions
+
+Open a quiz at `/host/quizzes/:id`, set the seconds per question (5 to 120) and click Start live session. The host console at `/host/sessions/:id` shows the join code. Students enter the code and a display name at `/join` (no account needed), wait in the lobby, and the host starts the quiz and moves through questions with Next. Scoring, timing and question order are all decided by the server.
+
+Try it locally with two browser windows:
+
+1. Run `supabase db reset` (applies migration 0004), then `npm run dev`.
+2. In window one, sign in as a host, open a quiz with at least one question and start a live session.
+3. In a second window (a private window gives you a separate identity), open `/join`, enter the code and a name.
+4. Add a third window to see rankings change. Refresh a student window mid-question: it returns to the same question with the timer still correct.
+
+Tests:
+
+```sh
+npm test
+```
+
+Runs the unit tests (scoring, answer deadline and grace, clock offset, join codes, rate limiter) and an integration test that boots the real server with an in-memory repository and 2 to 3 socket.io clients. No database is needed.
+
+Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
+
 ### Google sign-in
 
 Create a Google OAuth client with redirect URI `<supabase url>/auth/v1/callback`. Locally, set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in your shell and set `enabled = true` under `[auth.external.google]` in `supabase/config.toml`, then `supabase stop && supabase start`. On a hosted project, enable the Google provider in the dashboard. The button on `/login` is hidden unless the web app has `VITE_GOOGLE_AUTH_ENABLED=true`; set it once the provider is enabled. Google accounts follow the same role rules: student unless the email is allowlisted.

@@ -57,7 +57,7 @@ export function ServerStatus() {
     }, SOCKET_TIMEOUT_MS);
 
     socket.on('connect', () => {
-      socket.emit('time:ping', { clientSentMs: Date.now() });
+      socket.emit('time:ping', { clientSentMs: Date.now() }, () => undefined);
     });
 
     socket.on('connect_error', (error) => {
@@ -73,7 +73,7 @@ export function ServerStatus() {
       clearTimeout(timeoutId);
       const receivedMs = Date.now();
       const roundTripMs = receivedMs - parsed.data.clientSentMs;
-      const clockOffsetMs = parsed.data.serverMs - (parsed.data.clientSentMs + roundTripMs / 2);
+      const clockOffsetMs = parsed.data.serverNowMs - (parsed.data.clientSentMs + roundTripMs / 2);
       setSocketState({ kind: 'ok', roundTripMs, clockOffsetMs: Math.round(clockOffsetMs) });
     });
 
