@@ -95,6 +95,40 @@ Runs the unit tests (scoring, answer deadline and grace, clock offset, join code
 
 Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
 
+### Exam mode and proctoring
+
+Turn on **Exam mode** (with a duration in minutes) in the quiz editor. Adaptive mode and Elo/BKT updates are off for exams. Students join with the code and wait in the lobby; the host opens the exam; each student sees a consent screen, and accepting it creates their attempt with a private timer and a personal question and option order, and requests full screen. Attempts are stored in the database, so a refresh or a server restart does not reset them (the student resumes with the same join code, name and rejoin token). The server auto-submits expired attempts, and ending the session submits all open ones. There is no leaderboard; the host sees a progress table (alphabetical) and a per-student proctor timeline, and releases results with the Release results button. Until then students only see "Submitted. Results will be released by your host." Release works from the database alone, even after a restart. Run `supabase db reset` to apply migration 0007.
+
+What each signal means and how it is captured (all in the student's browser, only during an open attempt):
+
+| Signal            | Meaning                                              | How it is captured                                                                 |
+| ----------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `tab_switch`      | The student switched to another tab or minimized     | `visibilitychange` to hidden                                                       |
+| `window_blur`     | The exam window lost focus while still visible       | `blur` on the window, only if the page is still visible                            |
+| `focus_return`    | The student came back; carries the time away         | `visibilitychange` to visible, or window `focus`                                   |
+| `fullscreen_exit` | The student left full screen                         | `fullscreenchange` when the document leaves full screen                            |
+| `copy`            | Copy or cut (cut is flagged); length only            | `copy` and `cut` events; selection length                                          |
+| `paste`           | A paste; length only                                 | `paste` event; length of the pasted text                                           |
+| `right_click`     | The context menu was opened                          | `contextmenu` event                                                                |
+| `resize`          | The window size changed by 20 px or more             | `resize`, debounced 500 ms                                                         |
+| `consent_given`   | The student accepted the terms                       | Written by the server once, not sent by the browser                                |
+
+Events are timestamped by the browser and again by the server. They are queued in the browser while offline (up to 200) and flagged "late" if delivered more than 5 seconds after they happened. The server accepts at most 20 events per second per connection and counts any it drops.
+
+Never collected: no webcam, no microphone, no screen recording, no keystrokes, no clipboard content (copy and paste record only a length). The consent screen says this, and the server stores which version of the text each student accepted.
+
+Honest limits: these are browser-side signals. A determined student can evade or spoof them, for example by using a second device or a phone, a second monitor, a virtual machine, browser developer tools, or by blocking events. Missing signals do not mean no misconduct, and signals do not prove misconduct. Treat them as indicators for a human to review, with the student's context.
+
+Proctor latency check (simulated):
+
+```sh
+npm run proctor:sim
+```
+
+It starts the server in-process with the in-memory repository, one host socket and 20 simulated exam students who consent, start, and each emit every signal type. It prints p50, p95 and max per signal for how long the host takes to receive the `proctor:timeline` event and how long until the row is stored, plus the number dropped by the rate cap, and exits non-zero if the overall p95 is above 1000 ms. The numbers are simulated and local: the server and the simulated students share one Node process on your machine, so they say nothing about a deployed server or real networks. Stored latency is dominated by the 200 ms batch flush.
+
+After an exam ends the server keeps the session in memory for 7 days; after a restart it reloads exams that ended within the last 7 days. Beyond that window students can no longer reopen their results screen in the app, but the host can still release results, view the summary and download the CSVs, because those read from the database.
+
 ### Analytics
 
 The host live screen has an **Analytics** panel that updates in real time, and every ended session has a summary page with CSV exports.

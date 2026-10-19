@@ -1,4 +1,9 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["src/**/*.test.ts", "src/**/*.testkit.ts", "src/analytics/loadSim.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.testkit.ts",
+    "src/analytics/loadSim.ts",
+    "src/exam/proctorSim.ts"
+  ]
 }

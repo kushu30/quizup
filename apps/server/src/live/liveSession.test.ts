@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import type { AccessTokenVerifier } from '../auth.js';
 import { attachSocketServer, type QuizSocketServer } from '../socket.js';
+import { ExamService } from '../exam/examService.js';
 import { LiveEngine } from './engine.js';
 import { InMemoryLiveRepository } from './inMemoryRepository.js';
 import { SocketPublisher } from './socketPublisher.js';
@@ -83,9 +84,12 @@ describe('live session engine over sockets', () => {
       graceMs: GRACE_MS,
       hostRefreshIntervalMs: 20,
     });
-    httpServer = createServer(createApp({ engine, verifier }));
+    const exam = new ExamService({ engine, publisher });
+    engine.attachExam(exam);
+    httpServer = createServer(createApp({ engine, exam, verifier }));
     socketServer = attachSocketServer(httpServer, {
       engine,
+      exam,
       publisher,
       verifier,
       corsOrigins: ['http://localhost:5173'],

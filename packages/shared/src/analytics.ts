@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { difficultySchema, sessionStatusSchema, type Difficulty } from './enums.js';
+import { proctorCountsSchema } from './exam.js';
 import { leaderboardEntrySchema } from './socket.js';
 
 export const HISTOGRAM_BUCKET_COUNT = 10;
@@ -205,6 +206,7 @@ export const participantAnalyticsSchema = z.object({
   rating: z.number().nullable(),
   projection: projectionSchema.nullable(),
   checkpointProjection: z.number().nullable(),
+  proctorCounts: proctorCountsSchema.nullable(),
   mastery: z.array(z.number().min(0).max(1).nullable()),
 });
 export type ParticipantAnalytics = z.infer<typeof participantAnalyticsSchema>;
@@ -212,6 +214,7 @@ export type ParticipantAnalytics = z.infer<typeof participantAnalyticsSchema>;
 export const analyticsSnapshotSchema = z.object({
   sessionId: z.string().uuid(),
   source: z.enum(['live', 'rebuilt']),
+  mode: z.enum(['live', 'exam']).default('live'),
   status: sessionStatusSchema,
   generatedAtMs: z.number(),
   adaptive: z.boolean(),

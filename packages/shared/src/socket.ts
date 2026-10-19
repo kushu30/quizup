@@ -1,5 +1,16 @@
 import { z } from 'zod';
 import type { AnalyticsSnapshot } from './analytics.js';
+import type {
+  ExamAnswerPayload,
+  ExamProgressPayload,
+  ExamResults,
+  ExamStartPayload,
+  ExamStudentView,
+  ExamSubmitReason,
+  ProctorEventPayload,
+  ProctorEventRecord,
+} from './exam.js';
+import { examProgressRowSchema, examStudentViewSchema } from './exam.js';
 import { DISPLAY_NAME_MAX_LENGTH, JOIN_CODE_LENGTH, QUESTION_OPTION_COUNT } from './tables.js';
 import { difficultySchema, sessionStatusSchema } from './enums.js';
 
@@ -21,6 +32,13 @@ export const SOCKET_ERROR_CODES = [
   'too_early',
   'too_late',
   'already_answered',
+  'consent_required',
+  'consent_version_mismatch',
+  'exam_not_open',
+  'not_exam',
+  'no_open_attempt',
+  'attempt_expired',
+  'not_submitted',
 ] as const;
 export const socketErrorCodeSchema = z.enum(SOCKET_ERROR_CODES);
 export type SocketErrorCode = z.infer<typeof socketErrorCodeSchema>;
@@ -65,13 +83,6 @@ export type AnswerSubmitAck = Ack;
 export const timePingPayloadSchema = z.object({ clientSentMs: z.number() }).strict();
 export type TimePingPayload = z.infer<typeof timePingPayloadSchema>;
 export type TimePingAck = Ack;
-
-export const proctorEventPayloadSchema = z.object({
-  type: z.string().min(1),
-  payload: z.record(z.string(), z.unknown()),
-  simulated: z.boolean(),
-});
-export type ProctorEventPayload = z.infer<typeof proctorEventPayloadSchema>;
 
 export const participantPresenceSchema = z.object({
   participantId: z.string().uuid(),
@@ -165,6 +176,9 @@ export const roomStatePayloadSchema = z.object({
     })
     .nullable(),
   questionClosed: z.boolean(),
+  mode: z.enum(['live', 'exam']),
+  exam: examStudentViewSchema.nullable(),
+  examProgress: z.array(examProgressRowSchema).nullable(),
   adaptive: z.boolean(),
   round: adaptiveRoundSchema.nullable(),
   adaptiveTable: z.array(adaptiveRowSchema).nullable(),
@@ -189,11 +203,19 @@ export const timePongPayloadSchema = z.object({
 });
 export type TimePongPayload = z.infer<typeof timePongPayloadSchema>;
 
+export type ExamViewAck = Ack<{ view: ExamStudentView }>;
+export type ExamAnswerAck = Ack<{ answeredCount: number }>;
+export type ExamResultsAck = Ack<{ released: false } | { released: true; results: ExamResults }>;
+
 export interface ClientToServerEvents {
   'room:join': (payload: RoomJoinPayload, ack: (response: RoomJoinAck) => void) => void;
   'answer:submit': (payload: AnswerSubmitPayload, ack: (response: AnswerSubmitAck) => void) => void;
   'time:ping': (payload: TimePingPayload, ack: (response: TimePingAck) => void) => void;
   'proctor:event': (payload: ProctorEventPayload, ack: (response: Ack) => void) => void;
+  'exam:start': (payload: ExamStartPayload, ack: (response: ExamViewAck) => void) => void;
+  'exam:answer': (payload: ExamAnswerPayload, ack: (response: ExamAnswerAck) => void) => void;
+  'exam:submit': (payload: Record<string, never>, ack: (response: ExamViewAck) => void) => void;
+  'exam:results': (payload: Record<string, never>, ack: (response: ExamResultsAck) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -204,4 +226,8 @@ export interface ServerToClientEvents {
   'session:end': (payload: SessionEndPayload) => void;
   'time:pong': (payload: TimePongPayload) => void;
   'analytics:snapshot': (payload: AnalyticsSnapshot) => void;
+  'exam:progress': (payload: ExamProgressPayload) => void;
+  'exam:released': (payload: Record<string, never>) => void;
+  'exam:submitted': (payload: { reason: ExamSubmitReason }) => void;
+  'proctor:timeline': (payload: ProctorEventRecord) => void;
 }

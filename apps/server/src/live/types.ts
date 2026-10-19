@@ -1,6 +1,9 @@
 import type {
   Difficulty,
+  ExamProgressRow,
+  ExamStudentView,
   Participant,
+  ProctorEventRecord,
   ServerToClientEvents,
   Session,
   SocketErrorCode,
@@ -40,7 +43,7 @@ export interface SessionUpdate {
   ended_at?: string;
 }
 
-export interface LiveRepository {
+export interface LiveRepository extends ExamRepository {
   findOwnedQuiz: (
     quizId: string,
     hostId: string,
@@ -51,6 +54,7 @@ export interface LiveRepository {
     quizId: string;
     joinCode: string;
     questionIds: string[];
+    examDurationMinutes: number | null;
   }) => Promise<Session | null>;
   findSessionWithHost: (sessionId: string) => Promise<{ session: Session; hostId: string } | null>;
   updateSession: (sessionId: string, update: SessionUpdate) => Promise<void>;
@@ -79,9 +83,56 @@ export interface LiveRepository {
   endAllNonEndedSessions: (endedAtIso: string) => Promise<void>;
 }
 
+export interface ExamAttemptRecord {
+  id: string;
+  sessionId: string;
+  participantId: string;
+  consentAtMs: number;
+  consentVersion: string;
+  startedAtMs: number;
+  deadlineAtMs: number;
+  submittedAtMs: number | null;
+  shuffleSeed: number;
+  questionOrder: string[];
+  optionOrders: Record<string, number[]>;
+}
+
+export interface ExamAnswerRecord {
+  attemptId: string;
+  questionId: string;
+  chosenOriginalIndex: number;
+  savedAtMs: number;
+}
+
+export interface OpenExamSession {
+  session: Session;
+  hostId: string;
+  participants: {
+    id: string;
+    displayName: string;
+    elo: number;
+    joinedAtMs: number;
+    tokenHash: string;
+  }[];
+}
+
+export interface ExamRepository {
+  listOpenExamSessions: () => Promise<OpenExamSession[]>;
+  listExamAttempts: (sessionId: string) => Promise<ExamAttemptRecord[]>;
+  createExamAttempt: (attempt: ExamAttemptRecord) => Promise<ExamAttemptRecord>;
+  submitExamAttempt: (attemptId: string, submittedAtMs: number) => Promise<boolean>;
+  upsertExamAnswer: (answer: ExamAnswerRecord) => Promise<void>;
+  listExamAnswers: (attemptId: string) => Promise<ExamAnswerRecord[]>;
+  insertProctorEvents: (events: ProctorEventRecord[]) => Promise<void>;
+  listProctorEvents: (sessionId: string) => Promise<ProctorEventRecord[]>;
+  listParticipantNames: (sessionId: string) => Promise<{ id: string; displayName: string }[]>;
+  setResultsReleased: (sessionId: string, releasedAtMs: number) => Promise<number>;
+}
+
 export interface SessionAnalyticsSource {
   session: Session;
   hostId: string;
+  proctorEvents: { participantId: string; type: string }[];
   participants: { id: string; displayName: string; elo: number; joinedAtMs: number }[];
   questions: {
     id: string;
@@ -108,6 +159,22 @@ export interface SummaryRecord {
   session: Session;
   hostId: string;
   storedSummary: unknown;
+}
+
+export interface ExamContext {
+  sessionId: string;
+  status: Session['status'];
+  hostId: string;
+  durationMs: number;
+  questions: LiveQuestion[];
+  resultsReleasedAtMs: number | null;
+}
+
+export interface ExamHooks {
+  studentView: (sessionId: string, participantId: string) => ExamStudentView | null;
+  hostProgress: (sessionId: string) => ExamProgressRow[] | null;
+  beforeSessionEnds: (sessionId: string) => Promise<void>;
+  loadRehydrated: (sessionId: string) => Promise<void>;
 }
 
 export type EngineEventName = keyof ServerToClientEvents;

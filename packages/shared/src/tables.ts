@@ -61,6 +61,8 @@ export const sessionSchema = z.object({
   started_at: timestampSchema.nullable(),
   ended_at: timestampSchema.nullable(),
   question_ids: z.array(uuidSchema),
+  exam_duration_minutes: z.number().int().nullable(),
+  results_released_at: timestampSchema.nullable(),
 });
 export type Session = z.infer<typeof sessionSchema>;
 
@@ -109,8 +111,37 @@ export const proctorEventSchema = z.object({
   payload: jsonObjectSchema,
   at: timestampSchema,
   simulated: z.boolean(),
+  attempt_id: uuidSchema.nullable(),
+  client_at: timestampSchema.nullable(),
+  server_at: timestampSchema,
+  late: z.boolean(),
+  detail: jsonObjectSchema,
 });
 export type ProctorEvent = z.infer<typeof proctorEventSchema>;
+
+export const examAttemptSchema = z.object({
+  id: uuidSchema,
+  session_id: uuidSchema,
+  participant_id: uuidSchema,
+  consent_at: timestampSchema,
+  consent_version: z.string().min(1),
+  started_at: timestampSchema,
+  deadline_at: timestampSchema,
+  submitted_at: timestampSchema.nullable(),
+  shuffle_seed: z.number().int().nonnegative(),
+  question_order: z.array(uuidSchema),
+  option_orders: z.record(z.string(), z.array(z.number().int().min(0).max(3)).length(4)),
+});
+export type ExamAttempt = z.infer<typeof examAttemptSchema>;
+
+export const examAnswerSchema = z.object({
+  id: uuidSchema,
+  attempt_id: uuidSchema,
+  question_id: uuidSchema,
+  chosen_original_index: z.number().int().min(0).max(3),
+  saved_at: timestampSchema,
+});
+export type ExamAnswer = z.infer<typeof examAnswerSchema>;
 
 export const riskReportSchema = z.object({
   session_id: uuidSchema,

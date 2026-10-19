@@ -5,6 +5,7 @@ import {
   difficultyMismatch,
   emptyHistogram,
   emptyParticipantAggregate,
+  emptyProctorCounts,
   emptyQuestionAggregate,
   incrementBucket,
   medianOf,
@@ -16,6 +17,7 @@ import {
   type Difficulty,
   type LeaderboardEntry,
   type ParticipantAggregate,
+  type ProctorCounts,
   type ParticipantAnalytics,
   type QuestionAggregate,
   type QuestionAnalytics,
@@ -27,6 +29,7 @@ export interface SessionAnalyticsOptions {
   adaptive: boolean;
   totalRounds: number | null;
   source?: 'live' | 'rebuilt';
+  mode?: 'live' | 'exam';
 }
 
 export interface ServedQuestion {
@@ -59,6 +62,7 @@ interface ParticipantEntry {
   aggregate: ParticipantAggregate;
   rating: number | null;
   checkpointProjection: number | null;
+  proctorCounts: ProctorCounts | null;
 }
 
 interface QuestionEntry {
@@ -73,6 +77,7 @@ export class SessionAnalytics {
   private readonly adaptive: boolean;
   private readonly totalRounds: number | null;
   private readonly source: 'live' | 'rebuilt';
+  private readonly mode: 'live' | 'exam';
   private readonly participants = new Map<string, ParticipantEntry>();
   private readonly mastery = new Map<string, Map<string, number>>();
   private readonly topics = new Map<string, string>();
@@ -88,6 +93,7 @@ export class SessionAnalytics {
     this.adaptive = options.adaptive;
     this.totalRounds = options.totalRounds;
     this.source = options.source ?? 'live';
+    this.mode = options.mode ?? 'live';
   }
 
   registerParticipant(participantId: string, displayName: string) {
@@ -97,6 +103,7 @@ export class SessionAnalytics {
         aggregate: emptyParticipantAggregate(),
         rating: null,
         checkpointProjection: null,
+        proctorCounts: null,
       });
     }
   }
@@ -158,6 +165,13 @@ export class SessionAnalytics {
     this.mastery.set(participantId, forParticipant);
   }
 
+  setProctorCounts(participantId: string, counts: ProctorCounts) {
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      participant.proctorCounts = counts;
+    }
+  }
+
   setRating(participantId: string, rating: number) {
     const participant = this.participants.get(participantId);
     if (participant) {
@@ -209,6 +223,8 @@ export class SessionAnalytics {
           rating: this.adaptive ? participant.rating : null,
           projection: this.projectionFor(participant),
           checkpointProjection: participant.checkpointProjection,
+          proctorCounts:
+            this.mode === 'exam' ? (participant.proctorCounts ?? emptyProctorCounts()) : null,
           mastery: topics.map((topic) => masteryForParticipant?.get(topic.key) ?? null),
         };
       })
@@ -236,6 +252,7 @@ export class SessionAnalytics {
     return {
       sessionId: this.sessionId,
       source: this.source,
+      mode: this.mode,
       status: input.status,
       generatedAtMs: input.generatedAtMs,
       adaptive: this.adaptive,

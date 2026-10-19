@@ -32,12 +32,15 @@ import {
   type SessionStatus,
   type SessionSummary,
   type StudentJoinPayload,
+  type QuizSettings,
   type YourQuestionResult,
 } from '@quizup/shared';
 import { SessionAnalytics } from '../analytics/sessionAnalytics.js';
 import { createCryptoRandomSource } from './randomSource.js';
 import {
   EngineError,
+  type ExamContext,
+  type ExamHooks,
   type LiveQuestion,
   type LivePublisher,
   type LiveRepository,
@@ -46,6 +49,7 @@ import {
 const JOIN_CODE_ATTEMPTS = 20;
 const DEFAULT_HOST_REFRESH_INTERVAL_MS = 200;
 const DEFAULT_ENDED_RETENTION_MS = 10 * 60 * 1000;
+export const EXAM_ENDED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface LiveEngineOptions {
   repository: LiveRepository;
@@ -55,6 +59,7 @@ export interface LiveEngineOptions {
   graceMs?: number;
   hostRefreshIntervalMs?: number;
   endedSessionRetentionMs?: number;
+  endedExamRetentionMs?: number;
   randomIndex?: (exclusiveMax: number) => number;
   random?: RandomSource;
   analyticsThrottleMs?: number;
@@ -125,6 +130,9 @@ interface SessionState {
   persistence: Promise<void>;
   analytics: SessionAnalytics;
   analyticsTimer: NodeJS.Timeout | null;
+  exam: { durationMs: number } | null;
+  resultsReleasedAtMs: number | null;
+  finishing: boolean;
   participants: Map<string, ParticipantState>;
   participantIdByName: Map<string, string>;
   reservedNames: Set<string>;
@@ -154,9 +162,11 @@ export class LiveEngine {
   private readonly graceMs: number;
   private readonly hostRefreshIntervalMs: number;
   private readonly endedSessionRetentionMs: number;
+  private readonly endedExamRetentionMs: number;
   private readonly randomIndex: (exclusiveMax: number) => number;
   private readonly random: RandomSource;
   private readonly analyticsThrottleMs: number;
+  private examHooks: ExamHooks | null = null;
   private readonly sessionsById = new Map<string, SessionState>();
   private readonly sessionIdByJoinCode = new Map<string, string>();
   private readonly sessionIdByParticipantId = new Map<string, string>();
@@ -169,6 +179,7 @@ export class LiveEngine {
     this.graceMs = options.graceMs ?? ANSWER_GRACE_MS;
     this.hostRefreshIntervalMs = options.hostRefreshIntervalMs ?? DEFAULT_HOST_REFRESH_INTERVAL_MS;
     this.endedSessionRetentionMs = options.endedSessionRetentionMs ?? DEFAULT_ENDED_RETENTION_MS;
+    this.endedExamRetentionMs = options.endedExamRetentionMs ?? EXAM_ENDED_RETENTION_MS;
     this.randomIndex = options.randomIndex ?? ((exclusiveMax) => randomInt(exclusiveMax));
     this.random = options.random ?? createCryptoRandomSource();
     this.analyticsThrottleMs = options.analyticsThrottleMs ?? ANALYTICS_THROTTLE_MS;
@@ -198,13 +209,17 @@ export class LiveEngine {
     const questions = this.shuffle(approvedQuestions);
     const questionIds = questions.map((question) => question.id);
     const parsedSettings = quizSettingsSchema.safeParse(quiz.settings);
-    const settings = parsedSettings.success ? parsedSettings.data : { adaptive: false };
-    const adaptiveRounds = settings.adaptive
-      ? resolveAdaptiveRounds(
-          'adaptiveRounds' in settings ? settings.adaptiveRounds : undefined,
-          questions.length,
-        )
-      : null;
+    const settings: QuizSettings = parsedSettings.success
+      ? parsedSettings.data
+      : { mode: 'live', adaptive: false, adaptiveRounds: undefined, durationMinutes: undefined };
+    const examDurationMinutes =
+      settings.mode === 'exam' && settings.durationMinutes !== undefined
+        ? settings.durationMinutes
+        : null;
+    const adaptiveRounds =
+      examDurationMinutes === null && settings.adaptive
+        ? resolveAdaptiveRounds(settings.adaptiveRounds, questions.length)
+        : null;
 
     for (let attempt = 0; attempt < JOIN_CODE_ATTEMPTS; attempt += 1) {
       const joinCode = generateJoinCode(this.randomIndex);
@@ -215,6 +230,7 @@ export class LiveEngine {
         quizId: quiz.id,
         joinCode,
         questionIds,
+        examDurationMinutes,
       });
       if (!record) {
         continue;
@@ -222,7 +238,8 @@ export class LiveEngine {
       const state: SessionState = {
         record,
         hostId: input.hostId,
-        durationMs: input.questionDurationMs,
+        durationMs:
+          examDurationMinutes === null ? input.questionDurationMs : examDurationMinutes * 60_000,
         questions,
         adaptiveRounds,
         totalRounds: adaptiveRounds ?? questions.length,
@@ -230,9 +247,13 @@ export class LiveEngine {
         analytics: new SessionAnalytics({
           sessionId: record.id,
           adaptive: adaptiveRounds !== null,
-          totalRounds: adaptiveRounds ?? questions.length,
+          totalRounds: examDurationMinutes === null ? (adaptiveRounds ?? questions.length) : null,
+          mode: examDurationMinutes === null ? 'live' : 'exam',
         }),
         analyticsTimer: null,
+        exam: examDurationMinutes === null ? null : { durationMs: examDurationMinutes * 60_000 },
+        resultsReleasedAtMs: null,
+        finishing: false,
         participants: new Map(),
         participantIdByName: new Map(),
         reservedNames: new Set(),
@@ -262,6 +283,7 @@ export class LiveEngine {
       session: stored.session,
       joinCode: stored.session.join_code,
       adaptive: false,
+      mode: stored.session.exam_duration_minutes === null ? 'live' : 'exam',
       questionDurationSeconds: null,
       questionCount: stored.session.question_ids.length,
       currentQuestionNumber: null,
@@ -281,19 +303,27 @@ export class LiveEngine {
     for (const question of state.questions) {
       state.analytics.registerTopic(question.topic);
     }
+    if (state.exam) {
+      this.registerExamQuestions(state);
+    }
     const startedAtIso = new Date(this.now()).toISOString();
     await this.repository.updateSession(state.record.id, {
       status: 'running',
       started_at: startedAtIso,
     });
     state.record = { ...state.record, status: 'running', started_at: startedAtIso };
+    if (state.exam) {
+      this.pushRoomStateToParticipants(state);
+      this.flushHostState(state);
+      return this.summarize(state);
+    }
     await this.showRound(state, 0);
     return this.summarize(state);
   }
 
   async nextQuestion(sessionId: string, hostId: string): Promise<SessionSummary> {
     const state = this.requireHostedSession(sessionId, hostId);
-    if (state.record.status !== 'running' || !state.run) {
+    if (state.exam || state.record.status !== 'running' || !state.run) {
       throw new EngineError('invalid_session_state', 'The session is not running');
     }
     if (!state.run.closed) {
@@ -589,6 +619,7 @@ export class LiveEngine {
       session: state.record,
       joinCode: state.record.join_code,
       adaptive: state.adaptiveRounds !== null,
+      mode: state.exam ? 'exam' : 'live',
       questionDurationSeconds: Math.round(state.durationMs / 1000),
       questionCount: state.totalRounds,
       currentQuestionNumber: state.run ? state.run.index + 1 : null,
@@ -917,14 +948,18 @@ export class LiveEngine {
   }
 
   private async finishSession(state: SessionState) {
-    if (state.record.status === 'ended') {
+    if (state.record.status === 'ended' || state.finishing) {
       return;
     }
+    state.finishing = true;
     if (state.run && !state.run.closed) {
       state.run.closed = true;
     }
     this.clearTimers(state);
     await state.persistence;
+    if (state.exam) {
+      await this.examHooks?.beforeSessionEnds(state.record.id);
+    }
     if (this.hasEnded(state)) {
       return;
     }
@@ -947,8 +982,8 @@ export class LiveEngine {
       this.publisher.emitToParticipant(participant.id, 'session:end', {
         sessionId,
         endedAtServerMs: endedAtMs,
-        entries,
-        you: { rank: position + 1, score: participant.score },
+        entries: state.exam ? [] : entries,
+        you: state.exam ? null : { rank: position + 1, score: participant.score },
       });
     });
     this.flushHostState(state);
@@ -958,7 +993,7 @@ export class LiveEngine {
 
     state.retentionTimer = setTimeout(
       () => this.forgetSession(state),
-      this.endedSessionRetentionMs,
+      state.exam ? this.endedExamRetentionMs : this.endedSessionRetentionMs,
     );
     state.retentionTimer.unref();
 
@@ -1038,7 +1073,173 @@ export class LiveEngine {
 
   getAnalyticsSnapshot(sessionId: string, includeMedians = false): AnalyticsSnapshot | null {
     const state = this.sessionsById.get(sessionId);
-    return state ? this.buildAnalyticsSnapshot(state, includeMedians) : null;
+    if (!state || (state.exam && state.record.status !== 'ended')) {
+      return null;
+    }
+    return this.buildAnalyticsSnapshot(state, includeMedians);
+  }
+
+  attachExam(hooks: ExamHooks) {
+    this.examHooks = hooks;
+  }
+
+  getExamContext(sessionId: string): ExamContext | null {
+    const state = this.sessionsById.get(sessionId);
+    if (!state?.exam) {
+      return null;
+    }
+    return {
+      sessionId,
+      status: state.record.status,
+      hostId: state.hostId,
+      durationMs: state.exam.durationMs,
+      questions: state.questions,
+      resultsReleasedAtMs: state.resultsReleasedAtMs,
+    };
+  }
+
+  getParticipantRef(participantId: string): { sessionId: string; displayName: string } | null {
+    const state = this.findStateByParticipant(participantId);
+    const participant = state?.participants.get(participantId);
+    return state && participant
+      ? { sessionId: state.record.id, displayName: participant.displayName }
+      : null;
+  }
+
+  listSessionParticipants(sessionId: string): { id: string; displayName: string }[] {
+    const state = this.sessionsById.get(sessionId);
+    return [...(state?.participants.values() ?? [])].map((participant) => ({
+      id: participant.id,
+      displayName: participant.displayName,
+    }));
+  }
+
+  getSessionAnalytics(sessionId: string): SessionAnalytics | null {
+    return this.sessionsById.get(sessionId)?.analytics ?? null;
+  }
+
+  markResultsReleased(sessionId: string, releasedAtMs: number) {
+    const state = this.sessionsById.get(sessionId);
+    if (state && state.resultsReleasedAtMs === null) {
+      state.resultsReleasedAtMs = releasedAtMs;
+      this.flushHostState(state);
+    }
+  }
+
+  applyExamResult(participantId: string, score: number, totalResponseMs: number) {
+    const participant = this.findStateByParticipant(participantId)?.participants.get(participantId);
+    if (participant) {
+      participant.score = score;
+      participant.totalResponseMs = totalResponseMs;
+    }
+  }
+
+  private registerExamQuestions(state: SessionState) {
+    state.questions.forEach((question, index) => {
+      state.analytics.onQuestionServed(
+        {
+          id: question.id,
+          stem: question.stem,
+          topic: question.topic,
+          difficulty: question.difficulty,
+        },
+        index + 1,
+      );
+    });
+  }
+
+  private pushRoomStateToParticipants(state: SessionState) {
+    for (const participant of state.participants.values()) {
+      this.publisher.emitToParticipant(
+        participant.id,
+        'room:state',
+        this.buildRoomState(state, { role: 'student', participantId: participant.id }),
+      );
+    }
+  }
+
+  async rehydrateExamSessions(): Promise<void> {
+    const open = await this.repository.listOpenExamSessions();
+    for (const entry of open) {
+      const { session } = entry;
+      const minutes = session.exam_duration_minutes;
+      if (minutes === null || this.sessionsById.has(session.id)) {
+        continue;
+      }
+      const loaded = await this.repository.loadQuestionsByIds(session.question_ids);
+      const loadedById = new Map(loaded.map((question) => [question.id, question]));
+      const questions: LiveQuestion[] = session.question_ids.flatMap((questionId) => {
+        const question = loadedById.get(questionId);
+        return question
+          ? [
+              {
+                id: question.id,
+                stem: question.stem,
+                options: question.options,
+                correctIndex: question.correctIndex,
+                topic: question.topic,
+                difficulty: question.difficulty,
+                eloRating: question.eloRating,
+              },
+            ]
+          : [];
+      });
+
+      const state: SessionState = {
+        record: session,
+        hostId: entry.hostId,
+        durationMs: minutes * 60_000,
+        questions,
+        adaptiveRounds: null,
+        totalRounds: questions.length,
+        persistence: Promise.resolve(),
+        analytics: new SessionAnalytics({
+          sessionId: session.id,
+          adaptive: false,
+          totalRounds: null,
+          mode: 'exam',
+        }),
+        analyticsTimer: null,
+        exam: { durationMs: minutes * 60_000 },
+        resultsReleasedAtMs: session.results_released_at
+          ? Date.parse(session.results_released_at)
+          : null,
+        finishing: false,
+        participants: new Map(),
+        participantIdByName: new Map(),
+        reservedNames: new Set(),
+        run: null,
+        lastResult: null,
+        hostRefreshTimer: null,
+        retentionTimer: null,
+      };
+      for (const participant of entry.participants) {
+        state.participants.set(participant.id, {
+          id: participant.id,
+          displayName: participant.displayName,
+          joinedAtMs: participant.joinedAtMs,
+          tokenHash: participant.tokenHash,
+          connected: false,
+          score: 0,
+          totalResponseMs: 0,
+          elo: participant.elo,
+          answers: new Map(),
+          servedQuestionIds: new Set(),
+          mastery: new Map(),
+          lastOutcome: null,
+        });
+        state.participantIdByName.set(participant.displayName.toLowerCase(), participant.id);
+        state.analytics.registerParticipant(participant.id, participant.displayName);
+        this.sessionIdByParticipantId.set(participant.id, session.id);
+      }
+      for (const question of questions) {
+        state.analytics.registerTopic(question.topic);
+      }
+      this.registerExamQuestions(state);
+      this.sessionsById.set(session.id, state);
+      this.sessionIdByJoinCode.set(session.join_code, session.id);
+      await this.examHooks?.loadRehydrated(session.id);
+    }
   }
 
   private requestHostRefresh(state: SessionState) {
@@ -1081,6 +1282,7 @@ export class LiveEngine {
     const ranked = this.rankParticipants(state);
     const status: SessionStatus = state.record.status;
     const adaptive = state.adaptiveRounds !== null;
+    const isExam = state.exam !== null;
 
     let you: RoomStatePayload['you'] = null;
     let youAnswered = false;
@@ -1124,13 +1326,25 @@ export class LiveEngine {
       status,
       role: viewer.role,
       serverNowMs: this.now(),
-      participants: [...state.participants.values()]
-        .sort((first, second) => first.joinedAtMs - second.joinedAtMs)
-        .map((participant) => ({
-          participantId: participant.id,
-          displayName: participant.displayName,
-          connected: participant.connected,
-        })),
+      mode: isExam ? 'exam' : 'live',
+      exam:
+        isExam && viewer.role === 'student'
+          ? (this.examHooks?.studentView(state.record.id, viewer.participantId) ?? null)
+          : null,
+      examProgress:
+        isExam && viewer.role === 'host'
+          ? (this.examHooks?.hostProgress(state.record.id) ?? [])
+          : null,
+      participants:
+        isExam && viewer.role === 'student'
+          ? []
+          : [...state.participants.values()]
+              .sort((first, second) => first.joinedAtMs - second.joinedAtMs)
+              .map((participant) => ({
+                participantId: participant.id,
+                displayName: participant.displayName,
+                connected: participant.connected,
+              })),
       currentQuestion:
         run && visibleQuestion
           ? {
@@ -1158,8 +1372,8 @@ export class LiveEngine {
       youAnswered,
       answeredCount,
       lastResult,
-      leaderboard: this.buildLeaderboard(ranked),
-      you,
+      leaderboard: isExam ? [] : this.buildLeaderboard(ranked),
+      you: isExam ? null : you,
     };
   }
 }

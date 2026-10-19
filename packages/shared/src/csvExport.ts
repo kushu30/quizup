@@ -1,5 +1,6 @@
 import type { AnalyticsSnapshot } from './analytics.js';
 import type { Difficulty } from './enums.js';
+import { PROCTOR_COUNTED_TYPES, PROCTOR_TYPE_LABELS } from './exam.js';
 
 export type CsvCell = string | number | boolean | null | undefined;
 
@@ -35,6 +36,7 @@ export function formatChosenOption(options: readonly string[], chosenIndex: numb
 
 export function buildParticipantsCsv(summary: AnalyticsSnapshot): string {
   const includeRating = summary.adaptive;
+  const includeProctor = summary.mode === 'exam';
   const header: CsvCell[] = [
     'Rank',
     'Name',
@@ -45,6 +47,9 @@ export function buildParticipantsCsv(summary: AnalyticsSnapshot): string {
     'Avg response ms',
     ...(includeRating ? ['Final Elo'] : []),
     ...summary.topics.map((topic) => `Mastery: ${topic.label}`),
+    ...(includeProctor
+      ? PROCTOR_COUNTED_TYPES.map((type) => `Proctor: ${PROCTOR_TYPE_LABELS[type]}`)
+      : []),
   ];
   const rows = [...summary.participants]
     .sort((first, second) => first.rank - second.rank)
@@ -65,6 +70,9 @@ export function buildParticipantsCsv(summary: AnalyticsSnapshot): string {
         const mastery = participant.mastery[index] ?? null;
         return mastery === null ? null : Number(mastery.toFixed(4));
       }),
+      ...(includeProctor
+        ? PROCTOR_COUNTED_TYPES.map((type) => participant.proctorCounts?.[type] ?? 0)
+        : []),
     ]);
   return toCsv([header, ...rows]);
 }

@@ -22,6 +22,7 @@ export const sessionSummarySchema = z.object({
   session: sessionSchema,
   joinCode: z.string(),
   adaptive: z.boolean(),
+  mode: z.enum(['live', 'exam']),
   questionDurationSeconds: z.number().int().positive().nullable(),
   questionCount: z.number().int().nonnegative(),
   currentQuestionNumber: z.number().int().positive().nullable(),

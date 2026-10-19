@@ -5,6 +5,7 @@ import { AnalyticsService } from './analytics/analyticsService.js';
 import { requireAuth, type AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
 import { errorHandler } from './http.js';
+import type { ExamService } from './exam/examService.js';
 import type { LiveEngine } from './live/engine.js';
 import {
   supabaseGenerationRepository,
@@ -22,6 +23,7 @@ import { createSessionsRouter } from './routes/sessions.js';
 
 export interface AppDependencies {
   engine: LiveEngine;
+  exam: ExamService;
   verifier: AccessTokenVerifier;
   llmProvider?: LlmProvider | null;
   generationLimiter?: HostGenerationLimiter;
@@ -64,6 +66,7 @@ export function createApp(dependencies: AppDependencies) {
       engine: dependencies.engine,
       verifier: dependencies.verifier,
       analytics: new AnalyticsService(dependencies.engine),
+      exam: dependencies.exam,
     }),
   );
   app.use(errorHandler);

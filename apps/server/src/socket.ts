@@ -1,6 +1,11 @@
 import type { Server as HttpServer } from 'node:http';
 import {
+  PROCTOR_EVENT_RATE_PER_SECOND,
   answerSubmitPayloadSchema,
+  examAnswerPayloadSchema,
+  examEmptyPayloadSchema,
+  examStartPayloadSchema,
+  proctorEventPayloadSchema,
   roomJoinPayloadSchema,
   timePingPayloadSchema,
   type Ack,
@@ -13,6 +18,7 @@ import { Server } from 'socket.io';
 import type { z } from 'zod';
 import type { AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
+import type { ExamService } from './exam/examService.js';
 import type { LiveEngine } from './live/engine.js';
 import type { SocketData, SocketPublisher } from './live/socketPublisher.js';
 import { createRateLimiter } from './rateLimiter.js';
@@ -42,6 +48,7 @@ function failure(error: SocketErrorCode): { ok: false; error: SocketErrorCode } 
 
 export interface SocketServerDependencies {
   engine: LiveEngine;
+  exam: ExamService;
   publisher: SocketPublisher;
   verifier: AccessTokenVerifier;
   corsOrigins?: string[];
@@ -51,7 +58,7 @@ export function attachSocketServer(
   httpServer: HttpServer,
   dependencies: SocketServerDependencies,
 ): QuizSocketServer {
-  const { engine, publisher, verifier } = dependencies;
+  const { engine, exam, publisher, verifier } = dependencies;
   const io: QuizSocketServer = new Server(httpServer, {
     cors: { origin: dependencies.corsOrigins ?? serverEnv.CORS_ORIGINS },
     maxHttpBufferSize: MAX_PAYLOAD_BYTES,
@@ -79,6 +86,11 @@ export function attachSocketServer(
     const answerLimiter = createRateLimiter({
       maxEvents: MAX_ANSWERS_PER_WINDOW,
       windowMs: RATE_WINDOW_MS,
+    });
+    const examLimiter = createRateLimiter({ maxEvents: 60, windowMs: RATE_WINDOW_MS });
+    const proctorLimiter = createRateLimiter({
+      maxEvents: PROCTOR_EVENT_RATE_PER_SECOND,
+      windowMs: 1000,
     });
     const joinLimiter = createRateLimiter({
       maxEvents: MAX_JOINS_PER_WINDOW,
@@ -150,6 +162,10 @@ export function attachSocketServer(
             if (state) {
               socket.emit('room:state', state);
             }
+            const progress = exam.getProgressPayload(payload.sessionId);
+            if (progress) {
+              socket.emit('exam:progress', progress);
+            }
             const snapshot = engine.getAnalyticsSnapshot(payload.sessionId, false);
             if (snapshot) {
               socket.emit('analytics:snapshot', snapshot);
@@ -167,6 +183,7 @@ export function attachSocketServer(
           socket.data.participantId = joined.participantId;
           publisher.bindParticipant(socket, joined.sessionId, joined.participantId);
           engine.setParticipantConnected(joined.participantId, true);
+          await exam.submitIfExpired(joined.participantId);
           respond(joined);
           const state = engine.getRoomState(joined.sessionId, {
             role: 'student',
@@ -195,6 +212,98 @@ export function attachSocketServer(
         },
         rawPayload,
       );
+    });
+
+    function studentParticipantId(): string | null {
+      return socket.data.role === 'student' ? (socket.data.participantId ?? null) : null;
+    }
+
+    socket.on('exam:start', (rawPayload, rawAck) => {
+      handle(
+        examStartPayloadSchema,
+        examLimiter,
+        rawAck,
+        async (payload, ack) => {
+          const participantId = studentParticipantId();
+          (ack as AckCallback)(
+            participantId
+              ? await exam.startAttempt(participantId, payload.consentVersion)
+              : failure('not_in_room'),
+          );
+        },
+        rawPayload,
+      );
+    });
+
+    socket.on('exam:answer', (rawPayload, rawAck) => {
+      handle(
+        examAnswerPayloadSchema,
+        examLimiter,
+        rawAck,
+        async (payload, ack) => {
+          const participantId = studentParticipantId();
+          (ack as AckCallback)(
+            participantId ? await exam.saveAnswer(participantId, payload) : failure('not_in_room'),
+          );
+        },
+        rawPayload,
+      );
+    });
+
+    socket.on('exam:submit', (rawPayload, rawAck) => {
+      handle(
+        examEmptyPayloadSchema,
+        examLimiter,
+        rawAck,
+        async (_payload, ack) => {
+          const participantId = studentParticipantId();
+          (ack as AckCallback)(
+            participantId ? await exam.submit(participantId, 'student') : failure('not_in_room'),
+          );
+        },
+        rawPayload,
+      );
+    });
+
+    socket.on('exam:results', (rawPayload, rawAck) => {
+      handle(
+        examEmptyPayloadSchema,
+        examLimiter,
+        rawAck,
+        async (_payload, ack) => {
+          const participantId = studentParticipantId();
+          (ack as AckCallback)(
+            participantId ? await exam.getResults(participantId) : failure('not_in_room'),
+          );
+        },
+        rawPayload,
+      );
+    });
+
+    socket.on('proctor:event', (rawPayload, rawAck) => {
+      const ack = resolveAck(rawAck);
+      const participantId = studentParticipantId();
+      if (!participantId) {
+        ack(failure('not_in_room'));
+        return;
+      }
+      if (!proctorLimiter.allow()) {
+        exam.recordDropped(participantId);
+        ack(failure('rate_limited'));
+        return;
+      }
+      const parsed = proctorEventPayloadSchema.safeParse(rawPayload);
+      if (!parsed.success) {
+        ack(failure('invalid_payload'));
+        return;
+      }
+      exam
+        .recordProctorEvent(participantId, parsed.data)
+        .then((result) => ack(result))
+        .catch((error: unknown) => {
+          console.error(error);
+          ack(failure('server_error'));
+        });
     });
 
     socket.on('disconnect', () => {

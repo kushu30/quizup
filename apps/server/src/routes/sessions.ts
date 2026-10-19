@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { Router } from 'express';
 import { createRequireAuth, getAuthUser, requireRole, type AccessTokenVerifier } from '../auth.js';
 import type { AnalyticsAccess, AnalyticsService } from '../analytics/analyticsService.js';
+import type { ExamService } from '../exam/examService.js';
 import { asyncRoute, parseOrReject, sendNotFound } from '../http.js';
 import type { LiveEngine } from '../live/engine.js';
 
@@ -10,8 +11,9 @@ export function createSessionsRouter(dependencies: {
   engine: LiveEngine;
   verifier: AccessTokenVerifier;
   analytics: AnalyticsService;
+  exam: ExamService;
 }): Router {
-  const { engine, verifier, analytics } = dependencies;
+  const { engine, verifier, analytics, exam } = dependencies;
   const router = Router();
 
   router.use(createRequireAuth(verifier), requireRole('host', 'admin'));
@@ -128,6 +130,34 @@ export function createSessionsRouter(dependencies: {
         )
         .set('Cache-Control', 'no-store')
         .send(access.value);
+    }),
+  );
+
+  router.post(
+    '/:sessionId/release-results',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const released = await exam.releaseResults(params.sessionId, getAuthUser(request).id);
+      response.json(released);
+    }),
+  );
+
+  router.get(
+    '/:sessionId/proctor',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const access = await exam.getProctorTimeline(params.sessionId, getAuthUser(request));
+      if (access.kind !== 'ok') {
+        sendDenied(response, access);
+        return;
+      }
+      response.json(access.value);
     }),
   );
 

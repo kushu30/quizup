@@ -2,6 +2,8 @@ import {
   analyticsSnapshotSchema,
   apiErrorSchema,
   approveQuestionsResultSchema,
+  proctorTimelineResponseSchema,
+  releaseResultsResponseSchema,
   csvImportResultSchema,
   questionListSchema,
   sessionSummarySchema,
@@ -12,6 +14,8 @@ import {
   type AnalyticsSnapshot,
   type ApproveQuestionsResult,
   type ExportType,
+  type ProctorParticipantTimeline,
+  type ReleaseResultsResponse,
   type CsvImportResult,
   type GenerateQuestionsInput,
   type Question,
@@ -142,6 +146,10 @@ export const api = {
     const response = await sendRequest(`/sessions/${sessionId}/export.csv?type=${type}`, 'GET');
     return response.blob();
   },
+  releaseResults: (sessionId: string): Promise<ReleaseResultsResponse> =>
+    requestJson(`/sessions/${sessionId}/release-results`, 'POST', releaseResultsResponseSchema),
+  getProctorTimeline: (sessionId: string): Promise<ProctorParticipantTimeline[]> =>
+    requestJson(`/sessions/${sessionId}/proctor`, 'GET', proctorTimelineResponseSchema),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
   startSession: (sessionId: string): Promise<SessionSummary> =>

@@ -1,8 +1,10 @@
 import {
+  proctorEventRecordSchema,
   participantSchema,
   sessionSchema,
   type Difficulty,
   type Participant,
+  type ProctorEventRecord,
   type Session,
 } from '@quizup/shared';
 import { supabaseAdmin } from '../supabaseAdmin.js';
@@ -11,6 +13,9 @@ import type {
   LiveRepository,
   NewParticipantInput,
   NewResponseInput,
+  ExamAnswerRecord,
+  ExamAttemptRecord,
+  OpenExamSession,
   SessionAnalyticsSource,
   SessionUpdate,
   SummaryRecord,
@@ -18,6 +23,7 @@ import type {
 
 const UNIQUE_VIOLATION_CODE = '23505';
 const PAGE_SIZE = 1000;
+const EXAM_REHYDRATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface SupabaseErrorLike {
   code?: string;
@@ -72,6 +78,36 @@ async function fetchAllPages<Row>(
   }
 }
 
+interface AttemptRow {
+  id: string;
+  session_id: string;
+  participant_id: string;
+  consent_at: string;
+  consent_version: string;
+  started_at: string;
+  deadline_at: string;
+  submitted_at: string | null;
+  shuffle_seed: number | string;
+  question_order: string[];
+  option_orders: Record<string, number[]>;
+}
+
+function toAttemptRecord(row: AttemptRow): ExamAttemptRecord {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    participantId: row.participant_id,
+    consentAtMs: Date.parse(row.consent_at),
+    consentVersion: row.consent_version,
+    startedAtMs: Date.parse(row.started_at),
+    deadlineAtMs: Date.parse(row.deadline_at),
+    submittedAtMs: row.submitted_at ? Date.parse(row.submitted_at) : null,
+    shuffleSeed: Number(row.shuffle_seed),
+    questionOrder: row.question_order,
+    optionOrders: row.option_orders,
+  };
+}
+
 export class SupabaseLiveRepository implements LiveRepository {
   async findOwnedQuiz(quizId: string, hostId: string) {
     const { data, error } = await supabaseAdmin
@@ -115,6 +151,7 @@ export class SupabaseLiveRepository implements LiveRepository {
     quizId: string;
     joinCode: string;
     questionIds: string[];
+    examDurationMinutes: number | null;
   }): Promise<Session | null> {
     const { data, error } = await supabaseAdmin
       .from('sessions')
@@ -122,6 +159,7 @@ export class SupabaseLiveRepository implements LiveRepository {
         quiz_id: input.quizId,
         join_code: input.joinCode,
         question_ids: input.questionIds,
+        exam_duration_minutes: input.examDurationMinutes,
       })
       .select('*')
       .single();
@@ -342,9 +380,24 @@ export class SupabaseLiveRepository implements LiveRepository {
                 .range(from, to),
           );
 
+    const proctorRows =
+      record.session.exam_duration_minutes === null
+        ? []
+        : await fetchAllPages<{ participant_id: string; type: string }>((from, to) =>
+            supabaseAdmin
+              .from('proctor_events')
+              .select('participant_id, type')
+              .eq('session_id', sessionId)
+              .range(from, to),
+          );
+
     return {
       session: record.session,
       hostId: record.hostId,
+      proctorEvents: proctorRows.map((row) => ({
+        participantId: row.participant_id,
+        type: row.type,
+      })),
       participants: participantRows.map((row) => ({
         id: row.id,
         displayName: row.display_name,
@@ -373,11 +426,223 @@ export class SupabaseLiveRepository implements LiveRepository {
     };
   }
 
+  async listOpenExamSessions(): Promise<OpenExamSession[]> {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .select('*, quizzes(host_id)')
+      .not('exam_duration_minutes', 'is', null)
+      .or(
+        `status.neq.ended,ended_at.gt.${new Date(Date.now() - EXAM_REHYDRATE_WINDOW_MS).toISOString()}`,
+      );
+    throwUnexpected(error);
+
+    const opened: OpenExamSession[] = [];
+    for (const row of (data ?? []) as { quizzes: { host_id: string } | null }[]) {
+      const { quizzes, ...sessionRow } = row;
+      if (!quizzes) {
+        continue;
+      }
+      const session = sessionSchema.parse(sessionRow);
+      const participantRows = await fetchAllPages<{
+        id: string;
+        display_name: string;
+        elo: number;
+        joined_at: string;
+        rejoin_token_hash: string | null;
+      }>((from, to) =>
+        supabaseAdmin
+          .from('participants')
+          .select('id, display_name, elo, joined_at, rejoin_token_hash')
+          .eq('session_id', session.id)
+          .range(from, to),
+      );
+      opened.push({
+        session,
+        hostId: quizzes.host_id,
+        participants: participantRows.map((participant) => ({
+          id: participant.id,
+          displayName: participant.display_name,
+          elo: Number(participant.elo),
+          joinedAtMs: Date.parse(participant.joined_at),
+          tokenHash: participant.rejoin_token_hash ?? '',
+        })),
+      });
+    }
+    return opened;
+  }
+
+  async listExamAttempts(sessionId: string): Promise<ExamAttemptRecord[]> {
+    const rows = await fetchAllPages<AttemptRow>((from, to) =>
+      supabaseAdmin.from('exam_attempts').select('*').eq('session_id', sessionId).range(from, to),
+    );
+    return rows.map(toAttemptRecord);
+  }
+
+  async createExamAttempt(attempt: ExamAttemptRecord): Promise<ExamAttemptRecord> {
+    const { data, error } = await supabaseAdmin
+      .from('exam_attempts')
+      .insert({
+        id: attempt.id,
+        session_id: attempt.sessionId,
+        participant_id: attempt.participantId,
+        consent_at: new Date(attempt.consentAtMs).toISOString(),
+        consent_version: attempt.consentVersion,
+        started_at: new Date(attempt.startedAtMs).toISOString(),
+        deadline_at: new Date(attempt.deadlineAtMs).toISOString(),
+        shuffle_seed: attempt.shuffleSeed,
+        question_order: attempt.questionOrder,
+        option_orders: attempt.optionOrders,
+      })
+      .select('*')
+      .single();
+    if (error?.code === UNIQUE_VIOLATION_CODE) {
+      const existing = await supabaseAdmin
+        .from('exam_attempts')
+        .select('*')
+        .eq('session_id', attempt.sessionId)
+        .eq('participant_id', attempt.participantId)
+        .single();
+      throwUnexpected(existing.error);
+      return toAttemptRecord(existing.data as AttemptRow);
+    }
+    throwUnexpected(error);
+    return toAttemptRecord(data as AttemptRow);
+  }
+
+  async submitExamAttempt(attemptId: string, submittedAtMs: number): Promise<boolean> {
+    const { data, error } = await supabaseAdmin
+      .from('exam_attempts')
+      .update({ submitted_at: new Date(submittedAtMs).toISOString() })
+      .eq('id', attemptId)
+      .is('submitted_at', null)
+      .select('id');
+    throwUnexpected(error);
+    return (data ?? []).length > 0;
+  }
+
+  async upsertExamAnswer(answer: ExamAnswerRecord) {
+    const { error } = await supabaseAdmin.from('exam_answers').upsert(
+      {
+        attempt_id: answer.attemptId,
+        question_id: answer.questionId,
+        chosen_original_index: answer.chosenOriginalIndex,
+        saved_at: new Date(answer.savedAtMs).toISOString(),
+      },
+      { onConflict: 'attempt_id,question_id' },
+    );
+    throwUnexpected(error);
+  }
+
+  async listExamAnswers(attemptId: string): Promise<ExamAnswerRecord[]> {
+    const rows = await fetchAllPages<{
+      attempt_id: string;
+      question_id: string;
+      chosen_original_index: number;
+      saved_at: string;
+    }>((from, to) =>
+      supabaseAdmin.from('exam_answers').select('*').eq('attempt_id', attemptId).range(from, to),
+    );
+    return rows.map((row) => ({
+      attemptId: row.attempt_id,
+      questionId: row.question_id,
+      chosenOriginalIndex: row.chosen_original_index,
+      savedAtMs: Date.parse(row.saved_at),
+    }));
+  }
+
+  async insertProctorEvents(events: ProctorEventRecord[]) {
+    if (events.length === 0) {
+      return;
+    }
+    const { error } = await supabaseAdmin.from('proctor_events').insert(
+      events.map((event) => ({
+        id: event.id,
+        session_id: event.sessionId,
+        participant_id: event.participantId,
+        attempt_id: event.attemptId,
+        type: event.type,
+        client_at: new Date(event.clientAt).toISOString(),
+        server_at: new Date(event.serverAt).toISOString(),
+        late: event.late,
+        detail: event.detail ?? {},
+      })),
+    );
+    throwUnexpected(error);
+  }
+
+  async listProctorEvents(sessionId: string): Promise<ProctorEventRecord[]> {
+    const rows = await fetchAllPages<{
+      id: string;
+      session_id: string;
+      participant_id: string;
+      attempt_id: string;
+      type: string;
+      client_at: string | null;
+      server_at: string;
+      late: boolean;
+      detail: Record<string, unknown> | null;
+    }>((from, to) =>
+      supabaseAdmin
+        .from('proctor_events')
+        .select(
+          'id, session_id, participant_id, attempt_id, type, client_at, server_at, late, detail',
+        )
+        .eq('session_id', sessionId)
+        .order('server_at', { ascending: true })
+        .order('client_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    return rows.flatMap((row) => {
+      const parsed = proctorEventRecordSchema.safeParse({
+        id: row.id,
+        sessionId: row.session_id,
+        participantId: row.participant_id,
+        attemptId: row.attempt_id,
+        type: row.type,
+        clientAt: row.client_at ? Date.parse(row.client_at) : Date.parse(row.server_at),
+        serverAt: Date.parse(row.server_at),
+        late: row.late,
+        detail: row.detail && Object.keys(row.detail).length > 0 ? row.detail : null,
+      });
+      return parsed.success ? [parsed.data] : [];
+    });
+  }
+
+  async listParticipantNames(sessionId: string) {
+    const rows = await fetchAllPages<{ id: string; display_name: string }>((from, to) =>
+      supabaseAdmin
+        .from('participants')
+        .select('id, display_name')
+        .eq('session_id', sessionId)
+        .range(from, to),
+    );
+    return rows.map((row) => ({ id: row.id, displayName: row.display_name }));
+  }
+
+  async setResultsReleased(sessionId: string, releasedAtMs: number): Promise<number> {
+    const { error } = await supabaseAdmin
+      .from('sessions')
+      .update({ results_released_at: new Date(releasedAtMs).toISOString() })
+      .eq('id', sessionId)
+      .is('results_released_at', null);
+    throwUnexpected(error);
+    const { data, error: readError } = await supabaseAdmin
+      .from('sessions')
+      .select('results_released_at')
+      .eq('id', sessionId)
+      .single();
+    throwUnexpected(readError);
+    const stored = (data as { results_released_at: string | null }).results_released_at;
+    return stored ? Date.parse(stored) : releasedAtMs;
+  }
+
   async endAllNonEndedSessions(endedAtIso: string) {
     const { error } = await supabaseAdmin
       .from('sessions')
       .update({ status: 'ended', ended_at: endedAtIso })
-      .neq('status', 'ended');
+      .neq('status', 'ended')
+      .is('exam_duration_minutes', null);
     throwUnexpected(error);
   }
 }

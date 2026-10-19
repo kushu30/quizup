@@ -8,7 +8,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['packages/shared/src/**/*.test.ts', 'apps/server/src/**/*.test.ts'],
+    include: [
+      'packages/shared/src/**/*.test.ts',
+      'apps/server/src/**/*.test.ts',
+      'apps/web/src/**/*.test.{ts,tsx}',
+    ],
+    environmentMatchGlobs: [['apps/web/**', 'jsdom']],
     env: {
       PORT: '4999',
       CORS_ORIGINS: 'http://localhost:5173',

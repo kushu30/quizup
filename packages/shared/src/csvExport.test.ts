@@ -53,6 +53,7 @@ describe('toCsv', () => {
 const snapshot: AnalyticsSnapshot = {
   sessionId: '11111111-1111-4111-8111-111111111111',
   source: 'live',
+  mode: 'live',
   status: 'ended',
   generatedAtMs: 0,
   adaptive: true,
@@ -79,6 +80,7 @@ const snapshot: AnalyticsSnapshot = {
       rating: 1003.6,
       projection: null,
       checkpointProjection: null,
+      proctorCounts: null,
       mastery: [0.5, null],
     },
     {
@@ -92,6 +94,7 @@ const snapshot: AnalyticsSnapshot = {
       rating: 1031,
       projection: null,
       checkpointProjection: null,
+      proctorCounts: null,
       mastery: [0.7097561, 0.3],
     },
   ],
@@ -111,6 +114,33 @@ describe('buildParticipantsCsv', () => {
   it('omits the Elo column for non-adaptive sessions', () => {
     const header = buildParticipantsCsv({ ...snapshot, adaptive: false }).split('\r\n')[0];
     expect(header).not.toContain('Final Elo');
+  });
+});
+
+describe('buildParticipantsCsv for exams', () => {
+  it('adds one proctor count column per counted type after the mastery columns', () => {
+    const exam: AnalyticsSnapshot = {
+      ...snapshot,
+      mode: 'exam',
+      adaptive: false,
+      participants: snapshot.participants.map((participant, index) => ({
+        ...participant,
+        proctorCounts: {
+          tab_switch: index + 1,
+          window_blur: 0,
+          fullscreen_exit: 2,
+          copy: 0,
+          paste: 1,
+          right_click: 0,
+          resize: 3,
+        },
+      })),
+    };
+    const lines = buildParticipantsCsv(exam).trim().split('\r\n');
+    expect(lines[0]).toBe(
+      'Rank,Name,Final score,Answered,Correct,Accuracy,Avg response ms,Mastery: Algebra,Mastery: Geometry,Proctor: Tab switch,Proctor: Window focus lost,Proctor: Left full screen,Proctor: Copy or cut,Proctor: Paste,Proctor: Right-click,Proctor: Window resize',
+    );
+    expect(lines[1]).toBe('1,Ada,1800,2,2,1,900,0.7098,0.3,2,0,2,0,1,0,3');
   });
 });
 

@@ -1,12 +1,22 @@
-import type { AnalyticsSnapshot, RoomStatePayload, SocketErrorCode } from '@quizup/shared';
+import type {
+  AnalyticsSnapshot,
+  ExamProgressRow,
+  ProctorEventRecord,
+  ProctorParticipantTimeline,
+  RoomStatePayload,
+  SocketErrorCode,
+} from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdaptiveTable } from '../components/AdaptiveTable';
+import { ExamProgressTable } from '../components/exam/ExamProgressTable';
+import { ProctorTimeline } from '../components/exam/ProctorTimeline';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
+import { mergeProctorEvents } from '../lib/proctorEvents';
 import { api, describeError } from '../lib/api';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
@@ -19,6 +29,11 @@ export function HostConsole() {
   const [socket, setSocket] = useState<QuizSocket | null>(null);
   const [room, setRoom] = useState<RoomStatePayload | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsSnapshot | null>(null);
+  const [examRows, setExamRows] = useState<ExamProgressRow[] | null>(null);
+  const [resultsReleased, setResultsReleased] = useState(false);
+  const [liveProctor, setLiveProctor] = useState<Record<string, ProctorEventRecord[]>>({});
+  const [loadedTimelines, setLoadedTimelines] = useState<ProctorParticipantTimeline[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState<SocketErrorCode | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,7 +58,22 @@ export function HostConsole() {
         });
       });
       hostSocket.on('disconnect', () => setConnected(false));
-      hostSocket.on('room:state', setRoom);
+      hostSocket.on('room:state', (state) => {
+        setRoom(state);
+        if (state.examProgress) {
+          setExamRows(state.examProgress);
+        }
+      });
+      hostSocket.on('exam:progress', (payload) => {
+        setExamRows(payload.rows);
+        setResultsReleased(payload.resultsReleased);
+      });
+      hostSocket.on('proctor:timeline', (record) => {
+        setLiveProctor((current) => ({
+          ...current,
+          [record.participantId]: [...(current[record.participantId] ?? []), record],
+        }));
+      });
       hostSocket.on('analytics:snapshot', setAnalytics);
       setSocket(hostSocket);
     }
@@ -55,6 +85,30 @@ export function HostConsole() {
       setSocket(null);
     };
   }, [sessionId]);
+
+  const isExamSession = room?.mode === 'exam';
+  useEffect(() => {
+    if (!isExamSession || !connected) {
+      return;
+    }
+    let cancelled = false;
+    api
+      .getProctorTimeline(sessionId)
+      .then((timelines) => {
+        if (!cancelled) {
+          setLoadedTimelines(timelines);
+          setLiveProctor({});
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMessage(describeError(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isExamSession, connected, sessionId]);
 
   const runCommand = useCallback(async (command: () => Promise<unknown>) => {
     setBusy(true);
@@ -87,6 +141,15 @@ export function HostConsole() {
     return <p className="text-slate-600">Connecting...</p>;
   }
 
+  const isExam = room.mode === 'exam';
+  const selectedRow = examRows?.find((row) => row.participantId === selectedStudentId) ?? null;
+  const selectedEvents = selectedStudentId
+    ? mergeProctorEvents(
+        loadedTimelines.find((timeline) => timeline.participantId === selectedStudentId)?.events ??
+          [],
+        liveProctor[selectedStudentId] ?? [],
+      )
+    : [];
   const question = room.currentQuestion;
   const connectedCount = room.participants.filter((participant) => participant.connected).length;
   const round = room.round;
@@ -128,8 +191,52 @@ export function HostConsole() {
             onClick={() => void runCommand(() => api.startSession(sessionId))}
             className="rounded-md bg-slate-900 px-6 py-3 text-lg text-white disabled:opacity-50"
           >
-            Start quiz
+            {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
           </button>
+        </section>
+      )}
+
+      {isExam && room.status !== 'lobby' && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold">
+              {room.status === 'ended' ? 'Exam ended' : 'Exam in progress'}
+            </h2>
+            <button
+              type="button"
+              disabled={busy || resultsReleased}
+              onClick={() =>
+                void runCommand(async () => {
+                  await api.releaseResults(sessionId);
+                  setResultsReleased(true);
+                })
+              }
+              className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              {resultsReleased ? 'Results released' : 'Release results'}
+            </button>
+          </div>
+          <ExamProgressTable
+            rows={examRows ?? []}
+            offsetMs={offsetMs}
+            selectedId={selectedStudentId}
+            onSelect={setSelectedStudentId}
+          />
+          {selectedRow && (
+            <ProctorTimeline
+              displayName={selectedRow.displayName}
+              attemptStartedAtMs={
+                selectedRow.startedAtServerMs ??
+                loadedTimelines.find(
+                  (timeline) => timeline.participantId === selectedRow.participantId,
+                )?.attemptStartedAtMs ??
+                null
+              }
+              events={selectedEvents}
+              droppedEvents={selectedRow.droppedEvents}
+              onClose={() => setSelectedStudentId(null)}
+            />
+          )}
         </section>
       )}
 
@@ -252,7 +359,7 @@ export function HostConsole() {
       {room.status === 'ended' && (
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Final results</h2>
-          <Leaderboard entries={room.leaderboard} />
+          {!isExam && <Leaderboard entries={room.leaderboard} />}
           {room.adaptiveTable && <AdaptiveTable rows={room.adaptiveTable} />}
           <div className="flex gap-4">
             <Link to={`/sessions/${sessionId}/summary`} className="inline-block underline">
@@ -265,7 +372,7 @@ export function HostConsole() {
         </section>
       )}
 
-      <AnalyticsPanel snapshot={analytics} connected={connected} />
+      {!isExam && <AnalyticsPanel snapshot={analytics} connected={connected} />}
 
       {room.status !== 'ended' && (
         <button

@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "llm:smoke": "tsx --env-file-if-exists=.env src/llm/smoke.ts",
     "adaptive:sim": "tsx src/adaptive/simulate.ts",
-    "load:sim": "tsx src/analytics/loadSim.ts"
+    "load:sim": "tsx src/analytics/loadSim.ts",
+    "proctor:sim": "tsx src/exam/proctorSim.ts"
   },
   "dependencies": {
     "@quizup/shared": "*",

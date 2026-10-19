@@ -1,4 +1,11 @@
-import { normalizeTopicKey, type AnalyticsSnapshot, type LeaderboardEntry } from '@quizup/shared';
+import {
+  PROCTOR_COUNTED_TYPES,
+  emptyProctorCounts,
+  normalizeTopicKey,
+  type AnalyticsSnapshot,
+  type LeaderboardEntry,
+  type ProctorCountedType,
+} from '@quizup/shared';
 import type { SessionAnalyticsSource } from '../live/types.js';
 import { SessionAnalytics } from './sessionAnalytics.js';
 
@@ -13,6 +20,7 @@ export function rebuildAnalyticsSnapshot(
     adaptive: false,
     totalRounds: null,
     source: 'rebuilt',
+    mode: source.session.exam_duration_minutes === null ? 'live' : 'exam',
   });
 
   const questionById = new Map(source.questions.map((question) => [question.id, question]));
@@ -31,7 +39,12 @@ export function rebuildAnalyticsSnapshot(
       first.answeredAtMs - second.answeredAtMs ||
       first.participantId.localeCompare(second.participantId),
   );
-  const durationMs = Math.max(1, ...ordered.map((response) => response.responseMs));
+  const examDurationMs =
+    source.session.exam_duration_minutes === null
+      ? null
+      : source.session.exam_duration_minutes * 60_000;
+  const durationMs =
+    examDurationMs ?? Math.max(1, ...ordered.map((response) => response.responseMs));
   const answeredCountByParticipant = new Map<string, number>();
   let roundsCompleted = 0;
   const totalResponseMs = new Map<string, number>();
@@ -68,6 +81,22 @@ export function rebuildAnalyticsSnapshot(
     });
   }
   analytics.onRoundClose(roundsCompleted);
+
+  const countsByParticipant = new Map<string, ReturnType<typeof emptyProctorCounts>>();
+  for (const event of source.proctorEvents) {
+    if (!PROCTOR_COUNTED_TYPES.includes(event.type as ProctorCountedType)) {
+      continue;
+    }
+    const counts = countsByParticipant.get(event.participantId) ?? emptyProctorCounts();
+    counts[event.type as ProctorCountedType] += 1;
+    countsByParticipant.set(event.participantId, counts);
+  }
+  for (const participant of source.participants) {
+    analytics.setProctorCounts(
+      participant.id,
+      countsByParticipant.get(participant.id) ?? emptyProctorCounts(),
+    );
+  }
 
   for (const state of source.knowledgeStates) {
     analytics.onMastery(

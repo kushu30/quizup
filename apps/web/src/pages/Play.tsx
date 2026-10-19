@@ -1,4 +1,5 @@
 import type {
+  ExamStudentView,
   LeaderboardEntry,
   QuestionResultPayload,
   QuestionShowPayload,
@@ -8,6 +9,7 @@ import type {
 } from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
+import { ExamPlay } from '../components/exam/ExamPlay';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
@@ -28,6 +30,8 @@ interface PlayState {
   result: QuestionResultPayload | null;
   leaderboard: LeaderboardEntry[];
   standing: { rank: number; score: number } | null;
+  mode: 'live' | 'exam';
+  exam: ExamStudentView | null;
 }
 
 const INITIAL_STATE: PlayState = {
@@ -43,6 +47,8 @@ const INITIAL_STATE: PlayState = {
   result: null,
   leaderboard: [],
   standing: null,
+  mode: 'live',
+  exam: null,
 };
 
 const OPTION_STYLES = [
@@ -71,6 +77,13 @@ const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
   too_early: 'Too early.',
   too_late: 'Too late.',
   already_answered: 'Already answered.',
+  consent_required: 'You need to accept the exam terms first.',
+  consent_version_mismatch: 'The exam terms changed. Reload the page and try again.',
+  exam_not_open: 'The host has not opened the exam yet.',
+  not_exam: 'This is not an exam session.',
+  no_open_attempt: 'You have no open exam attempt.',
+  attempt_expired: 'Your time is up.',
+  not_submitted: 'Submit your exam first.',
 };
 
 export function Play() {
@@ -136,12 +149,40 @@ export function Play() {
         result: room.lastResult,
         leaderboard: room.leaderboard,
         standing: room.you ? { rank: room.you.rank, score: room.you.score } : null,
+        mode: room.mode,
+        exam: room.exam,
       }));
     }
 
     quizSocket.on('connect', joinRoom);
     quizSocket.on('disconnect', () => setState((current) => ({ ...current, connected: false })));
     quizSocket.on('room:state', applyRoomState);
+    quizSocket.on('exam:released', () => {
+      setState((current) =>
+        current.exam ? { ...current, exam: { ...current.exam, resultsReleased: true } } : current,
+      );
+    });
+    quizSocket.on('exam:submitted', () => {
+      setState((current) =>
+        current.exam
+          ? {
+              ...current,
+              exam: {
+                ...current.exam,
+                phase: 'submitted',
+                questions: [],
+                answers: {},
+                attempt: current.exam.attempt
+                  ? {
+                      ...current.exam.attempt,
+                      submittedAtServerMs: current.exam.attempt.deadlineAtServerMs,
+                    }
+                  : null,
+              },
+            }
+          : current,
+      );
+    });
     quizSocket.on('question:show', (question) => {
       setAnswerError(null);
       setState((current) => ({
@@ -219,6 +260,19 @@ export function Play() {
 
   if (!state.connected || !state.participantId || !synced) {
     return <p className="text-center text-slate-600">Connecting...</p>;
+  }
+
+  if (state.mode === 'exam' && state.exam && socket) {
+    return (
+      <ExamPlay
+        socket={socket}
+        view={state.exam}
+        displayName={state.displayName}
+        offsetMs={offsetMs}
+        connected={state.connected}
+        onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
+      />
+    );
   }
 
   const header = (

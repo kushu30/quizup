@@ -1,4 +1,9 @@
-import type { AnalyticsSnapshot, ExportType } from '@quizup/shared';
+import {
+  PROCTOR_COUNTED_TYPES,
+  PROCTOR_TYPE_LABELS,
+  type AnalyticsSnapshot,
+  type ExportType,
+} from '@quizup/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Leaderboard } from '../components/Leaderboard';
@@ -133,47 +138,88 @@ export function SessionSummaryPage() {
         <MasteryHeatmap topics={summary.topics} rows={heatmapRows} />
       </section>
 
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Projection vs actual</h2>
-        <p className="text-sm text-slate-600">
-          {summary.checkpointRound
-            ? `Projection made after round ${summary.checkpointRound}, compared with the final score.`
-            : 'No projection checkpoint was reached.'}
-          {summary.adaptive ? ' Adaptive sessions are always low confidence.' : ''}
-        </p>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-              <tr>
-                <th className="px-3 py-2">Student</th>
-                <th className="px-3 py-2">Projected</th>
-                <th className="px-3 py-2">Actual final</th>
-                <th className="px-3 py-2">Difference</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {summary.participants.map((participant) => (
-                <tr key={participant.participantId}>
-                  <td className="px-3 py-2">{participant.displayName}</td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {participant.checkpointProjection === null
-                      ? '-'
-                      : Math.round(participant.checkpointProjection).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">{participant.score.toLocaleString()}</td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {participant.checkpointProjection === null
-                      ? '-'
-                      : Math.round(
-                          participant.score - participant.checkpointProjection,
-                        ).toLocaleString()}
-                  </td>
+      {summary.mode === 'exam' && (
+        <section className="space-y-2">
+          <h2 className="text-xl font-semibold">Proctor signals per student</h2>
+          <p className="text-sm text-slate-600">
+            These are indicators recorded with the student's consent, not proof of misconduct.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                <tr>
+                  <th className="px-3 py-2">Student</th>
+                  <th className="px-3 py-2">Score</th>
+                  {PROCTOR_COUNTED_TYPES.map((type) => (
+                    <th key={type} className="px-3 py-2">
+                      {PROCTOR_TYPE_LABELS[type]}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {[...summary.participants]
+                  .sort((first, second) => first.displayName.localeCompare(second.displayName))
+                  .map((participant) => (
+                    <tr key={participant.participantId}>
+                      <td className="px-3 py-2">{participant.displayName}</td>
+                      <td className="px-3 py-2 tabular-nums">{participant.score}</td>
+                      {PROCTOR_COUNTED_TYPES.map((type) => (
+                        <td key={type} className="px-3 py-2 tabular-nums">
+                          {participant.proctorCounts?.[type] ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {summary.mode !== 'exam' && (
+        <section className="space-y-2">
+          <h2 className="text-xl font-semibold">Projection vs actual</h2>
+          <p className="text-sm text-slate-600">
+            {summary.checkpointRound
+              ? `Projection made after round ${summary.checkpointRound}, compared with the final score.`
+              : 'No projection checkpoint was reached.'}
+            {summary.adaptive ? ' Adaptive sessions are always low confidence.' : ''}
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                <tr>
+                  <th className="px-3 py-2">Student</th>
+                  <th className="px-3 py-2">Projected</th>
+                  <th className="px-3 py-2">Actual final</th>
+                  <th className="px-3 py-2">Difference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {summary.participants.map((participant) => (
+                  <tr key={participant.participantId}>
+                    <td className="px-3 py-2">{participant.displayName}</td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {participant.checkpointProjection === null
+                        ? '-'
+                        : Math.round(participant.checkpointProjection).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">{participant.score.toLocaleString()}</td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {participant.checkpointProjection === null
+                        ? '-'
+                        : Math.round(
+                            participant.score - participant.checkpointProjection,
+                          ).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

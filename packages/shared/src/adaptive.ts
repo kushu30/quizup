@@ -4,11 +4,41 @@ export const DEFAULT_MAX_ADAPTIVE_ROUNDS = 10;
 export const MIN_ADAPTIVE_ROUNDS = 1;
 export const MAX_ADAPTIVE_ROUNDS = 50;
 
-export const quizSettingsSchema = z.object({
+export const EXAM_MIN_DURATION_MINUTES = 1;
+export const EXAM_MAX_DURATION_MINUTES = 300;
+export const DEFAULT_EXAM_DURATION_MINUTES = 30;
+
+export const quizModeSettingSchema = z.enum(['live', 'exam']);
+export type QuizModeSetting = z.infer<typeof quizModeSettingSchema>;
+
+const quizSettingsBaseSchema = z.object({
+  mode: quizModeSettingSchema.default('live'),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(EXAM_MIN_DURATION_MINUTES)
+    .max(EXAM_MAX_DURATION_MINUTES)
+    .optional(),
   adaptive: z.boolean().default(false),
   adaptiveRounds: z.number().int().min(MIN_ADAPTIVE_ROUNDS).max(MAX_ADAPTIVE_ROUNDS).optional(),
 });
-export type QuizSettings = z.infer<typeof quizSettingsSchema>;
+
+export const quizSettingsSchema = quizSettingsBaseSchema
+  .superRefine((settings, context) => {
+    if (settings.mode === 'exam' && settings.durationMinutes === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['durationMinutes'],
+        message: 'An exam needs a duration in minutes',
+      });
+    }
+  })
+  .transform((settings) =>
+    settings.mode === 'exam'
+      ? { ...settings, adaptive: false, adaptiveRounds: undefined }
+      : { ...settings, durationMinutes: undefined },
+  );
+export type QuizSettings = z.output<typeof quizSettingsSchema>;
 export type QuizSettingsInput = z.input<typeof quizSettingsSchema>;
 
 export function resolveAdaptiveRounds(

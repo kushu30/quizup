@@ -4,6 +4,7 @@ import {
   ELO_MIN_RATING,
   initialQuestionRating,
   type Participant,
+  type ProctorEventRecord,
   type Session,
 } from '@quizup/shared';
 import type {
@@ -11,6 +12,9 @@ import type {
   LiveRepository,
   NewParticipantInput,
   NewResponseInput,
+  ExamAnswerRecord,
+  ExamAttemptRecord,
+  OpenExamSession,
   SessionAnalyticsSource,
   SessionUpdate,
   SummaryRecord,
@@ -46,6 +50,10 @@ export class InMemoryLiveRepository implements LiveRepository {
   readonly knowledgeStates: StoredKnowledgeState[] = [];
   readonly storedSummaries = new Map<string, unknown>();
   summaryWriteCount = 0;
+  readonly examAttempts: ExamAttemptRecord[] = [];
+  readonly examAnswers: ExamAnswerRecord[] = [];
+  readonly proctorEvents: ProctorEventRecord[] = [];
+  failProctorInsertsRemaining = 0;
 
   seedQuiz(input: {
     hostId: string;
@@ -111,7 +119,12 @@ export class InMemoryLiveRepository implements LiveRepository {
     return found;
   }
 
-  async createSession(input: { quizId: string; joinCode: string; questionIds: string[] }) {
+  async createSession(input: {
+    quizId: string;
+    joinCode: string;
+    questionIds: string[];
+    examDurationMinutes: number | null;
+  }) {
     const quiz = this.quizzes.get(input.quizId);
     const codeTaken = [...this.sessions.values()].some(
       (stored) => stored.session.join_code === input.joinCode,
@@ -127,6 +140,8 @@ export class InMemoryLiveRepository implements LiveRepository {
       started_at: null,
       ended_at: null,
       question_ids: input.questionIds,
+      exam_duration_minutes: input.examDurationMinutes,
+      results_released_at: null,
     };
     this.sessions.set(session.id, { session, hostId: quiz.hostId });
     return session;
@@ -273,6 +288,9 @@ export class InMemoryLiveRepository implements LiveRepository {
     return {
       session: stored.session,
       hostId: stored.hostId,
+      proctorEvents: this.proctorEvents
+        .filter((event) => event.sessionId === sessionId)
+        .map((event) => ({ participantId: event.participantId, type: event.type })),
       participants: participants.map((participant) => ({
         id: participant.id,
         displayName: participant.display_name,
@@ -297,9 +315,118 @@ export class InMemoryLiveRepository implements LiveRepository {
     };
   }
 
+  async listOpenExamSessions(): Promise<OpenExamSession[]> {
+    return [...this.sessions.values()]
+      .filter(
+        (stored) =>
+          stored.session.exam_duration_minutes !== null &&
+          (stored.session.status !== 'ended' ||
+            Date.parse(stored.session.ended_at ?? '') > Date.now() - 7 * 24 * 60 * 60 * 1000),
+      )
+      .map((stored) => ({
+        session: stored.session,
+        hostId: stored.hostId,
+        participants: this.participants
+          .filter((participant) => participant.session_id === stored.session.id)
+          .map((participant) => ({
+            id: participant.id,
+            displayName: participant.display_name,
+            elo: participant.elo,
+            joinedAtMs: Date.parse(participant.joined_at),
+            tokenHash: participant.rejoin_token_hash ?? '',
+          })),
+      }));
+  }
+
+  async listExamAttempts(sessionId: string): Promise<ExamAttemptRecord[]> {
+    return this.examAttempts
+      .filter((attempt) => attempt.sessionId === sessionId)
+      .map((attempt) => ({ ...attempt }));
+  }
+
+  async createExamAttempt(attempt: ExamAttemptRecord): Promise<ExamAttemptRecord> {
+    const existing = this.examAttempts.find(
+      (candidate) =>
+        candidate.sessionId === attempt.sessionId &&
+        candidate.participantId === attempt.participantId,
+    );
+    if (existing) {
+      return { ...existing };
+    }
+    this.examAttempts.push({ ...attempt });
+    return { ...attempt };
+  }
+
+  async submitExamAttempt(attemptId: string, submittedAtMs: number): Promise<boolean> {
+    const attempt = this.examAttempts.find((candidate) => candidate.id === attemptId);
+    if (!attempt || attempt.submittedAtMs !== null) {
+      return false;
+    }
+    attempt.submittedAtMs = submittedAtMs;
+    return true;
+  }
+
+  async upsertExamAnswer(answer: ExamAnswerRecord) {
+    const existing = this.examAnswers.find(
+      (candidate) =>
+        candidate.attemptId === answer.attemptId && candidate.questionId === answer.questionId,
+    );
+    if (existing) {
+      existing.chosenOriginalIndex = answer.chosenOriginalIndex;
+      existing.savedAtMs = answer.savedAtMs;
+    } else {
+      this.examAnswers.push({ ...answer });
+    }
+  }
+
+  async listExamAnswers(attemptId: string): Promise<ExamAnswerRecord[]> {
+    return this.examAnswers
+      .filter((answer) => answer.attemptId === attemptId)
+      .map((answer) => ({ ...answer }));
+  }
+
+  async insertProctorEvents(events: ProctorEventRecord[]) {
+    if (this.failProctorInsertsRemaining > 0) {
+      this.failProctorInsertsRemaining -= 1;
+      throw new Error('simulated proctor insert failure');
+    }
+    this.proctorEvents.push(...events.map((event) => ({ ...event })));
+  }
+
+  async listProctorEvents(sessionId: string): Promise<ProctorEventRecord[]> {
+    return this.proctorEvents
+      .filter((event) => event.sessionId === sessionId)
+      .sort(
+        (first, second) =>
+          first.serverAt - second.serverAt ||
+          first.clientAt - second.clientAt ||
+          first.id.localeCompare(second.id),
+      );
+  }
+
+  async listParticipantNames(sessionId: string) {
+    return this.participants
+      .filter((participant) => participant.session_id === sessionId)
+      .map((participant) => ({ id: participant.id, displayName: participant.display_name }));
+  }
+
+  async setResultsReleased(sessionId: string, releasedAtMs: number): Promise<number> {
+    const stored = this.sessions.get(sessionId);
+    if (!stored) {
+      return releasedAtMs;
+    }
+    if (stored.session.results_released_at === null) {
+      stored.session = {
+        ...stored.session,
+        results_released_at: new Date(releasedAtMs).toISOString(),
+      };
+    }
+    return Date.parse(stored.session.results_released_at as string);
+  }
+
   async endAllNonEndedSessions(endedAtIso: string) {
     for (const stored of this.sessions.values()) {
-      if (stored.session.status !== 'ended') {
+      if (stored.session.status !== 'ended' && stored.session.exam_duration_minutes === null) {
         stored.session = { ...stored.session, status: 'ended', ended_at: endedAtIso };
       }
     }

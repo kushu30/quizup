@@ -11,6 +11,7 @@ import { io as createClient, type Socket } from 'socket.io-client';
 import { createApp } from '../app.js';
 import type { AccessTokenVerifier } from '../auth.js';
 import { attachSocketServer, type QuizSocketServer } from '../socket.js';
+import { ExamService, type ExamServiceOptions } from '../exam/examService.js';
 import { LiveEngine, type LiveEngineOptions } from './engine.js';
 import { InMemoryLiveRepository } from './inMemoryRepository.js';
 import { SocketPublisher } from './socketPublisher.js';
@@ -66,8 +67,12 @@ export function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions> = {}) {
-  const repository = new InMemoryLiveRepository();
+export async function startLiveHarness(
+  engineOptions: Partial<LiveEngineOptions> = {},
+  examOptions: Partial<ExamServiceOptions> = {},
+  harnessOptions: { repository?: InMemoryLiveRepository } = {},
+) {
+  const repository = harnessOptions.repository ?? new InMemoryLiveRepository();
   const publisher = new SocketPublisher();
   const engine = new LiveEngine({
     repository,
@@ -77,10 +82,19 @@ export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions>
     hostRefreshIntervalMs: 20,
     ...engineOptions,
   });
-  const httpServer: HttpServer = createServer(createApp({ engine, verifier }));
+  const exam = new ExamService({
+    engine,
+    publisher,
+    now: engineOptions.now,
+    sweepIntervalMs: 60_000,
+    ...examOptions,
+  });
+  engine.attachExam(exam);
+  const httpServer: HttpServer = createServer(createApp({ engine, exam, verifier }));
   const socketServer: QuizSocketServer = attachSocketServer(httpServer, {
     engine,
     publisher,
+    exam,
     verifier,
     corsOrigins: ['http://localhost:5173'],
   });
@@ -179,6 +193,7 @@ export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions>
       socket.disconnect();
     }
     engine.shutdown();
+    await exam.stop();
     await new Promise<void>((resolve) => {
       void socketServer.close(() => resolve());
     });
@@ -187,6 +202,7 @@ export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions>
   return {
     repository,
     engine,
+    exam,
     baseUrl,
     connect,
     nextEvent,

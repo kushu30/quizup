@@ -2,6 +2,9 @@ import {
   DEFAULT_QUESTION_DURATION_SECONDS,
   MAX_QUESTION_DURATION_SECONDS,
   MIN_QUESTION_DURATION_SECONDS,
+  DEFAULT_EXAM_DURATION_MINUTES,
+  EXAM_MAX_DURATION_MINUTES,
+  EXAM_MIN_DURATION_MINUTES,
   MAX_ADAPTIVE_ROUNDS,
   MIN_ADAPTIVE_ROUNDS,
   quizSettingsSchema,
@@ -24,6 +27,8 @@ export function QuizEditor() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [title, setTitle] = useState('');
   const [mode, setMode] = useState<QuizMode>('live');
+  const [examMode, setExamMode] = useState(false);
+  const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const [adaptive, setAdaptive] = useState(false);
   const [adaptiveRounds, setAdaptiveRounds] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -38,6 +43,12 @@ export function QuizEditor() {
       setTitle(loaded.title);
       setMode(loaded.mode);
       const settings = quizSettingsSchema.safeParse(loaded.settings);
+      setExamMode(settings.success && settings.data.mode === 'exam');
+      setDurationMinutes(
+        settings.success && settings.data.durationMinutes !== undefined
+          ? String(settings.data.durationMinutes)
+          : String(DEFAULT_EXAM_DURATION_MINUTES),
+      );
       setAdaptive(settings.success ? settings.data.adaptive : false);
       setAdaptiveRounds(
         settings.success && settings.data.adaptiveRounds !== undefined
@@ -95,9 +106,13 @@ export function QuizEditor() {
       title,
       mode,
       settings: {
-        adaptive,
+        mode: examMode ? 'exam' : 'live',
+        durationMinutes: examMode ? Number(durationMinutes) : undefined,
+        adaptive: examMode ? false : adaptive,
         adaptiveRounds:
-          adaptive && adaptiveRounds.trim() !== '' ? Number(adaptiveRounds) : undefined,
+          !examMode && adaptive && adaptiveRounds.trim() !== ''
+            ? Number(adaptiveRounds)
+            : undefined,
       },
     });
     if (!parsed.success) {
@@ -192,12 +207,34 @@ export function QuizEditor() {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={adaptive}
+                checked={examMode}
+                onChange={(event) => setExamMode(event.target.checked)}
+              />
+              Exam mode
+            </label>
+            {examMode && (
+              <label className="flex items-center gap-2">
+                Minutes
+                <input
+                  type="number"
+                  min={EXAM_MIN_DURATION_MINUTES}
+                  max={EXAM_MAX_DURATION_MINUTES}
+                  className="w-24 rounded-md border border-slate-300 px-2 py-1"
+                  value={durationMinutes}
+                  onChange={(event) => setDurationMinutes(event.target.value)}
+                />
+              </label>
+            )}
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={adaptive && !examMode}
+                disabled={examMode}
                 onChange={(event) => setAdaptive(event.target.checked)}
               />
               Adaptive mode
             </label>
-            {adaptive && (
+            {adaptive && !examMode && (
               <label className="flex items-center gap-2">
                 Rounds
                 <input
@@ -212,9 +249,11 @@ export function QuizEditor() {
               </label>
             )}
             <span className="text-slate-500">
-              {adaptive
-                ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
-                : 'Everyone gets the same questions in the same order.'}
+              {examMode
+                ? 'Each student gets a private timer and a personal question order. Scores and leaderboards stay hidden until you release results. Browser signals are recorded after students consent. Adaptive mode is off in exams. Save to apply.'
+                : adaptive
+                  ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
+                  : 'Everyone gets the same questions in the same order.'}
             </span>
           </div>
         </form>
@@ -222,24 +261,26 @@ export function QuizEditor() {
       </div>
 
       <section className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
-        <label className="block text-sm">
-          Seconds per question
-          <input
-            type="number"
-            min={MIN_QUESTION_DURATION_SECONDS}
-            max={MAX_QUESTION_DURATION_SECONDS}
-            className="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-2"
-            value={durationSeconds}
-            onChange={(event) => setDurationSeconds(Number(event.target.value))}
-          />
-        </label>
+        {!examMode ? (
+          <label className="block text-sm">
+            Seconds per question
+            <input
+              type="number"
+              min={MIN_QUESTION_DURATION_SECONDS}
+              max={MAX_QUESTION_DURATION_SECONDS}
+              className="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-2"
+              value={durationSeconds}
+              onChange={(event) => setDurationSeconds(Number(event.target.value))}
+            />
+          </label>
+        ) : null}
         <button
           type="button"
           onClick={() => void handleStartLiveSession()}
           disabled={counts.approved === 0}
           className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
         >
-          Start live session
+          {examMode ? 'Open exam session' : 'Start live session'}
         </button>
         <p className="w-full text-sm text-slate-600">
           {counts.approved} approved · {counts.pending} pending review
