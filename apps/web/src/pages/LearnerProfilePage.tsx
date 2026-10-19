@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { RequireRole } from '../components/RequireRole';
+import { Button, Notice, PageHeader } from '../components/ui';
 import { api, describeError } from '../lib/api';
+
+const ERASED_MESSAGE = 'Your learner profile was erased.';
 
 function LearnerProfileContent() {
   const [message, setMessage] = useState<string | null>(null);
@@ -13,7 +16,7 @@ function LearnerProfileContent() {
     setBusy(true);
     try {
       await api.deleteLearnerProfile();
-      setMessage('Your learner profile was erased.');
+      setMessage(ERASED_MESSAGE);
     } catch (error) {
       setMessage(describeError(error));
     } finally {
@@ -22,22 +25,21 @@ function LearnerProfileContent() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-3">
-      <h1 className="text-2xl font-bold">My learning data</h1>
-      <p className="text-slate-600">
-        When you join an adaptive session while signed in, QuizUp remembers a skill rating and a
-        mastery estimate per topic so your next session can start closer to your level. It is never
-        shown to other students. You can erase it at any time.
-      </p>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void handleErase()}
-        className="rounded-md border border-red-300 px-4 py-2 text-red-700 disabled:opacity-50"
-      >
-        Erase my learner profile
-      </button>
-      {message && <p className="text-sm text-slate-700">{message}</p>}
+    <div>
+      <PageHeader title="My learning data" />
+      <div className="max-w-prose space-y-5">
+        <p className="text-lg">
+          When you join an adaptive session while signed in, QuizUp remembers a skill rating and a
+          mastery estimate per topic so your next session can start closer to your level. It is
+          never shown to other students. You can erase it at any time.
+        </p>
+        <Button variant="danger" disabled={busy} onClick={() => void handleErase()}>
+          Erase my learner profile
+        </Button>
+        {message && (
+          <Notice tone={message === ERASED_MESSAGE ? 'success' : 'danger'}>{message}</Notice>
+        )}
+      </div>
     </div>
   );
 }

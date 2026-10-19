@@ -13,7 +13,11 @@ export function RequireRole({ roles, deniedNotice, children }: RequireRoleProps)
   const { session, profile, loading } = useAuth();
 
   if (loading) {
-    return <p className="text-slate-600">Loading...</p>;
+    return (
+      <p role="status" className="py-16 text-center text-muted">
+        Loading...
+      </p>
+    );
   }
   if (!session) {
     return <Navigate to="/login" replace />;

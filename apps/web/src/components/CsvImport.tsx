@@ -1,6 +1,7 @@
 import { QUESTION_CSV_COLUMNS, type RowError } from '@quizup/shared';
 import { useState, type ChangeEvent } from 'react';
 import { ApiError, api, describeError } from '../lib/api';
+import { Notice } from './ui';
 
 interface CsvImportProps {
   quizId: string;
@@ -8,7 +9,7 @@ interface CsvImportProps {
 }
 
 export function CsvImport({ quizId, onImported }: CsvImportProps) {
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [rowErrors, setRowErrors] = useState<RowError[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -23,10 +24,10 @@ export function CsvImport({ quizId, onImported }: CsvImportProps) {
     setRowErrors([]);
     try {
       const result = await api.importQuestions(quizId, await file.text());
-      setMessage(`Imported ${result.imported} questions`);
+      setMessage({ text: `Imported ${result.imported} questions`, ok: true });
       onImported();
     } catch (error) {
-      setMessage(describeError(error));
+      setMessage({ text: describeError(error), ok: false });
       if (error instanceof ApiError) {
         setRowErrors(error.rowErrors);
       }
@@ -36,28 +37,49 @@ export function CsvImport({ quizId, onImported }: CsvImportProps) {
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="font-medium">Import from CSV</h3>
-      <p className="text-sm text-slate-600">
-        Header row: <code>{QUESTION_CSV_COLUMNS.join(',')}</code>. Difficulty is easy, medium or
-        hard. Correct is A, B, C or D. If any row is invalid nothing is imported.
-      </p>
-      <input
-        type="file"
-        accept=".csv,text/csv"
-        disabled={importing}
-        onChange={(event) => void handleFileChosen(event)}
-      />
-      {message && <p className="text-sm text-slate-800">{message}</p>}
-      {rowErrors.length > 0 && (
-        <ul className="list-disc pl-5 text-sm text-red-700">
-          {rowErrors.map((rowError) => (
-            <li key={`${rowError.row}-${rowError.message}`}>
-              Row {rowError.row}: {rowError.message}
-            </li>
-          ))}
-        </ul>
+    <section aria-labelledby="csv-import-heading" className="space-y-3">
+      <div className="space-y-1">
+        <h3 id="csv-import-heading" className="text-base font-semibold">
+          Import from CSV
+        </h3>
+        <p className="text-sm text-muted">
+          Header row:{' '}
+          <code className="rounded bg-paper px-1.5 py-0.5 text-xs break-all text-ink">
+            {QUESTION_CSV_COLUMNS.join(',')}
+          </code>
+          . Difficulty is easy, medium or hard. Correct is A, B, C or D. If any row is invalid
+          nothing is imported.
+        </p>
+      </div>
+      <label className="block text-sm font-medium">
+        CSV file
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          disabled={importing}
+          onChange={(event) => void handleFileChosen(event)}
+          className="mt-1.5 block w-full text-sm text-muted file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-md file:border file:border-rule-strong file:bg-surface file:px-4 file:text-sm file:font-semibold file:text-ink hover:file:bg-paper disabled:opacity-50"
+        />
+      </label>
+      {importing && (
+        <p role="status" className="text-sm text-muted">
+          Importing...
+        </p>
       )}
-    </div>
+      {message && (
+        <Notice tone={message.ok ? 'success' : 'danger'}>
+          <p>{message.text}</p>
+          {rowErrors.length > 0 && (
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {rowErrors.map((rowError) => (
+                <li key={`${rowError.row}-${rowError.message}`}>
+                  Row {rowError.row}: {rowError.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Notice>
+      )}
+    </section>
   );
 }

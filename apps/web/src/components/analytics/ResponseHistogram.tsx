@@ -30,9 +30,13 @@ export function ResponseHistogram({
   const tallest = Math.max(...counts, 1);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div role="group" aria-label="Histogram scope" className="flex gap-1 text-sm">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div
+          role="group"
+          aria-label="Histogram scope"
+          className="inline-flex rounded-md border border-rule-strong p-0.5 text-sm"
+        >
           {(
             [
               ['current', currentLabel],
@@ -44,44 +48,44 @@ export function ResponseHistogram({
               type="button"
               aria-pressed={scope === value}
               onClick={() => setScope(value)}
-              className={`rounded-md border px-3 py-1 ${
-                scope === value
-                  ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                  : 'border-slate-300'
+              className={`min-h-8 rounded px-3 font-medium ${
+                scope === value ? 'bg-ink text-white' : 'text-muted hover:text-ink'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-        <span className="text-sm text-slate-600 dark:text-slate-300">{total} responses</span>
+        <span className="text-sm text-muted tabular-nums">{total} responses</span>
       </div>
       <div
-        className="flex h-40 items-end gap-1"
+        className="flex h-40 items-end gap-1 border-b border-rule-strong"
         role="img"
         aria-label={`Response time distribution, ${total} responses`}
       >
         {counts.map((count, index) => (
           <div key={BUCKET_LABELS[index]} className="flex h-full flex-1 flex-col justify-end">
-            <span className="text-center text-xs tabular-nums">{count}</span>
+            <span className="text-center text-xs text-muted tabular-nums">{count}</span>
             <div
               title={`${BUCKET_LABELS[index]} of the time limit: ${count}`}
-              className="w-full rounded-t bg-blue-500 dark:bg-blue-400"
+              className="w-full rounded-t-sm bg-board"
               style={{ height: `${(count / tallest) * 100}%`, minHeight: count > 0 ? 2 : 0 }}
             />
           </div>
         ))}
       </div>
-      <div className="flex gap-1">
+      <div aria-hidden="true" className="hidden gap-1 sm:flex">
         {BUCKET_LABELS.map((label) => (
-          <span key={label} className="flex-1 text-center text-[10px] text-slate-500">
+          <span key={label} className="flex-1 text-center text-[11px] text-muted">
             {label}
           </span>
         ))}
       </div>
-      <p className="text-xs text-slate-500">
-        Share of the question time limit used before answering.
-      </p>
+      <div aria-hidden="true" className="flex justify-between text-xs text-muted sm:hidden">
+        <span>0%</span>
+        <span>100%</span>
+      </div>
+      <p className="text-xs text-muted">Share of the question time limit used before answering.</p>
     </div>
   );
 }

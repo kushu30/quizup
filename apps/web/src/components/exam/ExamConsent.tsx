@@ -1,4 +1,5 @@
 import { EXAM_CONSENT_TEXT } from '@quizup/shared';
+import { Button, Notice } from '../ui';
 
 interface ExamConsentProps {
   durationMinutes: number;
@@ -10,9 +11,9 @@ interface ExamConsentProps {
 
 function Section({ heading, items }: { heading: string; items: readonly string[] }) {
   return (
-    <section className="space-y-1">
-      <h2 className="font-semibold">{heading}</h2>
-      <ul className="list-disc space-y-1 pl-5 text-sm">
+    <section className="space-y-2">
+      <h2 className="text-base font-semibold">{heading}</h2>
+      <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink marker:text-muted">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}
@@ -29,35 +30,35 @@ export function ExamConsent({
   onDecline,
 }: ExamConsentProps) {
   return (
-    <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-      <h1 className="text-2xl font-bold">{EXAM_CONSENT_TEXT.title}</h1>
-      <p className="text-sm text-slate-600">
-        You have {durationMinutes} minutes. The timer starts when you accept.
-      </p>
-      <Section heading={EXAM_CONSENT_TEXT.monitoredHeading} items={EXAM_CONSENT_TEXT.monitored} />
-      <Section
-        heading={EXAM_CONSENT_TEXT.notCollectedHeading}
-        items={EXAM_CONSENT_TEXT.notCollected}
-      />
-      <Section heading={EXAM_CONSENT_TEXT.statementsHeading} items={EXAM_CONSENT_TEXT.statements} />
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onAccept}
-          className="rounded-md bg-slate-900 px-4 py-3 text-lg text-white disabled:opacity-50"
-        >
+    <div className="mx-auto max-w-2xl space-y-6 rounded-lg border border-rule bg-surface p-6 sm:p-8">
+      <div className="space-y-2">
+        <h1 className="text-title font-semibold tracking-tight">{EXAM_CONSENT_TEXT.title}</h1>
+        <p className="text-muted">
+          You have <strong className="font-semibold text-ink">{durationMinutes} minutes</strong>.
+          The timer starts when you accept.
+        </p>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <Section heading={EXAM_CONSENT_TEXT.monitoredHeading} items={EXAM_CONSENT_TEXT.monitored} />
+        <Section
+          heading={EXAM_CONSENT_TEXT.notCollectedHeading}
+          items={EXAM_CONSENT_TEXT.notCollected}
+        />
+      </div>
+      <div className="border-t border-rule pt-5">
+        <Section
+          heading={EXAM_CONSENT_TEXT.statementsHeading}
+          items={EXAM_CONSENT_TEXT.statements}
+        />
+      </div>
+      {error && <Notice tone="danger">{error}</Notice>}
+      <div className="flex flex-col gap-3 sm:flex-row-reverse">
+        <Button variant="brand" size="lg" disabled={busy} onClick={onAccept} className="sm:flex-1">
           {EXAM_CONSENT_TEXT.acceptLabel}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDecline}
-          className="rounded-md border border-slate-300 px-4 py-3 disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="secondary" size="lg" disabled={busy} onClick={onDecline}>
           {EXAM_CONSENT_TEXT.declineLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -14,12 +14,15 @@ import {
   type QuizMode,
 } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
+import { Button, Notice, PageHeader, Panel, SelectField, TextField } from '../components/ui';
 import { api, describeError } from '../lib/api';
+
+const SAVED_MESSAGE = 'Saved';
 
 export function QuizEditor() {
   const { quizId = '' } = useParams();
@@ -124,7 +127,7 @@ export function QuizEditor() {
     }
     try {
       setQuiz(await api.updateQuiz(quizId, parsed.data));
-      setMessage('Saved');
+      setMessage(SAVED_MESSAGE);
     } catch (error) {
       setMessage(describeError(error));
     }
@@ -162,42 +165,29 @@ export function QuizEditor() {
 
   if (!quiz) {
     return (
-      <div className="space-y-2">
-        <Link to="/host" className="text-sm hover:underline">
-          Back to dashboard
-        </Link>
-        <p className="text-slate-600">{message ?? 'Loading...'}</p>
+      <div>
+        <PageHeader title="Quiz" back={{ to: '/host', label: 'Back to dashboard' }} />
+        {message ? (
+          <Notice tone="danger">{message}</Notice>
+        ) : (
+          <p role="status" className="text-muted">
+            Loading...
+          </p>
+        )}
       </div>
     );
   }
 
+  const checkboxClass = 'h-4 w-4 shrink-0 rounded border-rule-strong accent-board';
+
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
-        <Link to="/host" className="text-sm hover:underline">
-          Back to dashboard
-        </Link>
-        <form onSubmit={(event) => void handleSaveDetails(event)} className="flex flex-wrap gap-2">
-          <input
-            className="min-w-48 flex-1 rounded-md border border-slate-300 px-3 py-2 text-lg font-semibold"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2"
-            value={mode}
-            onChange={(event) => setMode(event.target.value as QuizMode)}
-          >
-            <option value="live">Live</option>
-            <option value="exam">Exam</option>
-            <option value="coding">Coding</option>
-          </select>
-          <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-white">
-            Save
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-red-300 px-4 py-2 text-red-700"
+    <div>
+      <PageHeader
+        title={quiz.title}
+        back={{ to: '/host', label: 'Back to dashboard' }}
+        actions={
+          <Button
+            variant="danger"
             onClick={() => {
               if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
                 void handleDeleteQuiz();
@@ -205,146 +195,199 @@ export function QuizEditor() {
             }}
           >
             Delete quiz
-          </button>
-          <div className="flex w-full flex-wrap items-center gap-3 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={examMode}
-                onChange={(event) => setExamMode(event.target.checked)}
+          </Button>
+        }
+      />
+      {message && (
+        <Notice tone={message === SAVED_MESSAGE ? 'success' : 'danger'} className="mb-6">
+          {message}
+        </Notice>
+      )}
+
+      <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <div className="space-y-6 lg:sticky lg:top-6">
+          <Panel title="Details and mode">
+            <form onSubmit={(event) => void handleSaveDetails(event)} className="space-y-4">
+              <TextField
+                label="Quiz title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
               />
-              Exam mode
-            </label>
-            {examMode && (
-              <label className="flex items-center gap-2">
-                Minutes
-                <input
+              <SelectField
+                label="Quiz type"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as QuizMode)}
+              >
+                <option value="live">Live</option>
+                <option value="exam">Exam</option>
+                <option value="coding">Coding</option>
+              </SelectField>
+              <fieldset className="space-y-3 border-t border-rule pt-4">
+                <legend className="sr-only">How questions are delivered</legend>
+                <label className="flex items-center gap-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className={checkboxClass}
+                    checked={examMode}
+                    onChange={(event) => setExamMode(event.target.checked)}
+                  />
+                  Exam mode
+                </label>
+                {examMode && (
+                  <TextField
+                    label="Exam length in minutes"
+                    type="number"
+                    min={EXAM_MIN_DURATION_MINUTES}
+                    max={EXAM_MAX_DURATION_MINUTES}
+                    className="pl-7"
+                    inputClassName="w-28"
+                    value={durationMinutes}
+                    onChange={(event) => setDurationMinutes(event.target.value)}
+                  />
+                )}
+                <label
+                  className={`flex items-center gap-3 text-sm font-medium ${examMode ? 'text-muted' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    className={checkboxClass}
+                    checked={adaptive && !examMode}
+                    disabled={examMode}
+                    onChange={(event) => setAdaptive(event.target.checked)}
+                  />
+                  Adaptive mode
+                </label>
+                {adaptive && !examMode && (
+                  <div className="space-y-3 pl-7">
+                    <label className="flex items-center gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        className={checkboxClass}
+                        checked={useLearnerHistory}
+                        onChange={(event) => setUseLearnerHistory(event.target.checked)}
+                      />
+                      Use learner history
+                    </label>
+                    <TextField
+                      label="Rounds"
+                      type="number"
+                      min={MIN_ADAPTIVE_ROUNDS}
+                      max={MAX_ADAPTIVE_ROUNDS}
+                      placeholder="auto"
+                      hint="Leave empty to choose automatically."
+                      inputClassName="w-28"
+                      value={adaptiveRounds}
+                      onChange={(event) => setAdaptiveRounds(event.target.value)}
+                    />
+                  </div>
+                )}
+                <p className="text-sm text-muted">
+                  {examMode
+                    ? 'Each student gets a private timer and a personal question order. Scores and leaderboards stay hidden until you release results. Browser signals are recorded after students consent. Adaptive mode is off in exams. Save to apply.'
+                    : adaptive
+                      ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
+                      : 'Everyone gets the same questions in the same order.'}
+                </p>
+              </fieldset>
+              <Button type="submit" className="w-full">
+                Save details
+              </Button>
+            </form>
+          </Panel>
+
+          <Panel title={examMode ? 'Exam session' : 'Live session'}>
+            <div className="space-y-4">
+              {!examMode && (
+                <TextField
+                  label="Seconds per question"
                   type="number"
-                  min={EXAM_MIN_DURATION_MINUTES}
-                  max={EXAM_MAX_DURATION_MINUTES}
-                  className="w-24 rounded-md border border-slate-300 px-2 py-1"
-                  value={durationMinutes}
-                  onChange={(event) => setDurationMinutes(event.target.value)}
+                  min={MIN_QUESTION_DURATION_SECONDS}
+                  max={MAX_QUESTION_DURATION_SECONDS}
+                  inputClassName="w-28"
+                  value={durationSeconds}
+                  onChange={(event) => setDurationSeconds(Number(event.target.value))}
                 />
-              </label>
-            )}
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={adaptive && !examMode}
-                disabled={examMode}
-                onChange={(event) => setAdaptive(event.target.checked)}
-              />
-              Adaptive mode
-            </label>
-            {adaptive && !examMode && (
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={useLearnerHistory}
-                  onChange={(event) => setUseLearnerHistory(event.target.checked)}
-                />
-                Use learner history
-              </label>
-            )}
-            {adaptive && !examMode && (
-              <label className="flex items-center gap-2">
-                Rounds
-                <input
-                  type="number"
-                  min={MIN_ADAPTIVE_ROUNDS}
-                  max={MAX_ADAPTIVE_ROUNDS}
-                  placeholder="auto"
-                  className="w-24 rounded-md border border-slate-300 px-2 py-1"
-                  value={adaptiveRounds}
-                  onChange={(event) => setAdaptiveRounds(event.target.value)}
-                />
-              </label>
-            )}
-            <span className="text-slate-500">
-              {examMode
-                ? 'Each student gets a private timer and a personal question order. Scores and leaderboards stay hidden until you release results. Browser signals are recorded after students consent. Adaptive mode is off in exams. Save to apply.'
-                : adaptive
-                  ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
-                  : 'Everyone gets the same questions in the same order.'}
-            </span>
-          </div>
-        </form>
-        {message && <p className="text-sm text-slate-700">{message}</p>}
-      </div>
-
-      <section className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
-        {!examMode ? (
-          <label className="block text-sm">
-            Seconds per question
-            <input
-              type="number"
-              min={MIN_QUESTION_DURATION_SECONDS}
-              max={MAX_QUESTION_DURATION_SECONDS}
-              className="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-2"
-              value={durationSeconds}
-              onChange={(event) => setDurationSeconds(Number(event.target.value))}
-            />
-          </label>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => void handleStartLiveSession()}
-          disabled={counts.approved === 0}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
-        >
-          {examMode ? 'Open exam session' : 'Start live session'}
-        </button>
-        <p className="w-full text-sm text-slate-600">
-          {counts.approved} approved · {counts.pending} pending review
-          {counts.approved === 0 && ' · approve at least one question to start a live session'}
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Add a question</h2>
-        <QuestionForm
-          submitLabel="Add question"
-          onSubmit={async (input) => {
-            await api.createQuestion(quizId, input);
-            refreshQuestions();
-          }}
-        />
-        <CsvImport quizId={quizId} onImported={refreshQuestions} />
-        <GenerateQuestionsPanel quizId={quizId} onGenerated={refreshQuestions} />
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Needs review ({counts.pending})</h2>
-          <button
-            type="button"
-            disabled={counts.pending === 0}
-            onClick={() => void handleApproveAll()}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
-          >
-            Approve all
-          </button>
+              )}
+              <p className="text-sm text-muted">
+                <span className="font-semibold text-ink">{counts.approved}</span> approved,{' '}
+                <span className="font-semibold text-ink">{counts.pending}</span> pending review
+              </p>
+              {counts.approved === 0 && (
+                <p className="text-sm text-marker-ink">
+                  Approve at least one question to start a session.
+                </p>
+              )}
+              <Button
+                variant="brand"
+                size="lg"
+                className="w-full"
+                onClick={() => void handleStartLiveSession()}
+                disabled={counts.approved === 0}
+              >
+                {examMode ? 'Open exam session' : 'Start live session'}
+              </Button>
+            </div>
+          </Panel>
         </div>
-        <QuestionBank
-          quizId={quizId}
-          lockedApproval="pending"
-          emptyMessage="Nothing waiting for review"
-          refreshKey={refreshKey}
-          onChanged={refreshQuestions}
-        />
-      </section>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Approved questions ({counts.approved})</h2>
-        <QuestionBank
-          quizId={quizId}
-          lockedApproval="approved"
-          emptyMessage="No approved questions yet"
-          refreshKey={refreshKey}
-          onChanged={refreshQuestions}
-        />
-      </section>
+        <div className="min-w-0 space-y-6">
+          <Panel title="Add questions">
+            <div className="divide-y divide-rule">
+              <section aria-labelledby="write-question-heading" className="space-y-3 pb-6">
+                <h3 id="write-question-heading" className="text-base font-semibold">
+                  Write a question
+                </h3>
+                <QuestionForm
+                  submitLabel="Add question"
+                  onSubmit={async (input) => {
+                    await api.createQuestion(quizId, input);
+                    refreshQuestions();
+                  }}
+                />
+              </section>
+              <div className="py-6">
+                <CsvImport quizId={quizId} onImported={refreshQuestions} />
+              </div>
+              <div className="pt-6">
+                <GenerateQuestionsPanel quizId={quizId} onGenerated={refreshQuestions} />
+              </div>
+            </div>
+          </Panel>
+
+          <Panel
+            title={`Needs review (${counts.pending})`}
+            description="Imported and AI drafted questions wait here until you approve them."
+            actions={
+              <Button
+                variant="brand"
+                size="sm"
+                disabled={counts.pending === 0}
+                onClick={() => void handleApproveAll()}
+              >
+                Approve all
+              </Button>
+            }
+          >
+            <QuestionBank
+              quizId={quizId}
+              lockedApproval="pending"
+              emptyMessage="Nothing waiting for review"
+              refreshKey={refreshKey}
+              onChanged={refreshQuestions}
+            />
+          </Panel>
+
+          <Panel title={`Approved questions (${counts.approved})`}>
+            <QuestionBank
+              quizId={quizId}
+              lockedApproval="approved"
+              emptyMessage="No approved questions yet"
+              refreshKey={refreshKey}
+              onChanged={refreshQuestions}
+            />
+          </Panel>
+        </div>
+      </div>
     </div>
   );
 }

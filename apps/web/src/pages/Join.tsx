@@ -1,57 +1,65 @@
 import { joinFormSchema } from '@quizup/shared';
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Button, PageHeader, TextField } from '../components/ui';
+
+type FieldErrors = Partial<Record<'joinCode' | 'displayName', string>>;
 
 export function Join() {
   const navigate = useNavigate();
-  const [joinCode, setJoinCode] = useState('');
+  const [searchParams] = useSearchParams();
+  const prefilledCode = (searchParams.get('code') ?? '').trim().toUpperCase();
+  const [joinCode, setJoinCode] = useState(prefilledCode);
   const [displayName, setDisplayName] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const result = joinFormSchema.safeParse({ joinCode, displayName });
     if (!result.success) {
-      setErrors(result.error.issues.map((issue) => issue.message));
+      const next: FieldErrors = {};
+      for (const issue of result.error.issues) {
+        const field = issue.path[0];
+        if ((field === 'joinCode' || field === 'displayName') && !next[field]) {
+          next[field] = issue.message;
+        }
+      }
+      setErrors(next);
       return;
     }
     navigate(`/play/${result.data.joinCode}`, { state: { displayName: result.data.displayName } });
   }
 
   return (
-    <div className="mx-auto max-w-sm space-y-4">
-      <h1 className="text-2xl font-bold">Join a quiz</h1>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <label className="block text-sm">
-          Join code
-          <input
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl uppercase tracking-widest"
-            autoCapitalize="characters"
-            autoComplete="off"
-            value={joinCode}
-            onChange={(event) => setJoinCode(event.target.value)}
-          />
-        </label>
-        <label className="block text-sm">
-          Display name
-          <input
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-lg"
-            autoComplete="off"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-        </label>
-        {errors.map((error) => (
-          <p key={error} className="text-sm text-red-700">
-            {error}
-          </p>
-        ))}
-        <button
-          type="submit"
-          className="w-full rounded-md bg-slate-900 px-4 py-3 text-lg text-white"
-        >
+    <div className="mx-auto max-w-md">
+      <PageHeader
+        title="Join a quiz"
+        description="Enter the code your host shows on screen and the name others will see."
+      />
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <TextField
+          label="Join code"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus={!prefilledCode}
+          value={joinCode}
+          error={errors.joinCode}
+          onChange={(event) => setJoinCode(event.target.value)}
+          inputClassName="py-3 text-center text-title font-semibold tracking-[0.3em] uppercase tabular-nums"
+        />
+        <TextField
+          label="Display name"
+          autoComplete="off"
+          autoFocus={Boolean(prefilledCode)}
+          value={displayName}
+          error={errors.displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          inputClassName="py-3 text-lg"
+        />
+        <Button type="submit" size="lg" className="w-full">
           Join
-        </button>
+        </Button>
       </form>
     </div>
   );

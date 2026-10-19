@@ -5,6 +5,7 @@ import {
 } from '@quizup/shared';
 import { memo } from 'react';
 import { useStableRows } from '../../lib/stableRows';
+import { Badge, TableFrame } from '../ui';
 
 interface QuestionDifficultyTableProps {
   questions: QuestionAnalytics[];
@@ -25,42 +26,43 @@ const QuestionRow = memo(function QuestionRow({
 }) {
   return (
     <tr>
-      <td className="px-3 py-2 tabular-nums">{question.round}</td>
-      <td className="max-w-xs truncate px-3 py-2" title={question.stem}>
+      <td className="text-muted tabular-nums">{question.round}</td>
+      <td className="max-w-xs truncate font-medium" title={question.stem}>
         {question.stem}
       </td>
-      <td className="px-3 py-2">{question.topic}</td>
-      <td className="px-3 py-2 capitalize">
+      <td>{question.topic}</td>
+      <td className="whitespace-nowrap capitalize">
         {question.labeledDifficulty}
         {question.provisional && (
-          <span
-            title={`Fewer than ${PROVISIONAL_QUESTION_ANSWERS} responses so far: this question's rating is still settling`}
-            className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs normal-case text-slate-700 dark:bg-slate-700 dark:text-slate-100"
-          >
-            provisional
+          <span className="ml-2 normal-case">
+            <Badge
+              title={`Fewer than ${PROVISIONAL_QUESTION_ANSWERS} responses so far: this question's rating is still settling`}
+            >
+              provisional
+            </Badge>
           </span>
         )}
       </td>
-      <td className="px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap tabular-nums">
         {question.accuracy === null
           ? '-'
           : `${Math.round(question.accuracy * 100)}% (${question.correct}/${question.answered})`}
       </td>
       {showMedian && (
-        <td className="px-3 py-2 tabular-nums">
+        <td className="whitespace-nowrap tabular-nums">
           {question.medianResponseMs === null
             ? '-'
             : `${(question.medianResponseMs / 1000).toFixed(1)} s`}
         </td>
       )}
-      <td className="px-3 py-2">
+      <td className="whitespace-nowrap">
         {question.mismatch ? (
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <Badge tone="warning">
             {'⚠ '}
             {MISMATCH_TEXT[question.mismatch]}
-          </span>
+          </Badge>
         ) : (
-          <span className="text-slate-400">-</span>
+          <span className="text-muted">-</span>
         )}
       </td>
     </tr>
@@ -73,28 +75,28 @@ export function QuestionDifficultyTable({
 }: QuestionDifficultyTableProps) {
   const stableQuestions = useStableRows(questions, (question) => question.questionId);
   if (stableQuestions.length === 0) {
-    return <p className="text-slate-500">No questions served yet.</p>;
+    return <p className="text-muted">No questions served yet.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+    <TableFrame label="Question difficulty table">
+      <table>
+        <thead>
           <tr>
-            <th className="px-3 py-2">Round</th>
-            <th className="px-3 py-2">Question</th>
-            <th className="px-3 py-2">Topic</th>
-            <th className="px-3 py-2">Labeled</th>
-            <th className="px-3 py-2">Observed accuracy</th>
-            {showMedian && <th className="px-3 py-2">Median time</th>}
-            <th className="px-3 py-2">Check</th>
+            <th scope="col">Round</th>
+            <th scope="col">Question</th>
+            <th scope="col">Topic</th>
+            <th scope="col">Labeled</th>
+            <th scope="col">Observed accuracy</th>
+            {showMedian && <th scope="col">Median time</th>}
+            <th scope="col">Check</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200">
+        <tbody>
           {stableQuestions.map((question) => (
             <QuestionRow key={question.questionId} question={question} showMedian={showMedian} />
           ))}
         </tbody>
       </table>
-    </div>
+    </TableFrame>
   );
 }

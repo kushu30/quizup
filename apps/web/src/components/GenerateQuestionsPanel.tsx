@@ -7,6 +7,7 @@ import {
 } from '@quizup/shared';
 import { useState, type FormEvent } from 'react';
 import { api, describeError } from '../lib/api';
+import { Button, Notice, SelectField, TextAreaField, TextField } from './ui';
 
 interface GenerateQuestionsPanelProps {
   quizId: string;
@@ -43,75 +44,66 @@ export function GenerateQuestionsPanel({ quizId, onGenerated }: GenerateQuestion
     }
   }
 
+  const passageTooLong = passage.length > GENERATION_PASSAGE_MAX_LENGTH;
+  const passageCount = `${passage.length} / ${GENERATION_PASSAGE_MAX_LENGTH} characters`;
+
   return (
     <form
       onSubmit={(event) => void handleSubmit(event)}
-      className="space-y-3 rounded-lg border border-violet-200 bg-violet-50 p-4"
+      aria-labelledby="generate-questions-heading"
+      className="space-y-4"
     >
-      <h3 className="font-medium">Generate with AI</h3>
-      <p className="text-sm text-slate-600">
-        Questions are saved as pending. Review, edit and approve them before they can be used in a
-        live session.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-sm sm:col-span-3">
-          Topic
-          <input
-            maxLength={GENERATION_TOPIC_MAX_LENGTH}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-          />
-        </label>
-        <label className="block text-sm">
-          Number of questions
-          <input
-            type="number"
-            min={1}
-            max={GENERATION_MAX_COUNT}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
-            value={count}
-            onChange={(event) => setCount(Number(event.target.value))}
-          />
-        </label>
-        <label className="block text-sm">
-          Difficulty
-          <select
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
-            value={difficulty}
-            onChange={(event) => setDifficulty(event.target.value as Difficulty)}
-          >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </label>
+      <div className="space-y-1">
+        <h3 id="generate-questions-heading" className="text-base font-semibold">
+          Generate with AI
+        </h3>
+        <p className="text-sm text-muted">
+          Questions are saved as pending. Review, edit and approve them before they can be used in a
+          live session.
+        </p>
       </div>
-      <label className="block text-sm">
-        Passage (optional). Questions will be answerable from this text.
-        <textarea
-          rows={5}
-          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2"
-          value={passage}
-          onChange={(event) => setPassage(event.target.value)}
+      <TextField
+        label="Topic"
+        maxLength={GENERATION_TOPIC_MAX_LENGTH}
+        value={topic}
+        onChange={(event) => setTopic(event.target.value)}
+      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField
+          label="Number of questions"
+          type="number"
+          min={1}
+          max={GENERATION_MAX_COUNT}
+          value={count}
+          onChange={(event) => setCount(Number(event.target.value))}
         />
-        <span
-          className={`block text-right text-xs ${
-            passage.length > GENERATION_PASSAGE_MAX_LENGTH ? 'text-red-700' : 'text-slate-500'
-          }`}
+        <SelectField
+          label="Difficulty"
+          value={difficulty}
+          onChange={(event) => setDifficulty(event.target.value as Difficulty)}
         >
-          {passage.length} / {GENERATION_PASSAGE_MAX_LENGTH}
-        </span>
-      </label>
-      {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
-      {successMessage && <p className="text-sm text-emerald-800">{successMessage}</p>}
-      <button
-        type="submit"
-        disabled={generating}
-        className="rounded-md bg-violet-700 px-4 py-2 text-white disabled:opacity-50"
-      >
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </SelectField>
+      </div>
+      <TextAreaField
+        label="Passage (optional)"
+        rows={5}
+        hint={
+          passageTooLong
+            ? undefined
+            : `Questions will be answerable from this text. ${passageCount}`
+        }
+        error={passageTooLong ? `${passageCount}. Shorten the passage.` : undefined}
+        value={passage}
+        onChange={(event) => setPassage(event.target.value)}
+      />
+      {errorMessage && <Notice tone="danger">{errorMessage}</Notice>}
+      {successMessage && <Notice tone="success">{successMessage}</Notice>}
+      <Button type="submit" variant="secondary" disabled={generating}>
         {generating ? 'Generating... this can take up to a minute' : 'Generate questions'}
-      </button>
+      </Button>
     </form>
   );
 }

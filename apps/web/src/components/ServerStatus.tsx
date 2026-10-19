@@ -2,6 +2,7 @@ import { timePongPayloadSchema } from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { webEnv } from '../lib/env';
 import { createQuizSocket } from '../lib/socket';
+import { Badge } from './ui';
 
 type HealthState =
   { kind: 'checking' } | { kind: 'ok'; serverTime: string } | { kind: 'down'; reason: string };
@@ -12,15 +13,6 @@ type SocketState =
   | { kind: 'down'; reason: string };
 
 const SOCKET_TIMEOUT_MS = 5000;
-
-function Badge({ ok, pending, label }: { ok: boolean; pending: boolean; label: string }) {
-  const color = pending
-    ? 'bg-slate-100 text-slate-600'
-    : ok
-      ? 'bg-emerald-100 text-emerald-800'
-      : 'bg-red-100 text-red-800';
-  return <span className={`rounded-full px-3 py-1 text-sm font-medium ${color}`}>{label}</span>;
-}
 
 export function ServerStatus() {
   const [health, setHealth] = useState<HealthState>({ kind: 'checking' });
@@ -83,36 +75,38 @@ export function ServerStatus() {
     };
   }, []);
 
+  const healthLabel =
+    health.kind === 'checking'
+      ? 'Checking...'
+      : health.kind === 'ok'
+        ? 'Server OK'
+        : `Server down (${health.reason})`;
+  const socketLabel =
+    socketState.kind === 'checking'
+      ? 'Checking...'
+      : socketState.kind === 'ok'
+        ? `${socketState.roundTripMs} ms (clock offset ${socketState.clockOffsetMs} ms)`
+        : `Socket down (${socketState.reason})`;
+  const toneFor = (kind: 'checking' | 'ok' | 'down') =>
+    kind === 'checking' ? 'neutral' : kind === 'ok' ? 'success' : 'danger';
+
   return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-600">Server health</span>
-        <Badge
-          pending={health.kind === 'checking'}
-          ok={health.kind === 'ok'}
-          label={
-            health.kind === 'checking'
-              ? 'Checking...'
-              : health.kind === 'ok'
-                ? 'Server OK'
-                : `Server down (${health.reason})`
-          }
-        />
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-600">Socket round trip</span>
-        <Badge
-          pending={socketState.kind === 'checking'}
-          ok={socketState.kind === 'ok'}
-          label={
-            socketState.kind === 'checking'
-              ? 'Checking...'
-              : socketState.kind === 'ok'
-                ? `${socketState.roundTripMs} ms (clock offset ${socketState.clockOffsetMs} ms)`
-                : `Socket down (${socketState.reason})`
-          }
-        />
-      </div>
-    </div>
+    <section aria-label="System status" className="border-t border-rule pt-6">
+      <h2 className="text-sm font-semibold text-muted">System status</h2>
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-start">
+          <dt className="text-muted">Server health</dt>
+          <dd>
+            <Badge tone={toneFor(health.kind)}>{healthLabel}</Badge>
+          </dd>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-start">
+          <dt className="text-muted">Socket round trip</dt>
+          <dd>
+            <Badge tone={toneFor(socketState.kind)}>{socketLabel}</Badge>
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }

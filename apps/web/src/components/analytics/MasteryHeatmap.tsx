@@ -1,6 +1,7 @@
 import type { AnalyticsTopic } from '@quizup/shared';
 import { memo, useMemo, useState } from 'react';
 import { useStableRows } from '../../lib/stableRows';
+import { TableFrame } from '../ui';
 
 export interface HeatmapRow {
   participantId: string;
@@ -14,14 +15,14 @@ interface MasteryHeatmapProps {
   rows: HeatmapRow[];
 }
 
-const NO_DATA_CLASSES = 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+const NO_DATA_CLASSES = 'bg-[#eceff3] text-muted';
 
 const SEQUENTIAL_CLASSES = [
-  'bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100',
-  'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-50',
-  'bg-blue-300 text-blue-950 dark:bg-blue-800 dark:text-white',
-  'bg-blue-500 text-white dark:bg-blue-600 dark:text-white',
-  'bg-blue-700 text-white dark:bg-blue-400 dark:text-blue-950',
+  'bg-[#eef4f1] text-ink',
+  'bg-[#cfe2da] text-ink',
+  'bg-[#94c2b0] text-ink',
+  'bg-[#3a7d68] text-white',
+  'bg-board text-white',
 ];
 
 function masteryClasses(mastery: number | null): string {
@@ -44,7 +45,7 @@ const HeatmapRowView = memo(function HeatmapRowView({
 }) {
   return (
     <tr>
-      <th scope="row" className="whitespace-nowrap px-3 py-1 text-left font-medium">
+      <th scope="row" className="font-medium whitespace-nowrap text-ink">
         {row.displayName}
       </th>
       {topics.map((topic, index) => {
@@ -58,7 +59,7 @@ const HeatmapRowView = memo(function HeatmapRowView({
             key={topic.key}
             title={label}
             aria-label={label}
-            className={`px-3 py-1 text-center tabular-nums ${masteryClasses(mastery)}`}
+            className={`text-center font-medium tabular-nums ${masteryClasses(mastery)}`}
           >
             {mastery === null ? '–' : mastery.toFixed(2)}
           </td>
@@ -84,19 +85,17 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
   );
 
   if (stableTopics.length === 0) {
-    return <p className="text-slate-500">Topics appear once questions are served.</p>;
+    return <p className="text-muted">Topics appear once questions are served.</p>;
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-600 dark:text-slate-300">
-          Mastery per topic, 0 (none) to 1 (full)
-        </span>
-        <label className="flex items-center gap-2">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <span className="text-muted">Mastery per topic, 0 (none) to 1 (full)</span>
+        <label className="flex items-center gap-2 font-medium">
           Sort by
           <select
-            className="rounded-md border border-slate-300 bg-transparent px-2 py-1"
+            className="min-h-8 rounded-md border border-rule-strong bg-surface px-2 py-1 font-normal"
             value={sortBy}
             onChange={(event) => setSortBy(event.target.value as 'score' | 'name')}
           >
@@ -105,15 +104,13 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
           </select>
         </label>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full border-collapse text-sm">
+      <TableFrame label="Mastery heatmap table">
+        <table className="border-collapse">
           <thead>
-            <tr className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-              <th scope="col" className="px-3 py-2 text-left">
-                Student
-              </th>
+            <tr>
+              <th scope="col">Student</th>
               {stableTopics.map((topic) => (
-                <th key={topic.key} scope="col" className="px-3 py-2 text-center">
+                <th key={topic.key} scope="col" className="text-center">
                   {topic.label}
                 </th>
               ))}
@@ -125,14 +122,18 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+      </TableFrame>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Low</span>
         {SEQUENTIAL_CLASSES.map((classes) => (
-          <span key={classes} className={`h-4 w-8 rounded ${classes}`} aria-hidden="true" />
+          <span
+            key={classes}
+            className={`h-4 w-8 rounded-sm border border-rule ${classes}`}
+            aria-hidden="true"
+          />
         ))}
         <span>High</span>
-        <span className={`ml-3 rounded px-2 py-0.5 ${NO_DATA_CLASSES}`}>– no data</span>
+        <span className={`ml-3 rounded-sm px-2 py-0.5 ${NO_DATA_CLASSES}`}>– no data</span>
       </div>
     </div>
   );

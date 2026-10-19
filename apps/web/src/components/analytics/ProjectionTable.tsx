@@ -2,6 +2,7 @@ import type { ParticipantAnalytics } from '@quizup/shared';
 import { memo } from 'react';
 import { MIN_CONFIDENT_SAMPLE, MIN_PROJECTION_SAMPLE } from '@quizup/shared';
 import { useStableRows } from '../../lib/stableRows';
+import { Badge, TableFrame } from '../ui';
 
 interface ProjectionTableProps {
   participants: ParticipantAnalytics[];
@@ -24,29 +25,26 @@ const ParticipantRow = memo(function ParticipantRow({
   const { projection } = participant;
   return (
     <tr>
-      <td className="px-3 py-2 tabular-nums">{participant.rank}</td>
-      <td className="px-3 py-2">{participant.displayName}</td>
-      <td className="px-3 py-2 tabular-nums">{participant.score.toLocaleString()}</td>
-      <td className="px-3 py-2 tabular-nums">
+      <td className="text-muted tabular-nums">{participant.rank}</td>
+      <td className="font-medium">{participant.displayName}</td>
+      <td className="text-right tabular-nums">{participant.score.toLocaleString()}</td>
+      <td className="text-right tabular-nums">
         {participant.correct}/{participant.answered}
       </td>
-      <td className="px-3 py-2">
+      <td>
         {projection ? (
-          <span>
+          <span className="inline-flex flex-wrap items-center gap-2">
             Projected {Math.round(projection.projected).toLocaleString()}
             {projection.lowConfidence && (
-              <span
-                title={lowConfidenceHint(adaptive, projection.n)}
-                className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-              >
+              <Badge tone="warning" title={lowConfidenceHint(adaptive, projection.n)}>
                 low confidence
-              </span>
+              </Badge>
             )}
           </span>
         ) : (
           <span
             title={`Needs ${MIN_PROJECTION_SAMPLE} answers and a known number of rounds`}
-            className="text-slate-400"
+            className="text-muted"
           >
             -
           </span>
@@ -62,21 +60,25 @@ export function ProjectionTable({ participants, adaptive }: ProjectionTableProps
     (participant) => participant.participantId,
   );
   if (stableParticipants.length === 0) {
-    return <p className="text-slate-500">No students yet.</p>;
+    return <p className="text-muted">No students yet.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+    <TableFrame label="Students and projected final score table">
+      <table>
+        <thead>
           <tr>
-            <th className="px-3 py-2">Rank</th>
-            <th className="px-3 py-2">Student</th>
-            <th className="px-3 py-2">Score</th>
-            <th className="px-3 py-2">Correct</th>
-            <th className="px-3 py-2">Projected final score</th>
+            <th scope="col">Rank</th>
+            <th scope="col">Student</th>
+            <th scope="col" className="text-right">
+              Score
+            </th>
+            <th scope="col" className="text-right">
+              Correct
+            </th>
+            <th scope="col">Projected final score</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200">
+        <tbody>
           {stableParticipants.map((participant) => (
             <ParticipantRow
               key={participant.participantId}
@@ -86,6 +88,6 @@ export function ProjectionTable({ participants, adaptive }: ProjectionTableProps
           ))}
         </tbody>
       </table>
-    </div>
+    </TableFrame>
   );
 }

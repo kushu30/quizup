@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useProctor } from '../../hooks/useProctor';
 import { useServerNow } from '../../hooks/useServerNow';
 import type { QuizSocket } from '../../lib/socket';
+import { Button, Notice } from '../ui';
 
 interface ExamAttemptViewProps {
   socket: QuizSocket;
@@ -103,36 +104,40 @@ export function ExamAttemptView({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl space-y-6">
       {proctor.fullscreenLost && (
         <div
           role="alertdialog"
           aria-modal="true"
           aria-label="Full screen required"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/85 p-4"
         >
-          <div className="max-w-sm space-y-3 rounded-xl bg-white p-5 text-center">
-            <p className="text-lg font-semibold">Return to full screen</p>
-            <p className="text-sm text-slate-600">
-              The exam is running. Time left: {formatClock(remainingMs)}.
+          <div className="max-w-sm space-y-4 rounded-lg bg-surface p-6 text-center">
+            <p className="text-xl font-semibold">Return to full screen</p>
+            <p className="text-muted">
+              The exam is still running. Time left:{' '}
+              <span className="font-semibold text-ink tabular-nums">
+                {formatClock(remainingMs)}
+              </span>
             </p>
-            <button
-              type="button"
+            <Button
+              variant="brand"
+              size="lg"
+              className="w-full"
               onClick={() => void proctor.requestFullscreen()}
-              className="w-full rounded-md bg-slate-900 px-4 py-3 text-white"
             >
               Go full screen
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-2">
-        <span className="text-sm text-slate-600">
+      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between border-b border-rule bg-paper/95 px-4 py-3 backdrop-blur">
+        <span className="text-sm font-medium text-muted tabular-nums">
           {answeredCount} of {view.questions.length} answered
         </span>
         <span
-          className={`text-xl font-bold tabular-nums ${remainingMs < 60_000 ? 'text-red-700' : ''}`}
+          className={`text-title font-bold tabular-nums ${remainingMs < 60_000 ? 'text-alert' : ''}`}
           aria-label="Time left"
         >
           {formatClock(remainingMs)}
@@ -140,85 +145,99 @@ export function ExamAttemptView({
       </div>
 
       {!connected && (
-        <p className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
+        <Notice tone="warning">
           Reconnecting. Your timer keeps running and your answers are saved when you are back.
-        </p>
+        </Notice>
       )}
-      {timeIsUp && (
-        <p className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
-          Time is up. Submitting your exam...
-        </p>
-      )}
+      {timeIsUp && <Notice tone="warning">Time is up. Submitting your exam...</Notice>}
 
       <nav aria-label="Questions" className="flex flex-wrap gap-2">
-        {view.questions.map((item, index) => (
-          <button
-            key={item.questionId}
-            type="button"
-            onClick={() => setCurrentIndex(index)}
-            aria-current={index === currentIndex}
-            className={`h-10 w-10 rounded-md border text-sm ${
-              index === currentIndex
-                ? 'border-slate-900 bg-slate-900 text-white'
-                : 'border-slate-300'
-            } ${answers[item.questionId] !== undefined && index !== currentIndex ? 'bg-emerald-100' : ''}`}
-          >
-            {index + 1}
-          </button>
-        ))}
+        {view.questions.map((item, index) => {
+          const answered = answers[item.questionId] !== undefined;
+          const current = index === currentIndex;
+          return (
+            <button
+              key={item.questionId}
+              type="button"
+              onClick={() => setCurrentIndex(index)}
+              aria-current={current}
+              aria-label={`Question ${index + 1}${answered ? ', answered' : ''}`}
+              className={`h-10 w-10 rounded-md border text-sm font-semibold tabular-nums ${
+                current
+                  ? 'border-ink bg-ink text-white'
+                  : answered
+                    ? 'border-board bg-board-soft text-board'
+                    : 'border-rule-strong bg-surface text-ink hover:bg-paper'
+              }`}
+            >
+              {index + 1}
+            </button>
+          );
+        })}
       </nav>
 
       {question && (
-        <section className="space-y-3">
-          <h1 className="text-xl font-semibold">
-            {currentIndex + 1}. {question.stem}
+        <section className="space-y-4">
+          <h1 className="text-xl font-semibold break-words sm:text-2xl">
+            <span className="mr-2 text-muted">{currentIndex + 1}.</span>
+            {question.stem}
           </h1>
-          <div className="grid gap-2" role="radiogroup" aria-label="Answer options">
-            {question.options.map((option, optionIndex) => (
-              <button
-                key={OPTION_LETTERS[optionIndex]}
-                type="button"
-                role="radio"
-                aria-checked={answers[question.questionId] === optionIndex}
-                disabled={timeIsUp}
-                onClick={() => chooseOption(question.questionId, optionIndex)}
-                className={`rounded-lg border px-4 py-3 text-left disabled:opacity-60 ${
-                  answers[question.questionId] === optionIndex
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-300 bg-white'
-                }`}
-              >
-                <span className="mr-3 font-bold">{OPTION_LETTERS[optionIndex]}</span>
-                {option}
-              </button>
-            ))}
+          <div className="grid gap-3" role="radiogroup" aria-label="Answer options">
+            {question.options.map((option, optionIndex) => {
+              const checked = answers[question.questionId] === optionIndex;
+              return (
+                <button
+                  key={OPTION_LETTERS[optionIndex]}
+                  type="button"
+                  role="radio"
+                  aria-checked={checked}
+                  disabled={timeIsUp}
+                  onClick={() => chooseOption(question.questionId, optionIndex)}
+                  className={`flex items-center gap-4 rounded-lg border-2 px-4 py-3.5 text-left text-base break-words disabled:cursor-not-allowed disabled:opacity-60 ${
+                    checked
+                      ? 'border-board bg-board-soft'
+                      : 'border-rule bg-surface hover:border-rule-strong'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold ${
+                      checked ? 'bg-board text-white' : 'bg-paper text-muted'
+                    }`}
+                  >
+                    {OPTION_LETTERS[optionIndex]}
+                  </span>
+                  <span className="min-w-0">{option}</span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
 
-      {message && <p className="text-sm text-red-700">{message}</p>}
+      {message && <Notice tone="danger">{message}</Notice>}
 
       <div className="flex justify-between gap-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           disabled={currentIndex === 0}
           onClick={() => setCurrentIndex((index) => Math.max(index - 1, 0))}
-          className="rounded-md border border-slate-300 px-4 py-2 disabled:opacity-40"
         >
           Previous
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           disabled={currentIndex >= view.questions.length - 1}
           onClick={() => setCurrentIndex((index) => index + 1)}
-          className="rounded-md border border-slate-300 px-4 py-2 disabled:opacity-40"
         >
           Next
-        </button>
+        </Button>
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="brand"
+        size="lg"
+        className="w-full"
         disabled={submitting || timeIsUp}
         onClick={() => {
           const unanswered = view.questions.length - answeredCount;
@@ -230,10 +249,9 @@ export function ExamAttemptView({
             submit();
           }
         }}
-        className="w-full rounded-md bg-emerald-600 px-4 py-3 text-lg text-white disabled:opacity-50"
       >
         Submit exam
-      </button>
+      </Button>
     </div>
   );
 }

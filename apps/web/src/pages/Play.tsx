@@ -12,6 +12,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { ExamPlay } from '../components/exam/ExamPlay';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
+import { Notice, buttonClasses } from '../components/ui';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
@@ -53,10 +54,10 @@ const INITIAL_STATE: PlayState = {
 };
 
 const OPTION_STYLES = [
-  'bg-rose-600 hover:bg-rose-700',
-  'bg-sky-600 hover:bg-sky-700',
-  'bg-amber-500 hover:bg-amber-600',
-  'bg-emerald-600 hover:bg-emerald-700',
+  'bg-answer-a text-white',
+  'bg-answer-b text-white',
+  'bg-answer-c text-ink',
+  'bg-answer-d text-white',
 ];
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -260,13 +261,13 @@ export function Play() {
 
   if (state.joinError) {
     return (
-      <div className="mx-auto max-w-sm space-y-4 text-center">
-        <p className="text-lg text-red-700">
+      <div className="mx-auto max-w-md space-y-5 text-center">
+        <Notice tone="danger">
           {stateDisplayName || readStoredJoin(joinCode)
             ? JOIN_ERROR_MESSAGES[state.joinError]
             : 'Enter your name to join this quiz.'}
-        </p>
-        <Link to="/join" className="inline-block rounded-md bg-slate-900 px-4 py-3 text-white">
+        </Notice>
+        <Link to="/join" className={buttonClasses('primary', 'lg')}>
           Back to join
         </Link>
       </div>
@@ -274,7 +275,11 @@ export function Play() {
   }
 
   if (!state.connected || !state.participantId || !synced) {
-    return <p className="text-center text-slate-600">Connecting...</p>;
+    return (
+      <p role="status" className="py-16 text-center text-lg text-muted">
+        Connecting...
+      </p>
+    );
   }
 
   if (state.mode === 'exam' && state.exam && socket) {
@@ -291,11 +296,11 @@ export function Play() {
   }
 
   const header = (
-    <div className="flex items-center justify-between text-sm text-slate-600">
-      <span>{state.displayName}</span>
+    <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
+      <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
       {state.standing && (
-        <span>
-          Rank {state.standing.rank} · {state.standing.score} pts
+        <span className="shrink-0 text-muted">
+          Rank {state.standing.rank}, {state.standing.score.toLocaleString()} points
         </span>
       )}
     </div>
@@ -303,15 +308,24 @@ export function Play() {
 
   if (state.status === 'ended') {
     return (
-      <div className="mx-auto max-w-md space-y-4">
+      <div className="mx-auto max-w-md space-y-6">
         {header}
-        <h1 className="text-center text-3xl font-bold">Final results</h1>
-        {state.standing && (
-          <p className="text-center text-xl">
-            You finished <strong>#{state.standing.rank}</strong> with{' '}
-            <strong>{state.standing.score}</strong> points
-          </p>
-        )}
+        <div className="space-y-2 text-center">
+          <h1 className="text-title font-semibold tracking-tight">Final results</h1>
+          {state.standing && (
+            <p className="text-lg text-muted">
+              You finished{' '}
+              <strong className="font-semibold text-ink tabular-nums">
+                #{state.standing.rank}
+              </strong>{' '}
+              with{' '}
+              <strong className="font-semibold text-ink tabular-nums">
+                {state.standing.score.toLocaleString()}
+              </strong>{' '}
+              points
+            </p>
+          )}
+        </div>
         <Leaderboard entries={state.leaderboard} highlightParticipantId={state.participantId} />
       </div>
     );
@@ -319,54 +333,61 @@ export function Play() {
 
   if (state.status === 'lobby' || !state.question) {
     return (
-      <div className="mx-auto max-w-md space-y-4 text-center">
+      <div className="mx-auto max-w-md space-y-6">
         {header}
-        <h1 className="text-2xl font-bold">You are in!</h1>
-        <p className="text-slate-600">Waiting for the host to start the quiz.</p>
-        <p className="text-sm text-slate-500">Join code {joinCode}</p>
+        <div className="space-y-3 py-8 text-center">
+          <h1 className="text-title font-semibold tracking-tight">You are in</h1>
+          <p className="text-lg text-muted">Waiting for the host to start the quiz.</p>
+          <p className="text-sm text-muted">
+            Join code{' '}
+            <span className="rounded bg-board-soft px-2 py-1 font-semibold tracking-[0.2em] text-board tabular-nums">
+              {joinCode}
+            </span>
+          </p>
+        </div>
       </div>
     );
   }
 
   if (state.questionClosed && state.result) {
     const you = state.result.you;
+    const outcome =
+      you?.chosenIndex === null || you === null ? 'timeout' : you.correct ? 'correct' : 'wrong';
+    const outcomeStyle =
+      outcome === 'correct' ? 'bg-success' : outcome === 'wrong' ? 'bg-alert' : 'bg-ink';
     return (
-      <div className="mx-auto max-w-md space-y-4">
+      <div className="mx-auto max-w-md space-y-5">
         {header}
-        <div
-          className={`rounded-xl p-6 text-center text-white ${
-            you?.correct ? 'bg-emerald-600' : 'bg-rose-600'
-          }`}
-        >
-          <p className="text-3xl font-bold">
-            {you?.chosenIndex === null || you === null
-              ? "Time's up"
-              : you.correct
-                ? 'Correct!'
-                : 'Not quite'}
+        <div role="status" className={`rounded-lg p-6 text-center text-white ${outcomeStyle}`}>
+          <p className="text-title font-semibold">
+            {outcome === 'timeout' ? "Time's up" : outcome === 'correct' ? 'Correct' : 'Not quite'}
           </p>
-          <p className="mt-2 text-xl">+{you?.pointsAwarded ?? 0} points</p>
+          <p className="mt-2 text-xl tabular-nums">+{you?.pointsAwarded ?? 0} points</p>
           {you && (
-            <p className="mt-1">
-              {you.totalPoints} total · rank {you.rank}
+            <p className="mt-1 text-white/85">
+              {you.totalPoints.toLocaleString()} total, rank {you.rank}
             </p>
           )}
         </div>
-        <p className="text-center text-sm text-slate-600">
-          Correct answer: {OPTION_LETTERS[state.result.correctIndex]}.{' '}
-          {state.question.options[state.result.correctIndex]}
+        <p className="text-center text-sm text-muted">
+          Correct answer:{' '}
+          <span className="font-semibold text-ink">
+            {OPTION_LETTERS[state.result.correctIndex]}.{' '}
+            {state.question.options[state.result.correctIndex]}
+          </span>
         </p>
         <Leaderboard entries={state.leaderboard} highlightParticipantId={state.participantId} />
-        <p className="text-center text-sm text-slate-500">Waiting for the next question...</p>
+        <p className="text-center text-sm text-muted">Waiting for the next question...</p>
       </div>
     );
   }
 
   const hasStarted = serverNowMs >= state.question.startsAtServerMs;
   const hasEnded = serverNowMs >= state.question.startsAtServerMs + state.question.durationMs;
+  const locked = state.answered || hasEnded;
 
   return (
-    <div className="mx-auto max-w-md space-y-4">
+    <div className="mx-auto max-w-2xl space-y-6">
       {header}
       <QuestionTimer
         serverNowMs={serverNowMs}
@@ -375,30 +396,45 @@ export function Play() {
       />
       {hasStarted && (
         <>
-          <h1 className="text-xl font-semibold">{state.question.stem}</h1>
-          <div className="grid gap-3">
-            {state.question.options.map((option, optionIndex) => (
-              <button
-                key={OPTION_LETTERS[optionIndex]}
-                type="button"
-                disabled={state.answered || hasEnded}
-                onClick={() => submitAnswer(optionIndex)}
-                className={`min-h-20 rounded-xl px-4 py-4 text-left text-lg font-medium text-white disabled:opacity-60 ${
-                  OPTION_STYLES[optionIndex]
-                } ${state.chosenIndex === optionIndex ? 'ring-4 ring-slate-900' : ''}`}
-              >
-                <span className="mr-3 font-bold">{OPTION_LETTERS[optionIndex]}</span>
-                {option}
-              </button>
-            ))}
+          <h1 className="text-xl font-semibold break-words sm:text-2xl">{state.question.stem}</h1>
+          <div role="group" aria-label="Answers" className="grid gap-3 sm:grid-cols-2">
+            {state.question.options.map((option, optionIndex) => {
+              const chosen = state.chosenIndex === optionIndex;
+              return (
+                <button
+                  key={OPTION_LETTERS[optionIndex]}
+                  type="button"
+                  disabled={locked}
+                  aria-pressed={chosen}
+                  onClick={() => submitAnswer(optionIndex)}
+                  className={`flex min-h-20 w-full items-center gap-4 rounded-lg px-4 py-4 text-left text-lg font-semibold break-words transition hover:brightness-110 disabled:cursor-not-allowed disabled:hover:brightness-100 ${
+                    OPTION_STYLES[optionIndex]
+                  } ${chosen ? 'ring-4 ring-ink ring-offset-2 ring-offset-paper' : locked ? 'opacity-45' : ''}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/25 text-base font-bold"
+                  >
+                    {OPTION_LETTERS[optionIndex]}
+                  </span>
+                  <span className="min-w-0">{option}</span>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
       {state.answered && (
-        <p className="text-center text-slate-700">Answer locked. Waiting for the others...</p>
+        <p role="status" className="text-center font-medium text-muted">
+          Answer locked. Waiting for the others...
+        </p>
       )}
-      {!state.answered && hasEnded && <p className="text-center text-slate-700">Time's up</p>}
-      {answerError && <p className="text-center text-sm text-red-700">{answerError}</p>}
+      {!state.answered && hasEnded && (
+        <p role="status" className="text-center font-medium text-muted">
+          Time&apos;s up
+        </p>
+      )}
+      {answerError && <Notice tone="danger">{answerError}</Notice>}
     </div>
   );
 }

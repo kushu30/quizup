@@ -5,11 +5,12 @@ import {
   type ExportType,
 } from '@quizup/shared';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Leaderboard } from '../components/Leaderboard';
 import { MasteryHeatmap } from '../components/analytics/MasteryHeatmap';
 import { QuestionDifficultyTable } from '../components/analytics/QuestionDifficultyTable';
 import { ResponseHistogram } from '../components/analytics/ResponseHistogram';
+import { Button, Notice, PageHeader, Panel, TableFrame } from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { saveBlob } from '../lib/download';
 
@@ -71,101 +72,102 @@ export function SessionSummaryPage() {
 
   if (!summary) {
     return (
-      <div className="space-y-2">
-        <Link to="/host" className="text-sm hover:underline">
-          Back to dashboard
-        </Link>
-        <p className="text-slate-600">{message ?? 'Loading...'}</p>
+      <div>
+        <PageHeader title="Session summary" back={{ to: '/host', label: 'Back to dashboard' }} />
+        {message ? (
+          <Notice tone="danger">{message}</Notice>
+        ) : (
+          <p role="status" className="text-muted">
+            Loading...
+          </p>
+        )}
       </div>
     );
   }
 
+  const facts = [
+    `Status ${summary.status}`,
+    ...(summary.adaptive ? ['adaptive'] : []),
+    `${summary.participants.length} students`,
+    `${summary.roundsCompleted} rounds completed`,
+  ].join(', ');
+
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <Link to="/host" className="text-sm hover:underline">
-          Back to dashboard
-        </Link>
-        <h1 className="text-2xl font-bold">Session summary</h1>
-        <p className="text-sm text-slate-600">
-          Status {summary.status}
-          {summary.adaptive ? ' · adaptive' : ''} · {summary.participants.length} students ·{' '}
-          {summary.roundsCompleted} rounds completed
-        </p>
-        {summary.source === 'rebuilt' && (
-          <p className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
-            This summary was rebuilt from the saved responses. Time buckets use the slowest answer
-            as the time limit and projections are not available.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {(['participants', 'responses'] as const).map((type) => (
-            <button
-              key={type}
-              type="button"
-              disabled={downloading !== null}
-              onClick={() => void handleDownload(type)}
-              className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50"
-            >
-              {downloading === type ? 'Preparing...' : EXPORT_LABELS[type]}
-            </button>
-          ))}
-        </div>
-        {message && <p className="text-sm text-red-700">{message}</p>}
+    <div className="space-y-6">
+      <PageHeader
+        title="Session summary"
+        description={facts}
+        back={{ to: '/host', label: 'Back to dashboard' }}
+        actions={(['participants', 'responses'] as const).map((type) => (
+          <Button
+            key={type}
+            variant="secondary"
+            disabled={downloading !== null}
+            onClick={() => void handleDownload(type)}
+          >
+            {downloading === type ? 'Preparing...' : EXPORT_LABELS[type]}
+          </Button>
+        ))}
+      />
+      {summary.source === 'rebuilt' && (
+        <Notice tone="warning">
+          This summary was rebuilt from the saved responses. Time buckets use the slowest answer as
+          the time limit and projections are not available.
+        </Notice>
+      )}
+      {message && <Notice tone="danger">{message}</Notice>}
+
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-2">
+        <Panel title="Final leaderboard">
+          <Leaderboard entries={summary.leaderboard} />
+        </Panel>
+
+        <Panel title="Response time">
+          <ResponseHistogram
+            currentCounts={summary.currentRoundHistogram}
+            sessionCounts={summary.sessionHistogram}
+            currentLabel="Last round"
+          />
+        </Panel>
       </div>
 
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Final leaderboard</h2>
-        <Leaderboard entries={summary.leaderboard} />
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Questions</h2>
+      <Panel title="Questions">
         <QuestionDifficultyTable questions={summary.questions} showMedian />
-      </section>
+      </Panel>
 
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Response time</h2>
-        <ResponseHistogram
-          currentCounts={summary.currentRoundHistogram}
-          sessionCounts={summary.sessionHistogram}
-          currentLabel="Last round"
-        />
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Mastery</h2>
+      <Panel title="Mastery">
         <MasteryHeatmap topics={summary.topics} rows={heatmapRows} />
-      </section>
+      </Panel>
 
       {summary.mode === 'exam' && (
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold">Proctor signals per student</h2>
-          <p className="text-sm text-slate-600">
-            These are indicators recorded with the student's consent, not proof of misconduct.
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+        <Panel
+          title="Proctor signals per student"
+          description="These are indicators recorded with the student's consent, not proof of misconduct."
+        >
+          <TableFrame label="Proctor signals per student table">
+            <table>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Score</th>
+                  <th scope="col">Student</th>
+                  <th scope="col" className="text-right">
+                    Score
+                  </th>
                   {PROCTOR_COUNTED_TYPES.map((type) => (
-                    <th key={type} className="px-3 py-2">
+                    <th key={type} scope="col" className="text-right">
                       {PROCTOR_TYPE_LABELS[type]}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody>
                 {[...summary.participants]
                   .sort((first, second) => first.displayName.localeCompare(second.displayName))
                   .map((participant) => (
                     <tr key={participant.participantId}>
-                      <td className="px-3 py-2">{participant.displayName}</td>
-                      <td className="px-3 py-2 tabular-nums">{participant.score}</td>
+                      <td className="font-medium">{participant.displayName}</td>
+                      <td className="text-right tabular-nums">{participant.score}</td>
                       {PROCTOR_COUNTED_TYPES.map((type) => (
-                        <td key={type} className="px-3 py-2 tabular-nums">
+                        <td key={type} className="text-right tabular-nums">
                           {participant.proctorCounts?.[type] ?? 0}
                         </td>
                       ))}
@@ -173,40 +175,48 @@ export function SessionSummaryPage() {
                   ))}
               </tbody>
             </table>
-          </div>
-        </section>
+          </TableFrame>
+        </Panel>
       )}
 
       {summary.mode !== 'exam' && (
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold">Projection vs actual</h2>
-          <p className="text-sm text-slate-600">
-            {summary.checkpointRound
+        <Panel
+          title="Projection vs actual"
+          description={`${
+            summary.checkpointRound
               ? `Projection made after round ${summary.checkpointRound}, compared with the final score.`
-              : 'No projection checkpoint was reached.'}
-            {summary.adaptive ? ' Adaptive sessions are always low confidence.' : ''}
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+              : 'No projection checkpoint was reached.'
+          }${summary.adaptive ? ' Adaptive sessions are always low confidence.' : ''}`}
+        >
+          <TableFrame label="Projection vs actual table">
+            <table>
+              <thead>
                 <tr>
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Projected</th>
-                  <th className="px-3 py-2">Actual final</th>
-                  <th className="px-3 py-2">Difference</th>
+                  <th scope="col">Student</th>
+                  <th scope="col" className="text-right">
+                    Projected
+                  </th>
+                  <th scope="col" className="text-right">
+                    Actual final
+                  </th>
+                  <th scope="col" className="text-right">
+                    Difference
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody>
                 {summary.participants.map((participant) => (
                   <tr key={participant.participantId}>
-                    <td className="px-3 py-2">{participant.displayName}</td>
-                    <td className="px-3 py-2 tabular-nums">
+                    <td className="font-medium">{participant.displayName}</td>
+                    <td className="text-right tabular-nums">
                       {participant.checkpointProjection === null
                         ? '-'
                         : Math.round(participant.checkpointProjection).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 tabular-nums">{participant.score.toLocaleString()}</td>
-                    <td className="px-3 py-2 tabular-nums">
+                    <td className="text-right tabular-nums">
+                      {participant.score.toLocaleString()}
+                    </td>
+                    <td className="text-right tabular-nums">
                       {participant.checkpointProjection === null
                         ? '-'
                         : Math.round(
@@ -217,8 +227,8 @@ export function SessionSummaryPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
+          </TableFrame>
+        </Panel>
       )}
     </div>
   );

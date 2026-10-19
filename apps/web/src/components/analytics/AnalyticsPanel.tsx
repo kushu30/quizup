@@ -1,6 +1,7 @@
 import type { AnalyticsSnapshot } from '@quizup/shared';
 import { memo, useMemo } from 'react';
 import { Leaderboard } from '../Leaderboard';
+import { Panel } from '../ui';
 import { LiveIndicator } from './LiveIndicator';
 import { MasteryHeatmap } from './MasteryHeatmap';
 import { ProjectionTable } from './ProjectionTable';
@@ -28,48 +29,46 @@ export const AnalyticsPanel = memo(function AnalyticsPanel({
   );
 
   return (
-    <section
-      className="space-y-6 rounded-xl border border-slate-200 p-4"
-      aria-label="Live analytics"
-    >
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Analytics</h2>
+    <section aria-labelledby="analytics-heading" className="space-y-6 border-t border-rule pt-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="analytics-heading" className="text-title font-semibold tracking-tight">
+          Analytics
+        </h2>
         <LiveIndicator connected={connected} />
       </div>
 
       {!snapshot ? (
-        <p className="text-slate-500">Waiting for the first update...</p>
+        <p className="text-muted">Waiting for the first update...</p>
       ) : (
-        <>
-          <div className="space-y-2">
-            <h3 className="font-medium">Leaderboard</h3>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-2">
+          <Panel title="Leaderboard" level={3}>
             <Leaderboard entries={snapshot.leaderboard} />
-          </div>
+          </Panel>
 
-          <div className="space-y-2">
-            <h3 className="font-medium">Students and projected final score</h3>
-            <ProjectionTable participants={snapshot.participants} adaptive={snapshot.adaptive} />
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="font-medium">Mastery heatmap</h3>
-            <MasteryHeatmap topics={snapshot.topics} rows={heatmapRows} />
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="font-medium">Response time</h3>
+          <Panel title="Response time" level={3}>
             <ResponseHistogram
               currentCounts={snapshot.currentRoundHistogram}
               sessionCounts={snapshot.sessionHistogram}
               currentLabel={snapshot.adaptive ? 'Current round' : 'Current question'}
             />
-          </div>
+          </Panel>
 
-          <div className="space-y-2">
-            <h3 className="font-medium">Question difficulty: labeled vs observed</h3>
+          <Panel title="Students and projected final score" level={3} className="xl:col-span-2">
+            <ProjectionTable participants={snapshot.participants} adaptive={snapshot.adaptive} />
+          </Panel>
+
+          <Panel title="Mastery heatmap" level={3} className="xl:col-span-2">
+            <MasteryHeatmap topics={snapshot.topics} rows={heatmapRows} />
+          </Panel>
+
+          <Panel
+            title="Question difficulty: labeled vs observed"
+            level={3}
+            className="xl:col-span-2"
+          >
             <QuestionDifficultyTable questions={snapshot.questions} />
-          </div>
-        </>
+          </Panel>
+        </div>
       )}
     </section>
   );

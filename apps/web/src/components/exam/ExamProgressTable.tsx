@@ -2,6 +2,7 @@ import { PROCTOR_EVENT_BADGE_THRESHOLD, type ExamProgressRow } from '@quizup/sha
 import { memo } from 'react';
 import { useServerNow } from '../../hooks/useServerNow';
 import { useStableRows } from '../../lib/stableRows';
+import { TableFrame } from '../ui';
 
 interface ExamProgressTableProps {
   rows: ExamProgressRow[];
@@ -45,41 +46,39 @@ const ProgressRowView = memo(function ProgressRowView({
 }) {
   const flagged = row.proctorEventCount > PROCTOR_EVENT_BADGE_THRESHOLD;
   return (
-    <tr className={selected ? 'bg-slate-100 dark:bg-slate-800' : ''}>
-      <td className="px-3 py-2">
+    <tr className={selected ? 'bg-board-soft' : ''}>
+      <td>
         <button
           type="button"
           onClick={() => onSelect(row.participantId)}
-          className="font-medium underline-offset-2 hover:underline"
+          className="rounded-sm text-left font-semibold text-board underline decoration-board/30 underline-offset-4 hover:decoration-board"
           aria-pressed={selected}
         >
           {row.displayName}
         </button>
       </td>
-      <td className="px-3 py-2">{STATUS_LABELS[row.status]}</td>
-      <td className="px-3 py-2 tabular-nums">
+      <td className="whitespace-nowrap">{STATUS_LABELS[row.status]}</td>
+      <td className="text-right tabular-nums">
         {row.answered}/{row.totalQuestions}
       </td>
-      <td className="px-3 py-2">
+      <td className="text-right">
         {row.status === 'in_progress' && row.deadlineAtServerMs !== null ? (
           <RemainingTime deadlineAtServerMs={row.deadlineAtServerMs} offsetMs={offsetMs} />
         ) : (
           '-'
         )}
       </td>
-      <td className="px-3 py-2">
+      <td className="text-right">
         <span
           title={`${row.proctorEventCount} proctor events${flagged ? ' (above the highlight threshold)' : ''}`}
-          className={`inline-block min-w-8 rounded-full px-2 py-0.5 text-center text-xs tabular-nums ${
-            flagged
-              ? 'bg-amber-200 font-semibold text-amber-950'
-              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+          className={`inline-block min-w-8 rounded-md px-2 py-0.5 text-center text-xs tabular-nums ${
+            flagged ? 'bg-marker font-semibold text-ink' : 'bg-paper text-muted'
           }`}
         >
           {row.proctorEventCount}
         </span>
       </td>
-      <td className="px-3 py-2 tabular-nums">{row.score === null ? '-' : row.score}</td>
+      <td className="text-right tabular-nums">{row.score === null ? '-' : row.score}</td>
     </tr>
   );
 });
@@ -92,22 +91,30 @@ export function ExamProgressTable({
 }: ExamProgressTableProps) {
   const stableRows = useStableRows(rows, (row) => row.participantId);
   if (stableRows.length === 0) {
-    return <p className="text-slate-500">No students yet.</p>;
+    return <p className="text-muted">No students yet.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+    <TableFrame label="Exam progress">
+      <table>
+        <thead>
           <tr>
-            <th className="px-3 py-2">Student</th>
-            <th className="px-3 py-2">Status</th>
-            <th className="px-3 py-2">Answered</th>
-            <th className="px-3 py-2">Time left</th>
-            <th className="px-3 py-2">Proctor events</th>
-            <th className="px-3 py-2">Score</th>
+            <th scope="col">Student</th>
+            <th scope="col">Status</th>
+            <th scope="col" className="text-right">
+              Answered
+            </th>
+            <th scope="col" className="text-right">
+              Time left
+            </th>
+            <th scope="col" className="text-right">
+              Proctor events
+            </th>
+            <th scope="col" className="text-right">
+              Score
+            </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200">
+        <tbody>
           {stableRows.map((row) => (
             <ProgressRowView
               key={row.participantId}
@@ -119,6 +126,6 @@ export function ExamProgressTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </TableFrame>
   );
 }

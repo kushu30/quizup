@@ -6,6 +6,7 @@ import {
   type ProctorRecordType,
 } from '@quizup/shared';
 import { memo, useMemo } from 'react';
+import { Button } from '../ui';
 
 interface ProctorTimelineProps {
   displayName: string;
@@ -66,23 +67,23 @@ const TimelineItem = memo(function TimelineItem({
     <li className="flex items-start gap-3 py-2 text-sm">
       <span
         aria-label={PROCTOR_TYPE_LABELS[event.type]}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base dark:bg-slate-800"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-paper text-base"
       >
         {TYPE_ICONS[event.type]}
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium">
           {PROCTOR_TYPE_LABELS[event.type]}
-          {detail && <span className="ml-2 font-normal text-slate-600">{detail}</span>}
+          {detail && <span className="ml-2 font-normal text-muted">{detail}</span>}
           {event.late && (
-            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900">
+            <span className="ml-2 rounded-sm bg-marker-soft px-1.5 py-0.5 text-xs font-medium text-marker-ink">
               late
             </span>
           )}
         </p>
-        <p className="text-xs text-slate-500">
-          <span className="tabular-nums">{formatElapsed(event.serverAt, startedAt)}</span>
-          {' · '}
+        <p className="text-xs text-muted">
+          <span>{formatElapsed(event.serverAt, startedAt)}</span>
+          {', '}
           {new Date(event.serverAt).toLocaleTimeString()}
         </p>
       </div>
@@ -109,34 +110,36 @@ export function ProctorTimeline({
 
   return (
     <section
-      className="space-y-3 rounded-xl border border-slate-200 p-4"
+      className="space-y-4 rounded-lg border border-rule bg-surface p-5"
       aria-label={`Proctor timeline for ${displayName}`}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{displayName}</h3>
-        <button type="button" onClick={onClose} className="text-sm underline">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h3 className="text-xl font-semibold break-words">{displayName}</h3>
+          <p className="text-sm text-muted">
+            These signals are indicators, not proof of misconduct.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
-      <p className="text-xs text-slate-500">
-        These signals are indicators, not proof of misconduct.
-      </p>
       <ul className="flex flex-wrap gap-2 text-xs">
         {PROCTOR_COUNTED_TYPES.map((type) => (
-          <li key={type} className="rounded-full border border-slate-300 px-2 py-1 tabular-nums">
+          <li key={type} className="rounded-md border border-rule px-2 py-1 tabular-nums">
             {PROCTOR_TYPE_LABELS[type]}: {counts[type]}
           </li>
         ))}
         {droppedEvents > 0 && (
-          <li className="rounded-full border border-amber-300 px-2 py-1 text-amber-900">
+          <li className="rounded-md bg-marker-soft px-2 py-1 font-medium text-marker-ink">
             Dropped by rate limit: {droppedEvents}
           </li>
         )}
       </ul>
       {events.length === 0 ? (
-        <p className="text-slate-500">No events yet.</p>
+        <p className="text-muted">No events yet.</p>
       ) : (
-        <ol className="divide-y divide-slate-200">
+        <ol className="divide-y divide-rule border-t border-rule">
           {events.map((event) => (
             <TimelineItem key={event.id} event={event} startedAt={attemptStartedAtMs} />
           ))}

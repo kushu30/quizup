@@ -13,6 +13,7 @@ import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
+import { Button, Notice, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
@@ -22,7 +23,7 @@ import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
-const OPTION_BAR_COLORS = ['bg-rose-500', 'bg-sky-500', 'bg-amber-500', 'bg-emerald-500'];
+const OPTION_BAR_COLORS = ['bg-answer-a', 'bg-answer-b', 'bg-answer-c', 'bg-answer-d'];
 
 export function HostConsole() {
   const { sessionId = '' } = useParams();
@@ -124,13 +125,13 @@ export function HostConsole() {
 
   if (joinError) {
     return (
-      <div className="space-y-3">
-        <p className="text-red-700">
+      <div className="mx-auto max-w-xl space-y-4">
+        <Notice tone="danger">
           {joinError === 'session_not_found'
             ? 'This session is not live. Start a new one from the quiz editor.'
             : 'You cannot control this session.'}
-        </p>
-        <Link to="/host" className="underline">
+        </Notice>
+        <Link to="/host" className={buttonClasses('secondary', 'md')}>
           Back to dashboard
         </Link>
       </div>
@@ -138,7 +139,11 @@ export function HostConsole() {
   }
 
   if (!room) {
-    return <p className="text-slate-600">Connecting...</p>;
+    return (
+      <p role="status" className="py-16 text-center text-lg text-muted">
+        Connecting...
+      </p>
+    );
   }
 
   const isExam = room.mode === 'exam';
@@ -155,238 +160,315 @@ export function HostConsole() {
   const round = room.round;
   const isLastQuestion = question ? question.questionNumber === question.totalQuestions : false;
   const isLastRound = round ? round.roundNumber === round.totalRounds : false;
+  const answeredLine = (
+    <p className="text-center text-lg font-medium tabular-nums">
+      {room.answeredCount ?? 0} of {room.participants.length} answered
+    </p>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <p className="text-sm uppercase tracking-wide text-slate-500">Join code</p>
-        <p className="text-6xl font-bold tracking-widest sm:text-8xl">{room.joinCode}</p>
-        <p className="text-sm text-slate-500">Students join at {window.location.origin}/join</p>
-      </div>
-
-      {message && <p className="text-center text-sm text-red-700">{message}</p>}
-
-      {room.status === 'lobby' && (
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold">
-            Lobby · {connectedCount} connected of {room.participants.length}
-          </h2>
-          <ul className="flex flex-wrap gap-2">
-            {room.participants.map((participant) => (
-              <li
-                key={participant.participantId}
-                className={`rounded-full px-3 py-1 text-sm ${
-                  participant.connected
-                    ? 'bg-emerald-100 text-emerald-900'
-                    : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {participant.displayName}
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            disabled={busy || room.participants.length === 0}
-            onClick={() => void runCommand(() => api.startSession(sessionId))}
-            className="rounded-md bg-slate-900 px-6 py-3 text-lg text-white disabled:opacity-50"
-          >
-            {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
-          </button>
-        </section>
-      )}
-
-      {isExam && room.status !== 'lobby' && (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-semibold">
-              {room.status === 'ended' ? 'Exam ended' : 'Exam in progress'}
+    <div className="space-y-8">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <aside
+          aria-label="Join details"
+          className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6"
+        >
+          <div className="rounded-lg bg-board p-6 text-center text-white">
+            <p className="text-base font-medium text-white/85">Join code</p>
+            <p className="mt-1 text-hero font-bold tracking-[0.18em] whitespace-nowrap tabular-nums sm:text-display lg:text-[3.5rem]">
+              {room.joinCode}
+            </p>
+            <p className="mt-3 text-sm break-words text-white/85">
+              Students join at{' '}
+              <span className="font-semibold text-white">{window.location.host}/join</span>
+            </p>
+          </div>
+          <div className="rounded-lg border border-rule bg-surface p-4">
+            <h2 className="text-sm font-semibold">
+              Students{' '}
+              <span className="font-normal text-muted">
+                {connectedCount} connected of {room.participants.length}
+              </span>
             </h2>
-            <button
-              type="button"
-              disabled={busy || resultsReleased}
-              onClick={() =>
-                void runCommand(async () => {
-                  await api.releaseResults(sessionId);
-                  setResultsReleased(true);
-                })
-              }
-              className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
-            >
-              {resultsReleased ? 'Results released' : 'Release results'}
-            </button>
+            {room.participants.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">Nobody has joined yet.</p>
+            ) : (
+              <ul className="mt-3 flex max-h-64 flex-wrap gap-1.5 overflow-y-auto">
+                {room.participants.map((participant) => (
+                  <li
+                    key={participant.participantId}
+                    className={`max-w-full truncate rounded-md px-2 py-1 text-sm ${
+                      participant.connected
+                        ? 'bg-board-soft text-board'
+                        : 'bg-paper text-muted line-through decoration-muted/50'
+                    }`}
+                    title={participant.connected ? undefined : 'Disconnected'}
+                  >
+                    {participant.displayName}
+                    {!participant.connected && <span className="sr-only"> (disconnected)</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <ExamProgressTable
-            rows={examRows ?? []}
-            offsetMs={offsetMs}
-            selectedId={selectedStudentId}
-            onSelect={setSelectedStudentId}
-          />
-          {selectedRow && (
-            <ProctorTimeline
-              displayName={selectedRow.displayName}
-              attemptStartedAtMs={
-                selectedRow.startedAtServerMs ??
-                loadedTimelines.find(
-                  (timeline) => timeline.participantId === selectedRow.participantId,
-                )?.attemptStartedAtMs ??
-                null
-              }
-              events={selectedEvents}
-              droppedEvents={selectedRow.droppedEvents}
-              onClose={() => setSelectedStudentId(null)}
-            />
-          )}
-        </section>
-      )}
+        </aside>
 
-      {room.status === 'running' && room.adaptive && round && (
-        <section className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Adaptive round {round.roundNumber} of {round.totalRounds}. Each student has their own
-            question.
-          </p>
+        <div className="min-w-0 space-y-6 lg:col-start-1 lg:row-start-1">
+          {message && <Notice tone="danger">{message}</Notice>}
 
-          {!room.questionClosed && (
-            <>
-              <QuestionTimer
-                serverNowMs={serverNowMs}
-                startsAtServerMs={round.startsAtServerMs}
-                durationMs={round.durationMs}
-              />
-              <p className="text-center text-lg">
-                {room.answeredCount ?? 0} of {room.participants.length} answered
+          {room.status === 'lobby' && (
+            <section aria-labelledby="lobby-heading" className="space-y-4">
+              <h1 id="lobby-heading" className="text-title font-semibold tracking-tight">
+                Waiting for students
+              </h1>
+              <p className="max-w-prose text-muted">
+                {room.mode === 'exam'
+                  ? 'When everyone is in, open the exam. Each student starts their own timer after accepting the exam rules.'
+                  : 'Share the join code. Start the quiz when everyone you expect is on the list.'}
               </p>
-            </>
-          )}
-
-          <h3 className="text-lg font-semibold">Students</h3>
-          <AdaptiveTable rows={room.adaptiveTable ?? []} />
-
-          {room.questionClosed && (
-            <>
-              <h3 className="text-lg font-semibold">Leaderboard</h3>
-              <Leaderboard entries={room.leaderboard} />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void runCommand(() => api.nextQuestion(sessionId))}
-                className="rounded-md bg-slate-900 px-6 py-3 text-lg text-white disabled:opacity-50"
+              <Button
+                variant="brand"
+                size="lg"
+                disabled={busy || room.participants.length === 0}
+                onClick={() => void runCommand(() => api.startSession(sessionId))}
               >
-                {isLastRound ? 'Show final results' : 'Next round'}
-              </button>
-            </>
-          )}
-        </section>
-      )}
-
-      {room.status === 'running' && !room.adaptive && question && (
-        <section className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Question {question.questionNumber} of {question.totalQuestions}
-          </p>
-          <h2 className="text-2xl font-semibold">{question.stem}</h2>
-
-          {!room.questionClosed && (
-            <>
-              <QuestionTimer
-                serverNowMs={serverNowMs}
-                startsAtServerMs={question.startsAtServerMs}
-                durationMs={question.durationMs}
-              />
-              <p className="text-center text-lg">
-                {room.answeredCount ?? 0} of {room.participants.length} answered
-              </p>
-            </>
+                {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
+              </Button>
+            </section>
           )}
 
-          <ul className="space-y-2">
-            {question.options.map((option, optionIndex) => {
-              const optionCounts = room.lastResult?.optionCounts ?? null;
-              const count = optionCounts?.[optionIndex] ?? 0;
-              const total = optionCounts
-                ? Math.max(
-                    optionCounts.reduce((sum, value) => sum + value, 0),
-                    1,
-                  )
-                : 1;
-              const isCorrect = room.lastResult?.correctIndex === optionIndex;
-              return (
-                <li
-                  key={OPTION_LETTERS[optionIndex]}
-                  className={`rounded-lg border p-3 ${
-                    isCorrect ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'
-                  }`}
+          {isExam && room.status !== 'lobby' && (
+            <section aria-labelledby="exam-heading" className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 id="exam-heading" className="text-title font-semibold tracking-tight">
+                  {room.status === 'ended' ? 'Exam ended' : 'Exam in progress'}
+                </h1>
+                <Button
+                  variant="brand"
+                  disabled={busy || resultsReleased}
+                  onClick={() =>
+                    void runCommand(async () => {
+                      await api.releaseResults(sessionId);
+                      setResultsReleased(true);
+                    })
+                  }
                 >
-                  <div className="flex justify-between">
-                    <span>
-                      <strong className="mr-2">{OPTION_LETTERS[optionIndex]}</strong>
-                      {option}
-                      {isCorrect ? ' (correct)' : ''}
-                    </span>
-                    {room.lastResult && <span>{count}</span>}
-                  </div>
-                  {room.lastResult && (
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className={`h-full ${OPTION_BAR_COLORS[optionIndex]}`}
-                        style={{ width: `${(count / total) * 100}%` }}
-                      />
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-
-          {room.questionClosed && (
-            <>
-              <h3 className="text-lg font-semibold">Leaderboard</h3>
-              <Leaderboard entries={room.leaderboard} />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void runCommand(() => api.nextQuestion(sessionId))}
-                className="rounded-md bg-slate-900 px-6 py-3 text-lg text-white disabled:opacity-50"
-              >
-                {isLastQuestion ? 'Show final results' : 'Next question'}
-              </button>
-            </>
+                  {resultsReleased ? 'Results released' : 'Release results'}
+                </Button>
+              </div>
+              <ExamProgressTable
+                rows={examRows ?? []}
+                offsetMs={offsetMs}
+                selectedId={selectedStudentId}
+                onSelect={setSelectedStudentId}
+              />
+              {selectedRow && (
+                <ProctorTimeline
+                  displayName={selectedRow.displayName}
+                  attemptStartedAtMs={
+                    selectedRow.startedAtServerMs ??
+                    loadedTimelines.find(
+                      (timeline) => timeline.participantId === selectedRow.participantId,
+                    )?.attemptStartedAtMs ??
+                    null
+                  }
+                  events={selectedEvents}
+                  droppedEvents={selectedRow.droppedEvents}
+                  onClose={() => setSelectedStudentId(null)}
+                />
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      {room.status === 'ended' && (
-        <section className="space-y-3">
-          <h2 className="text-2xl font-semibold">Final results</h2>
-          {!isExam && <Leaderboard entries={room.leaderboard} />}
-          {room.adaptiveTable && <AdaptiveTable rows={room.adaptiveTable} />}
-          <div className="flex gap-4">
-            <Link to={`/sessions/${sessionId}/summary`} className="inline-block underline">
-              Open the full summary and exports
-            </Link>
-            <Link to="/host" className="inline-block underline">
-              Back to dashboard
-            </Link>
-          </div>
-        </section>
-      )}
+          {room.status === 'running' && room.adaptive && round && (
+            <section aria-labelledby="round-heading" className="space-y-5">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted">
+                  Round {round.roundNumber} of {round.totalRounds}
+                </p>
+                <h1 id="round-heading" className="text-title font-semibold tracking-tight">
+                  Adaptive round
+                </h1>
+                <p className="text-muted">Each student has their own question.</p>
+              </div>
+
+              {!room.questionClosed && (
+                <div className="space-y-3">
+                  <QuestionTimer
+                    serverNowMs={serverNowMs}
+                    startsAtServerMs={round.startsAtServerMs}
+                    durationMs={round.durationMs}
+                  />
+                  {answeredLine}
+                </div>
+              )}
+
+              <Panel title="Students" level={2}>
+                <AdaptiveTable rows={room.adaptiveTable ?? []} />
+              </Panel>
+
+              {room.questionClosed && (
+                <>
+                  <Panel title="Leaderboard" level={2}>
+                    <Leaderboard entries={room.leaderboard} />
+                  </Panel>
+                  <Button
+                    size="lg"
+                    disabled={busy}
+                    onClick={() => void runCommand(() => api.nextQuestion(sessionId))}
+                  >
+                    {isLastRound ? 'Show final results' : 'Next round'}
+                  </Button>
+                </>
+              )}
+            </section>
+          )}
+
+          {room.status === 'running' && !room.adaptive && question && (
+            <section aria-labelledby="question-heading" className="space-y-5">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted">
+                  Question {question.questionNumber} of {question.totalQuestions}
+                </p>
+                <h1
+                  id="question-heading"
+                  className="text-title font-semibold tracking-tight break-words"
+                >
+                  {question.stem}
+                </h1>
+              </div>
+
+              {!room.questionClosed && (
+                <div className="space-y-3">
+                  <QuestionTimer
+                    serverNowMs={serverNowMs}
+                    startsAtServerMs={question.startsAtServerMs}
+                    durationMs={question.durationMs}
+                  />
+                  {answeredLine}
+                </div>
+              )}
+
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {question.options.map((option, optionIndex) => {
+                  const optionCounts = room.lastResult?.optionCounts ?? null;
+                  const count = optionCounts?.[optionIndex] ?? 0;
+                  const total = optionCounts
+                    ? Math.max(
+                        optionCounts.reduce((sum, value) => sum + value, 0),
+                        1,
+                      )
+                    : 1;
+                  const isCorrect = room.lastResult?.correctIndex === optionIndex;
+                  return (
+                    <li
+                      key={OPTION_LETTERS[optionIndex]}
+                      className={`rounded-lg border-2 bg-surface p-4 ${
+                        isCorrect ? 'border-success' : 'border-rule'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="flex min-w-0 items-start gap-3">
+                          <span
+                            aria-hidden="true"
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-bold ${
+                              OPTION_BAR_COLORS[optionIndex]
+                            } ${optionIndex === 2 ? 'text-ink' : 'text-white'}`}
+                          >
+                            {OPTION_LETTERS[optionIndex]}
+                          </span>
+                          <span className="min-w-0 pt-0.5 break-words">
+                            <span className="sr-only">{OPTION_LETTERS[optionIndex]}. </span>
+                            {option}
+                            {isCorrect && (
+                              <span className="ml-2 text-sm font-semibold text-success">
+                                Correct
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        {room.lastResult && (
+                          <span className="shrink-0 pt-0.5 font-semibold tabular-nums">
+                            {count}
+                          </span>
+                        )}
+                      </div>
+                      {room.lastResult && (
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-paper">
+                          <div
+                            className={`h-full rounded-full ${OPTION_BAR_COLORS[optionIndex]}`}
+                            style={{ width: `${(count / total) * 100}%` }}
+                          />
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {room.questionClosed && (
+                <>
+                  <Panel title="Leaderboard" level={2}>
+                    <Leaderboard entries={room.leaderboard} />
+                  </Panel>
+                  <Button
+                    size="lg"
+                    disabled={busy}
+                    onClick={() => void runCommand(() => api.nextQuestion(sessionId))}
+                  >
+                    {isLastQuestion ? 'Show final results' : 'Next question'}
+                  </Button>
+                </>
+              )}
+            </section>
+          )}
+
+          {room.status === 'ended' && (
+            <section aria-labelledby="final-heading" className="space-y-4">
+              {!isExam && (
+                <h1 id="final-heading" className="text-title font-semibold tracking-tight">
+                  Final results
+                </h1>
+              )}
+              {isExam && (
+                <h2 id="final-heading" className="text-xl font-semibold">
+                  Final results
+                </h2>
+              )}
+              {!isExam && <Leaderboard entries={room.leaderboard} />}
+              {room.adaptiveTable && <AdaptiveTable rows={room.adaptiveTable} />}
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to={`/sessions/${sessionId}/summary`}
+                  className={buttonClasses('primary', 'md')}
+                >
+                  Open the full summary and exports
+                </Link>
+                <Link to="/host" className={buttonClasses('secondary', 'md')}>
+                  Back to dashboard
+                </Link>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
 
       {!isExam && <AnalyticsPanel snapshot={analytics} connected={connected} />}
 
       {room.status !== 'ended' && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            if (window.confirm('End this session now?')) {
-              void runCommand(() => api.endSession(sessionId));
-            }
-          }}
-          className="rounded-md border border-red-300 px-4 py-2 text-red-700 disabled:opacity-50"
-        >
-          End session
-        </button>
+        <div className="border-t border-rule pt-6">
+          <Button
+            variant="danger"
+            disabled={busy}
+            onClick={() => {
+              if (window.confirm('End this session now?')) {
+                void runCommand(() => api.endSession(sessionId));
+              }
+            }}
+          >
+            End session
+          </Button>
+        </div>
       )}
     </div>
   );

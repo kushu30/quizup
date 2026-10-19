@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { Button, Notice, PageHeader, Panel, TextField } from '../components/ui';
 import { useAuth } from '../lib/AuthContext';
 import { webEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
@@ -14,6 +15,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<'danger' | 'info'>('danger');
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && session) {
@@ -35,6 +37,7 @@ export function Login() {
     event.preventDefault();
     setSubmitting(true);
     setMessage(null);
+    setMessageTone('danger');
 
     if (mode === 'sign-in') {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -52,6 +55,7 @@ export function Login() {
       if (error) {
         setMessage(error.message);
       } else if (!data.session) {
+        setMessageTone('info');
         setMessage('Check your email to confirm your account, then sign in.');
       } else {
         navigate('/');
@@ -61,68 +65,71 @@ export function Login() {
     setSubmitting(false);
   }
 
+  const signingIn = mode === 'sign-in';
+
   return (
-    <div className="mx-auto max-w-sm space-y-4">
-      <h1 className="text-2xl font-bold">{mode === 'sign-in' ? 'Sign in' : 'Create account'}</h1>
-      <form onSubmit={(event) => void handleSubmit(event)} className="space-y-3">
-        {mode === 'sign-up' && (
-          <>
-            <label className="block text-sm">
-              Name
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-          </>
-        )}
-        <label className="block text-sm">
-          Email
-          <input
+    <div className="mx-auto max-w-md">
+      <PageHeader
+        title={signingIn ? 'Sign in' : 'Create an account'}
+        description={
+          signingIn
+            ? 'Hosts and students with an account sign in here. Joining a quiz never needs an account.'
+            : 'Every new account starts as a student account. An admin can make you a host.'
+        }
+      />
+      <Panel>
+        <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
+          {!signingIn && (
+            <TextField
+              label="Name"
+              autoComplete="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          )}
+          <TextField
+            label="Email"
             type="email"
             required
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+            autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
-        </label>
-        <label className="block text-sm">
-          Password
-          <input
+          <TextField
+            label="Password"
             type="password"
             required
             minLength={6}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+            autoComplete={signingIn ? 'current-password' : 'new-password'}
+            hint={signingIn ? undefined : 'At least 6 characters.'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-        </label>
-        {message && <p className="text-sm text-red-700">{message}</p>}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50"
-        >
-          {mode === 'sign-in' ? 'Sign in' : 'Sign up'}
-        </button>
-      </form>
-      {webEnv.VITE_GOOGLE_AUTH_ENABLED && (
+          {message && <Notice tone={messageTone}>{message}</Notice>}
+          <Button type="submit" size="lg" disabled={submitting} className="w-full">
+            {signingIn ? 'Sign in' : 'Sign up'}
+          </Button>
+        </form>
+        {webEnv.VITE_GOOGLE_AUTH_ENABLED && (
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => void handleGoogleSignIn()}
+            className="mt-3 w-full"
+          >
+            Continue with Google
+          </Button>
+        )}
+      </Panel>
+      <p className="mt-6 text-center text-sm text-muted">
         <button
           type="button"
-          onClick={() => void handleGoogleSignIn()}
-          className="w-full rounded-md border border-slate-300 bg-white px-4 py-2"
+          className="font-medium text-board underline-offset-4 hover:underline"
+          onClick={() => setMode(signingIn ? 'sign-up' : 'sign-in')}
         >
-          Continue with Google
+          {signingIn ? 'Need an account? Sign up' : 'Have an account? Sign in'}
         </button>
-      )}
-      <button
-        type="button"
-        className="text-sm text-slate-600 underline"
-        onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
-      >
-        {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
-      </button>
+      </p>
     </div>
   );
 }

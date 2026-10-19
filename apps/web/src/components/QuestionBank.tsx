@@ -2,6 +2,7 @@ import type { ApprovalFilter, Difficulty, Question } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { api, describeError } from '../lib/api';
 import { QuestionForm } from './QuestionForm';
+import { Badge, Button, Notice, SelectField, TextField } from './ui';
 
 interface QuestionBankProps {
   quizId?: string;
@@ -13,6 +14,11 @@ interface QuestionBankProps {
 
 const SEARCH_DEBOUNCE_MS = 300;
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
+const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+};
 
 export function QuestionBank({
   quizId,
@@ -89,16 +95,19 @@ export function QuestionBank({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <input
-          className="min-w-48 flex-1 rounded-md border border-slate-300 px-3 py-2"
-          placeholder="Search question or topic"
+    <div className="space-y-4">
+      <div
+        className={`grid gap-3 sm:grid-cols-2 ${lockedApproval ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}
+      >
+        <TextField
+          label="Search"
+          type="search"
+          placeholder="Question or topic"
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
         />
-        <select
-          className="rounded-md border border-slate-300 px-3 py-2"
+        <SelectField
+          label="Topic"
           value={topicFilter}
           onChange={(event) => setTopicFilter(event.target.value)}
         >
@@ -108,9 +117,9 @@ export function QuestionBank({
               {topic}
             </option>
           ))}
-        </select>
-        <select
-          className="rounded-md border border-slate-300 px-3 py-2"
+        </SelectField>
+        <SelectField
+          label="Difficulty"
           value={difficultyFilter}
           onChange={(event) => setDifficultyFilter(event.target.value as Difficulty | '')}
         >
@@ -118,109 +127,111 @@ export function QuestionBank({
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
-        </select>
+        </SelectField>
         {!lockedApproval && (
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2"
+          <SelectField
+            label="Status"
             value={approvalFilter}
             onChange={(event) => setApprovalFilter(event.target.value as ApprovalFilter | '')}
           >
             <option value="">Approved and pending</option>
             <option value="approved">Approved</option>
             <option value="pending">Pending review</option>
-          </select>
+          </SelectField>
         )}
       </div>
-      {message && <p className="text-sm text-red-700">{message}</p>}
-      {loading && <p className="text-slate-600">Loading...</p>}
-      {!loading && questions.length === 0 && <p className="text-slate-500">{emptyMessage}</p>}
-      <ul className="space-y-2">
-        {questions.map((question) =>
-          editingQuestionId === question.id ? (
-            <li key={question.id}>
-              <QuestionForm
-                initialValue={{
-                  topic: question.topic,
-                  stem: question.stem,
-                  options: question.options,
-                  correct_index: question.correct_index,
-                  difficulty: question.difficulty,
-                }}
-                submitLabel="Save"
-                onCancel={() => setEditingQuestionId(null)}
-                onSubmit={async (input) => {
-                  await api.updateQuestion(question.id, input);
-                  setEditingQuestionId(null);
-                  await load();
-                  onChanged?.();
-                }}
-              />
-            </li>
-          ) : (
-            <li
-              key={question.id}
-              className="space-y-1 rounded-lg border border-slate-200 bg-white p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-medium">{question.stem}</p>
-                <span className="shrink-0 space-x-1 text-right text-xs text-slate-500">
-                  <span>
-                    {question.topic} · {question.difficulty}
-                  </span>
-                  {question.source === 'llm' && (
-                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
-                      AI generated
-                    </span>
-                  )}
-                  <span
-                    className={`rounded px-1.5 py-0.5 ${
-                      question.approved
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
+      {message && <Notice tone="danger">{message}</Notice>}
+      {loading && (
+        <p role="status" className="text-muted">
+          Loading...
+        </p>
+      )}
+      {!loading && questions.length === 0 && (
+        <p className="rounded-md border border-dashed border-rule-strong px-4 py-6 text-center text-muted">
+          {emptyMessage}
+        </p>
+      )}
+      {questions.length > 0 && (
+        <ul className="divide-y divide-rule border-y border-rule">
+          {questions.map((question) =>
+            editingQuestionId === question.id ? (
+              <li key={question.id} className="py-4">
+                <div className="rounded-lg border border-board/40 bg-board-soft/40 p-4">
+                  <QuestionForm
+                    initialValue={{
+                      topic: question.topic,
+                      stem: question.stem,
+                      options: question.options,
+                      correct_index: question.correct_index,
+                      difficulty: question.difficulty,
+                    }}
+                    submitLabel="Save"
+                    onCancel={() => setEditingQuestionId(null)}
+                    onSubmit={async (input) => {
+                      await api.updateQuestion(question.id, input);
+                      setEditingQuestionId(null);
+                      await load();
+                      onChanged?.();
+                    }}
+                  />
+                </div>
+              </li>
+            ) : (
+              <li key={question.id} className="space-y-3 py-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <p className="min-w-0 font-semibold break-words">{question.stem}</p>
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
+                    <Badge>{question.topic}</Badge>
+                    <Badge>{DIFFICULTY_LABELS[question.difficulty]}</Badge>
+                    {question.source === 'llm' && <Badge tone="brand">AI generated</Badge>}
+                    <Badge tone={question.approved ? 'success' : 'warning'}>
+                      {question.approved ? 'Approved' : 'Pending'}
+                    </Badge>
+                  </div>
+                </div>
+                <ol className="grid gap-1.5 text-sm sm:grid-cols-2">
+                  {question.options.map((option, optionIndex) => {
+                    const correct = optionIndex === question.correct_index;
+                    return (
+                      <li
+                        key={OPTION_LETTERS[optionIndex]}
+                        className={`flex items-start gap-2 rounded-md px-2 py-1 ${
+                          correct ? 'bg-success-soft font-medium text-success' : 'text-ink'
+                        }`}
+                      >
+                        <span aria-hidden="true" className="w-4 shrink-0 font-semibold text-muted">
+                          {OPTION_LETTERS[optionIndex]}
+                        </span>
+                        <span className="min-w-0 break-words">{option}</span>
+                        {correct && <span className="ml-auto shrink-0 text-xs">Correct</span>}
+                      </li>
+                    );
+                  })}
+                </ol>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditingQuestionId(question.id)}
                   >
-                    {question.approved ? 'Approved' : 'Pending'}
-                  </span>
-                </span>
-              </div>
-              <ol className="text-sm text-slate-700">
-                {question.options.map((option, optionIndex) => (
-                  <li
-                    key={OPTION_LETTERS[optionIndex]}
-                    className={optionIndex === question.correct_index ? 'font-semibold' : ''}
+                    Edit
+                  </Button>
+                  <Button
+                    variant={question.approved ? 'secondary' : 'brand'}
+                    size="sm"
+                    onClick={() => void handleApproval(question.id, !question.approved)}
                   >
-                    {OPTION_LETTERS[optionIndex]}. {option}
-                    {optionIndex === question.correct_index ? ' (correct)' : ''}
-                  </li>
-                ))}
-              </ol>
-              <div className="flex gap-3 pt-1 text-sm">
-                <button
-                  type="button"
-                  className="hover:underline"
-                  onClick={() => setEditingQuestionId(question.id)}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="text-emerald-700 hover:underline"
-                  onClick={() => void handleApproval(question.id, !question.approved)}
-                >
-                  {question.approved ? 'Unapprove' : 'Approve'}
-                </button>
-                <button
-                  type="button"
-                  className="text-red-700 hover:underline"
-                  onClick={() => void handleDelete(question.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ),
-        )}
-      </ul>
+                    {question.approved ? 'Unapprove' : 'Approve'}
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => void handleDelete(question.id)}>
+                    Delete
+                  </Button>
+                </div>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
     </div>
   );
 }

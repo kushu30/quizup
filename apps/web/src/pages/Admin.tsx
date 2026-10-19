@@ -1,11 +1,13 @@
 import { emailSchema, hostAllowlistSchema, type HostAllowlistEntry } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { RequireRole } from '../components/RequireRole';
+import { Button, Notice, PageHeader, TextField } from '../components/ui';
 import { supabase } from '../lib/supabase';
 
 function HostAllowlistManager() {
   const [entries, setEntries] = useState<HostAllowlistEntry[]>([]);
   const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const loadEntries = useCallback(async () => {
@@ -29,9 +31,10 @@ function HostAllowlistManager() {
     event.preventDefault();
     const parsedEmail = emailSchema.safeParse(newEmail);
     if (!parsedEmail.success) {
-      setMessage('Enter a valid email address');
+      setEmailError('Enter a valid email address');
       return;
     }
+    setEmailError(null);
     const { error } = await supabase.from('host_allowlist').insert({ email: parsedEmail.data });
     if (error) {
       setMessage(error.message);
@@ -53,35 +56,56 @@ function HostAllowlistManager() {
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Host allowlist</h1>
-      <form onSubmit={(event) => void handleAdd(event)} className="flex gap-2">
-        <input
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2"
+    <div className="max-w-2xl">
+      <PageHeader
+        title="Host allowlist"
+        description="People with these email addresses become hosts when they sign in. Everyone else gets a student account."
+      />
+      <form
+        onSubmit={(event) => void handleAdd(event)}
+        noValidate
+        className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start"
+      >
+        <TextField
+          label="Host email"
+          type="email"
+          autoComplete="off"
+          className="flex-1"
           placeholder="host@example.com"
           value={newEmail}
+          error={emailError}
           onChange={(event) => setNewEmail(event.target.value)}
         />
-        <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-white">
-          Add
-        </button>
+        <Button type="submit" className="sm:mt-6">
+          Add host
+        </Button>
       </form>
-      {message && <p className="text-sm text-red-700">{message}</p>}
-      <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-        {entries.map((entry) => (
-          <li key={entry.email} className="flex items-center justify-between px-4 py-2">
-            <span>{entry.email}</span>
-            <button
-              type="button"
-              className="text-sm text-red-700 hover:underline"
-              onClick={() => void handleRemove(entry.email)}
-            >
-              Remove
-            </button>
-          </li>
-        ))}
-        {entries.length === 0 && <li className="px-4 py-2 text-slate-500">No hosts yet</li>}
-      </ul>
+      {message && (
+        <Notice tone="danger" className="mb-6">
+          {message}
+        </Notice>
+      )}
+      {entries.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-rule-strong px-5 py-8 text-center text-muted">
+          No hosts yet. Add an email address above.
+        </p>
+      ) : (
+        <ul className="divide-y divide-rule rounded-lg border border-rule bg-surface">
+          {entries.map((entry) => (
+            <li key={entry.email} className="flex items-center justify-between gap-3 px-5 py-3">
+              <span className="min-w-0 break-all">{entry.email}</span>
+              <Button
+                variant="danger"
+                size="sm"
+                aria-label={`Remove ${entry.email}`}
+                onClick={() => void handleRemove(entry.email)}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

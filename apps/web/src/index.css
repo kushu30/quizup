@@ -1,1 +1,74 @@
+@import '@fontsource-variable/schibsted-grotesk/wght.css';
 @import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #1c2533;
+  --color-muted: #566173;
+  --color-paper: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-rule: #d8dde5;
+  --color-rule-strong: #b9c1cd;
+  --color-board: #1e5446;
+  --color-board-strong: #163f34;
+  --color-board-soft: #e6efec;
+  --color-marker: #e9b949;
+  --color-marker-soft: #fbf1d6;
+  --color-marker-ink: #7a5200;
+  --color-alert: #b42318;
+  --color-alert-soft: #fdecea;
+  --color-success: #1f6b3f;
+  --color-success-soft: #e7f3ec;
+
+  --color-answer-a: #b4233c;
+  --color-answer-b: #1d5fa8;
+  --color-answer-c: #e9b949;
+  --color-answer-d: #1f7a4d;
+
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.25rem;
+  --text-hero: 2.75rem;
+  --text-hero--line-height: 3.25rem;
+  --text-display: 4.5rem;
+  --text-display--line-height: 1;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'kern';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-board);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-marker-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
