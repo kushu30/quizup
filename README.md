@@ -66,6 +66,18 @@ Notes:
 - Turn Confirm email on in production. Hosts are only promoted once their email is confirmed.
 - Add a host's email to the allowlist after that person has created their account. Adding promotes them at once, and removing demotes them.
 
+### Quiz management
+
+Hosts (and the admin) manage quizzes from `/host`: create, rename, change mode and delete quizzes; add, edit and delete questions; import questions from CSV; and search the question bank at `/host/questions` by text, topic and difficulty. All of it goes through the server API, which validates every request with the shared Zod schemas and checks that the quiz belongs to the caller.
+
+CSV import: header row `topic,difficulty,stem,option_a,option_b,option_c,option_d,correct`. Difficulty is `easy`, `medium` or `hard`; `correct` is `A` to `D`. If any row is invalid nothing is imported and the bad rows are listed.
+
+API (all need `Authorization: Bearer <access token>` from a host or admin): `GET/POST /quizzes`, `GET/PATCH/DELETE /quizzes/:quizId`, `POST /quizzes/:quizId/questions`, `POST /quizzes/:quizId/questions/import`, `GET /questions`, `GET /questions/topics`, `PATCH/DELETE /questions/:questionId`.
+
+### Google sign-in
+
+Create a Google OAuth client with redirect URI `<supabase url>/auth/v1/callback`. Locally, set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in your shell and set `enabled = true` under `[auth.external.google]` in `supabase/config.toml`, then `supabase stop && supabase start`. On a hosted project, enable the Google provider in the dashboard. The button on `/login` is hidden unless the web app has `VITE_GOOGLE_AUTH_ENABLED=true`; set it once the provider is enabled. Google accounts follow the same role rules: student unless the email is allowlisted.
+
 ### Deploy
 
 Web on Vercel:
@@ -93,5 +105,6 @@ Database: create a Supabase project and run `supabase link` then `supabase db pu
 | `VITE_SERVER_URL`           | web     | yes      | Public URL of the server                        |
 | `VITE_SUPABASE_URL`         | web     | yes      | Supabase project URL                            |
 | `VITE_SUPABASE_ANON_KEY`    | web     | yes      | Supabase anon key                               |
+| `VITE_GOOGLE_AUTH_ENABLED`  | web     | no       | `true` shows the Google button, default `false` |
 
 The server and the web app both fail at startup with a list of the invalid variables.

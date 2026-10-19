@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
+import { webEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'sign-in' | 'sign-up';
@@ -17,6 +18,17 @@ export function Login() {
 
   if (!loading && session) {
     return <Navigate to="/" replace />;
+  }
+
+  async function handleGoogleSignIn() {
+    setMessage(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setMessage(error.message);
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -95,6 +107,15 @@ export function Login() {
           {mode === 'sign-in' ? 'Sign in' : 'Sign up'}
         </button>
       </form>
+      {webEnv.VITE_GOOGLE_AUTH_ENABLED && (
+        <button
+          type="button"
+          onClick={() => void handleGoogleSignIn()}
+          className="w-full rounded-md border border-slate-300 bg-white px-4 py-2"
+        >
+          Continue with Google
+        </button>
+      )}
       <button
         type="button"
         className="text-sm text-slate-600 underline"

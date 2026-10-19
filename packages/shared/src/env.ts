@@ -28,6 +28,10 @@ export const webEnvSchema = z.object({
   VITE_SERVER_URL: z.string().url(),
   VITE_SUPABASE_URL: z.string().url(),
   VITE_SUPABASE_ANON_KEY: z.string().min(1),
+  VITE_GOOGLE_AUTH_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 export type WebEnv = z.infer<typeof webEnvSchema>;
 

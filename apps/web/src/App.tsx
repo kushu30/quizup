@@ -1,10 +1,13 @@
 import { Route, Routes } from 'react-router-dom';
+import { HostRoute } from './components/HostRoute';
 import { Layout } from './components/Layout';
 import { Admin } from './pages/Admin';
 import { Host } from './pages/Host';
 import { Join } from './pages/Join';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
+import { QuestionBankPage } from './pages/QuestionBankPage';
+import { QuizEditor } from './pages/QuizEditor';
 
 export function App() {
   return (
@@ -13,7 +16,11 @@ export function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/admin" element={<Admin />} />
-        <Route path="/host" element={<Host />} />
+        <Route element={<HostRoute />}>
+          <Route path="/host" element={<Host />} />
+          <Route path="/host/quizzes/:quizId" element={<QuizEditor />} />
+          <Route path="/host/questions" element={<QuestionBankPage />} />
+        </Route>
         <Route path="/join" element={<Join />} />
       </Route>
     </Routes>

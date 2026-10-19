@@ -61,3 +61,10 @@ export function requireRole(...allowedRoles: UserRole[]) {
     next();
   };
 }
+
+export function getAuthUser(request: Request): MeResponse {
+  if (!request.authUser) {
+    throw new Error('getAuthUser called on a route without requireAuth');
+  }
+  return request.authUser;
+}
