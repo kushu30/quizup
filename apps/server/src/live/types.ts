@@ -34,6 +34,7 @@ export interface SessionUpdate {
 export interface LiveRepository {
   findOwnedQuiz: (quizId: string, hostId: string) => Promise<{ id: string; title: string } | null>;
   listApprovedQuestions: (quizId: string) => Promise<LiveQuestion[]>;
+  loadQuestionsByIds: (questionIds: string[]) => Promise<(LiveQuestion & { approved: boolean })[]>;
   createSession: (input: {
     quizId: string;
     joinCode: string;
@@ -70,6 +71,7 @@ export type EngineErrorCode =
   | 'session_not_found'
   | 'quiz_not_found'
   | 'no_approved_questions'
+  | 'questions_not_approved'
   | 'invalid_session_state'
   | 'question_still_open'
   | 'join_code_exhausted';
@@ -78,6 +80,7 @@ const ENGINE_ERROR_STATUS: Record<EngineErrorCode, number> = {
   session_not_found: 404,
   quiz_not_found: 404,
   no_approved_questions: 400,
+  questions_not_approved: 409,
   invalid_session_state: 409,
   question_still_open: 409,
   join_code_exhausted: 503,

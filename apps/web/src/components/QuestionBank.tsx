@@ -1,10 +1,12 @@
-import type { Difficulty, Question } from '@quizup/shared';
+import type { ApprovalFilter, Difficulty, Question } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { api, describeError } from '../lib/api';
 import { QuestionForm } from './QuestionForm';
 
 interface QuestionBankProps {
   quizId?: string;
+  lockedApproval?: ApprovalFilter;
+  emptyMessage?: string;
   refreshKey?: number;
   onChanged?: () => void;
 }
@@ -12,13 +14,21 @@ interface QuestionBankProps {
 const SEARCH_DEBOUNCE_MS = 300;
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
-export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBankProps) {
+export function QuestionBank({
+  quizId,
+  lockedApproval,
+  emptyMessage = 'No questions found',
+  refreshKey = 0,
+  onChanged,
+}: QuestionBankProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [topicFilter, setTopicFilter] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | ''>('');
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter | ''>('');
+  const approval = lockedApproval ?? (approvalFilter || undefined);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +46,7 @@ export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBank
           search: debouncedSearch || undefined,
           topic: topicFilter || undefined,
           difficulty: difficultyFilter || undefined,
+          approval,
         }),
         api.listTopics(quizId),
       ]);
@@ -47,11 +58,25 @@ export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBank
     } finally {
       setLoading(false);
     }
-  }, [quizId, debouncedSearch, topicFilter, difficultyFilter]);
+  }, [quizId, debouncedSearch, topicFilter, difficultyFilter, approval]);
 
   useEffect(() => {
     void load();
   }, [load, refreshKey]);
+
+  async function handleApproval(questionId: string, approve: boolean) {
+    try {
+      if (approve) {
+        await api.approveQuestion(questionId);
+      } else {
+        await api.unapproveQuestion(questionId);
+      }
+      await load();
+      onChanged?.();
+    } catch (error) {
+      setMessage(describeError(error));
+    }
+  }
 
   async function handleDelete(questionId: string) {
     try {
@@ -94,10 +119,21 @@ export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBank
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
         </select>
+        {!lockedApproval && (
+          <select
+            className="rounded-md border border-slate-300 px-3 py-2"
+            value={approvalFilter}
+            onChange={(event) => setApprovalFilter(event.target.value as ApprovalFilter | '')}
+          >
+            <option value="">Approved and pending</option>
+            <option value="approved">Approved</option>
+            <option value="pending">Pending review</option>
+          </select>
+        )}
       </div>
       {message && <p className="text-sm text-red-700">{message}</p>}
       {loading && <p className="text-slate-600">Loading...</p>}
-      {!loading && questions.length === 0 && <p className="text-slate-500">No questions found</p>}
+      {!loading && questions.length === 0 && <p className="text-slate-500">{emptyMessage}</p>}
       <ul className="space-y-2">
         {questions.map((question) =>
           editingQuestionId === question.id ? (
@@ -127,8 +163,24 @@ export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBank
             >
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium">{question.stem}</p>
-                <span className="shrink-0 text-xs text-slate-500">
-                  {question.topic} · {question.difficulty}
+                <span className="shrink-0 space-x-1 text-right text-xs text-slate-500">
+                  <span>
+                    {question.topic} · {question.difficulty}
+                  </span>
+                  {question.source === 'llm' && (
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
+                      AI generated
+                    </span>
+                  )}
+                  <span
+                    className={`rounded px-1.5 py-0.5 ${
+                      question.approved
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {question.approved ? 'Approved' : 'Pending'}
+                  </span>
                 </span>
               </div>
               <ol className="text-sm text-slate-700">
@@ -149,6 +201,13 @@ export function QuestionBank({ quizId, refreshKey = 0, onChanged }: QuestionBank
                   onClick={() => setEditingQuestionId(question.id)}
                 >
                   Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-emerald-700 hover:underline"
+                  onClick={() => void handleApproval(question.id, !question.approved)}
+                >
+                  {question.approved ? 'Unapprove' : 'Approve'}
                 </button>
                 <button
                   type="button"

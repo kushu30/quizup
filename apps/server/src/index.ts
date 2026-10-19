@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { supabaseAccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
+import { createLlmProvider } from './llm/createProvider.js';
 import { LiveEngine } from './live/engine.js';
 import { SocketPublisher } from './live/socketPublisher.js';
 import { SupabaseLiveRepository } from './live/supabaseRepository.js';
@@ -10,7 +11,11 @@ import { attachSocketServer } from './socket.js';
 const publisher = new SocketPublisher();
 const engine = new LiveEngine({ repository: new SupabaseLiveRepository(), publisher });
 
-const httpServer = createServer(createApp({ engine, verifier: supabaseAccessTokenVerifier }));
+const llmProvider = createLlmProvider(serverEnv);
+
+const httpServer = createServer(
+  createApp({ engine, verifier: supabaseAccessTokenVerifier, llmProvider }),
+);
 const socketServer = attachSocketServer(httpServer, {
   engine,
   publisher,
@@ -25,6 +30,7 @@ async function start() {
   }
   httpServer.listen(serverEnv.PORT, () => {
     console.log(`QuizUp server listening on port ${serverEnv.PORT}`);
+    console.log(llmProvider ? `LLM provider: ${llmProvider.name}` : 'LLM provider: not configured');
   });
 }
 

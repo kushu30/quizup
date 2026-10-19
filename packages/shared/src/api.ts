@@ -74,8 +74,12 @@ export type QuestionUpdateInput = z.infer<typeof questionUpdateSchema>;
 export const questionListSchema = z.array(questionSchema);
 export const topicListSchema = z.array(z.string());
 
+export const approvalFilterSchema = z.enum(['approved', 'pending']);
+export type ApprovalFilter = z.infer<typeof approvalFilterSchema>;
+
 export const questionBankQuerySchema = z.object({
   quizId: uuidSchema.optional(),
+  approval: approvalFilterSchema.optional(),
   search: z.string().trim().max(100).optional(),
   topic: z.string().trim().max(80).optional(),
   difficulty: difficultySchema.optional(),
@@ -113,5 +117,8 @@ export const apiErrorSchema = z.object({
   error: z.string(),
   issues: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
   rowErrors: z.array(rowErrorSchema).optional(),
+  message: z.string().optional(),
+  summary: z.string().optional(),
+  retryAfterSeconds: z.number().int().nonnegative().optional(),
 });
 export type ApiErrorBody = z.infer<typeof apiErrorSchema>;

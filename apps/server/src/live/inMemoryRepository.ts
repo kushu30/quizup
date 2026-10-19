@@ -56,6 +56,19 @@ export class InMemoryLiveRepository implements LiveRepository {
       }));
   }
 
+  async loadQuestionsByIds(questionIds: string[]) {
+    const wanted = new Set(questionIds);
+    const found: (LiveQuestion & { approved: boolean })[] = [];
+    for (const quiz of this.quizzes.values()) {
+      for (const question of quiz.questions) {
+        if (wanted.has(question.id)) {
+          found.push({ ...question });
+        }
+      }
+    }
+    return found;
+  }
+
   async createSession(input: { quizId: string; joinCode: string; questionIds: string[] }) {
     const quiz = this.quizzes.get(input.quizId);
     const codeTaken = [...this.sessions.values()].some(

@@ -1,4 +1,5 @@
 import {
+  approveQuestionsBodySchema,
   csvImportBodySchema,
   parseQuestionsCsv,
   questionInputSchema,
@@ -171,5 +172,29 @@ quizzesRouter.post(
     );
     throwIfSupabaseError(error);
     response.status(201).json({ imported: questions.length });
+  }),
+);
+
+quizzesRouter.post(
+  '/:quizId/questions/approve',
+  asyncRoute(async (request, response) => {
+    const params = parseOrReject(quizIdParamsSchema, request.params, response);
+    const body = params ? parseOrReject(approveQuestionsBodySchema, request.body, response) : null;
+    if (!params || !body) {
+      return;
+    }
+    const quiz = await findOwnedQuiz(params.quizId, getAuthUser(request).id);
+    if (!quiz) {
+      sendNotFound(response, 'Quiz');
+      return;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('questions')
+      .update({ approved: true })
+      .eq('quiz_id', quiz.id)
+      .in('id', body.questionIds)
+      .select('id');
+    throwIfSupabaseError(error);
+    response.json({ approved: (data ?? []).length });
   }),
 );

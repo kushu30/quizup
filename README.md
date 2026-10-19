@@ -95,6 +95,26 @@ Runs the unit tests (scoring, answer deadline and grace, clock offset, join code
 
 Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
 
+### AI question generation
+
+Hosts can generate multiple-choice questions into a quiz from a topic or a pasted passage (the "Generate with AI" panel in the quiz editor). Generated questions are saved as **pending** and tagged "AI generated". Review, edit and approve them under "Needs review"; only approved questions can ever be used in a live session.
+
+Server environment variables (server only, never put them in the web app or on Vercel):
+
+| Variable         | Required | Meaning                                                                                |
+| ---------------- | -------- | -------------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`   | no       | Provider to use, only `gemini` today (default)                                         |
+| `GEMINI_API_KEY` | no       | Google AI Studio key. Without it the server still boots and the endpoint returns 503   |
+| `GEMINI_MODEL`   | no       | Overrides the built-in default model id (`gemini-3.8-flash` at the time of writing)    |
+
+Getting a key: open [Google AI Studio](https://aistudio.google.com/apikey), sign in, choose Create API key, and paste it into `apps/server/.env` locally or into the environment of the Render service. Keep it on Render only; it must never reach the browser or Vercel. In the Google Cloud console for that project, set a quota limit and a budget alert or spend cap, because anyone who can reach a host account can trigger generations (the server also limits each host to 10 generations an hour and one at a time).
+
+Check the integration with one real call (not part of CI, uses your key, prints only whether the output validated):
+
+```sh
+npm run llm:smoke
+```
+
 ### Google sign-in
 
 Create a Google OAuth client with redirect URI `<supabase url>/auth/v1/callback`. Locally, set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in your shell and set `enabled = true` under `[auth.external.google]` in `supabase/config.toml`, then `supabase stop && supabase start`. On a hosted project, enable the Google provider in the dashboard. The button on `/login` is hidden unless the web app has `VITE_GOOGLE_AUTH_ENABLED=true`; set it once the provider is enabled. Google accounts follow the same role rules: student unless the email is allowlisted.
@@ -121,7 +141,9 @@ Database: create a Supabase project and run `supabase link` then `supabase db pu
 | `CORS_ORIGINS`              | server  | yes      | Comma-separated allowed origins                 |
 | `SUPABASE_URL`              | server  | yes      | Supabase project URL                            |
 | `SUPABASE_SERVICE_ROLE_KEY` | server  | yes      | Service role key, server only, never in the web |
-| `GEMINI_API_KEY`            | server  | no       | Reserved for later phases                       |
+| `GEMINI_API_KEY`            | server  | no       | Enables AI question generation                  |
+| `LLM_PROVIDER`              | server  | no       | `gemini` (default), see AI question generation  |
+| `GEMINI_MODEL`              | server  | no       | Overrides the default Gemini model id           |
 | `OPENAI_API_KEY`            | server  | no       | Reserved for later phases                       |
 | `VITE_SERVER_URL`           | web     | yes      | Public URL of the server                        |
 | `VITE_SUPABASE_URL`         | web     | yes      | Supabase project URL                            |

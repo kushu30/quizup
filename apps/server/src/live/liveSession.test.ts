@@ -418,6 +418,7 @@ describe('live session engine over sockets', () => {
     });
     const response = await hostRequest('/sessions', 'host-token', { quizId: emptyQuizId });
     expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toContain('Approve at least one');
   });
 
   it('survives invalid payloads', async () => {
@@ -437,6 +438,97 @@ describe('live session engine over sockets', () => {
     const pong = nextEvent(socket, 'time:pong');
     expect(await socket.emitWithAck('time:ping', { clientSentMs: 123 })).toEqual({ ok: true });
     expect((await pong).clientSentMs).toBe(123);
+  });
+
+  it('only serves approved questions', async () => {
+    const approvedIds = [randomUUID(), randomUUID()];
+    const mixedQuizId = repository.seedQuiz({
+      hostId: HOST.id,
+      questions: [
+        {
+          id: approvedIds[0] as string,
+          stem: 'Approved one',
+          options: ['a', 'b', 'c', 'd'],
+          correctIndex: 0,
+        },
+        {
+          id: randomUUID(),
+          stem: 'Pending one',
+          options: ['a', 'b', 'c', 'd'],
+          correctIndex: 1,
+          approved: false,
+        },
+        {
+          id: approvedIds[1] as string,
+          stem: 'Approved two',
+          options: ['a', 'b', 'c', 'd'],
+          correctIndex: 2,
+        },
+        {
+          id: randomUUID(),
+          stem: 'Pending two',
+          options: ['a', 'b', 'c', 'd'],
+          correctIndex: 3,
+          approved: false,
+        },
+      ],
+    });
+    const summary = await engine.createSession({
+      quizId: mixedQuizId,
+      hostId: HOST.id,
+      questionDurationMs: 300,
+    });
+    expect([...summary.session.question_ids].sort()).toEqual([...approvedIds].sort());
+    expect(summary.questionCount).toBe(2);
+
+    const alice = await joinAsStudent(summary.joinCode, 'Alice');
+    const shownStems: string[] = [];
+    let upcomingShow = nextEvent(alice.socket, 'question:show');
+    await hostRequest(`/sessions/${summary.session.id}/start`);
+
+    for (let round = 0; round < 2; round += 1) {
+      const shown = await upcomingShow;
+      shownStems.push(shown.stem);
+      expect(approvedIds).toContain(shown.questionId);
+      const result = nextEvent(alice.socket, 'question:result');
+      await waitUntilStarted(shown.startsAtServerMs);
+      await alice.socket.emitWithAck('answer:submit', {
+        questionId: shown.questionId,
+        chosenIndex: 0,
+      });
+      await result;
+      upcomingShow = nextEvent(alice.socket, 'question:show');
+      await hostRequest(`/sessions/${summary.session.id}/next`);
+    }
+
+    expect(shownStems.sort()).toEqual(['Approved one', 'Approved two']);
+  });
+
+  it('refuses to start when a question was unapproved after the session was created', async () => {
+    const summary = await createLiveSession();
+    const quiz = repository.quizzes.get(quizId);
+    const target = quiz?.questions[0];
+    if (!target) {
+      throw new Error('seed missing');
+    }
+    target.approved = false;
+
+    const response = await hostRequest(`/sessions/${summary.session.id}/start`);
+    expect(response.status).toBe(409);
+    expect(repository.sessions.get(summary.session.id)?.session.status).toBe('lobby');
+  });
+
+  it('picks up edits made between creating and starting the session', async () => {
+    const summary = await createLiveSession();
+    const alice = await joinAsStudent(summary.joinCode, 'Alice');
+    const quiz = repository.quizzes.get(quizId);
+    for (const question of quiz?.questions ?? []) {
+      question.stem = `Edited ${question.stem}`;
+    }
+
+    const shownPromise = nextEvent(alice.socket, 'question:show');
+    await hostRequest(`/sessions/${summary.session.id}/start`);
+    expect((await shownPromise).stem.startsWith('Edited ')).toBe(true);
   });
 
   it('plays through every question and ends the session', async () => {

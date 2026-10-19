@@ -19,10 +19,19 @@ export const serverEnvSchema = z.object({
     .pipe(z.array(z.string().url()).min(1)),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  LLM_PROVIDER: z.enum(['gemini']).default('gemini'),
   GEMINI_API_KEY: optionalSecretSchema,
+  GEMINI_MODEL: optionalSecretSchema,
   OPENAI_API_KEY: optionalSecretSchema,
 });
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export const llmEnvSchema = serverEnvSchema.pick({
+  LLM_PROVIDER: true,
+  GEMINI_API_KEY: true,
+  GEMINI_MODEL: true,
+});
+export type LlmEnv = z.infer<typeof llmEnvSchema>;
 
 export const webEnvSchema = z.object({
   VITE_SERVER_URL: z.string().url(),

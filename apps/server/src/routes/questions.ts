@@ -39,6 +39,9 @@ questionsRouter.get(
     if (query.difficulty) {
       listing = listing.eq('difficulty', query.difficulty);
     }
+    if (query.approval) {
+      listing = listing.eq('approved', query.approval === 'approved');
+    }
     const searchTerm = query.search ? toSafeSearchTerm(query.search) : '';
     if (searchTerm) {
       listing = listing.or(`stem.ilike.%${searchTerm}%,topic.ilike.%${searchTerm}%`);
@@ -116,3 +119,28 @@ questionsRouter.delete(
     response.status(204).end();
   }),
 );
+
+function createApprovalHandler(approved: boolean) {
+  return asyncRoute(async (request, response) => {
+    const params = parseOrReject(questionIdParamsSchema, request.params, response);
+    if (!params) {
+      return;
+    }
+    const question = await findOwnedQuestion(params.questionId, getAuthUser(request).id);
+    if (!question) {
+      sendNotFound(response, 'Question');
+      return;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('questions')
+      .update({ approved })
+      .eq('id', question.id)
+      .select('*')
+      .single();
+    throwIfSupabaseError(error);
+    response.json(questionSchema.parse(data));
+  });
+}
+
+questionsRouter.post('/:questionId/approve', createApprovalHandler(true));
+questionsRouter.post('/:questionId/unapprove', createApprovalHandler(false));

@@ -55,6 +55,24 @@ export class SupabaseLiveRepository implements LiveRepository {
     }));
   }
 
+  async loadQuestionsByIds(questionIds: string[]) {
+    if (questionIds.length === 0) {
+      return [];
+    }
+    const { data, error } = await supabaseAdmin
+      .from('questions')
+      .select('id, stem, options, correct_index, approved')
+      .in('id', questionIds);
+    throwUnexpected(error);
+    return ((data ?? []) as (QuestionRow & { approved: boolean })[]).map((row) => ({
+      id: row.id,
+      stem: row.stem,
+      options: row.options,
+      correctIndex: row.correct_index,
+      approved: row.approved === true,
+    }));
+  }
+
   async createSession(input: {
     quizId: string;
     joinCode: string;

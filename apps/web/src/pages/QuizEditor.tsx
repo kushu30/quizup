@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CsvImport } from '../components/CsvImport';
+import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
 import { api, describeError } from '../lib/api';
@@ -22,6 +23,7 @@ export function QuizEditor() {
   const [mode, setMode] = useState<QuizMode>('live');
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [counts, setCounts] = useState({ approved: 0, pending: 0 });
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_QUESTION_DURATION_SECONDS);
 
   const loadQuiz = useCallback(async () => {
@@ -38,6 +40,42 @@ export function QuizEditor() {
   useEffect(() => {
     void loadQuiz();
   }, [loadQuiz]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      api.listQuestions({ quizId, approval: 'approved', limit: 500 }),
+      api.listQuestions({ quizId, approval: 'pending', limit: 500 }),
+    ])
+      .then(([approved, pending]) => {
+        if (!cancelled) {
+          setCounts({ approved: approved.length, pending: pending.length });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMessage(describeError(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quizId, refreshKey]);
+
+  async function handleApproveAll() {
+    try {
+      const pending = await api.listQuestions({ quizId, approval: 'pending', limit: 500 });
+      if (pending.length > 0) {
+        await api.approveQuestions(
+          quizId,
+          pending.map((question) => question.id),
+        );
+      }
+      refreshQuestions();
+    } catch (error) {
+      setMessage(describeError(error));
+    }
+  }
 
   async function handleSaveDetails(event: FormEvent) {
     event.preventDefault();
@@ -149,10 +187,15 @@ export function QuizEditor() {
         <button
           type="button"
           onClick={() => void handleStartLiveSession()}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white"
+          disabled={counts.approved === 0}
+          className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
         >
           Start live session
         </button>
+        <p className="w-full text-sm text-slate-600">
+          {counts.approved} approved · {counts.pending} pending review
+          {counts.approved === 0 && ' · approve at least one question to start a live session'}
+        </p>
       </section>
 
       <section className="space-y-3">
@@ -165,11 +208,39 @@ export function QuizEditor() {
           }}
         />
         <CsvImport quizId={quizId} onImported={refreshQuestions} />
+        <GenerateQuestionsPanel quizId={quizId} onGenerated={refreshQuestions} />
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Questions</h2>
-        <QuestionBank quizId={quizId} refreshKey={refreshKey} />
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Needs review ({counts.pending})</h2>
+          <button
+            type="button"
+            disabled={counts.pending === 0}
+            onClick={() => void handleApproveAll()}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
+          >
+            Approve all
+          </button>
+        </div>
+        <QuestionBank
+          quizId={quizId}
+          lockedApproval="pending"
+          emptyMessage="Nothing waiting for review"
+          refreshKey={refreshKey}
+          onChanged={refreshQuestions}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Approved questions ({counts.approved})</h2>
+        <QuestionBank
+          quizId={quizId}
+          lockedApproval="approved"
+          emptyMessage="No approved questions yet"
+          refreshKey={refreshKey}
+          onChanged={refreshQuestions}
+        />
       </section>
     </div>
   );

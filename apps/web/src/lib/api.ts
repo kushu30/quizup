@@ -1,5 +1,6 @@
 import {
   apiErrorSchema,
+  approveQuestionsResultSchema,
   csvImportResultSchema,
   questionListSchema,
   sessionSummarySchema,
@@ -7,7 +8,9 @@ import {
   quizSchema,
   questionSchema,
   topicListSchema,
+  type ApproveQuestionsResult,
   type CsvImportResult,
+  type GenerateQuestionsInput,
   type Question,
   type QuestionBankQuery,
   type QuestionInput,
@@ -29,10 +32,17 @@ interface Parser<Parsed> {
 
 export class ApiError extends Error {
   readonly rowErrors: RowError[];
+  readonly status: number;
+  readonly code: string | null;
 
-  constructor(message: string, rowErrors: RowError[] = []) {
+  constructor(
+    message: string,
+    options: { rowErrors?: RowError[]; status?: number; code?: string | null } = {},
+  ) {
     super(message);
-    this.rowErrors = rowErrors;
+    this.rowErrors = options.rowErrors ?? [];
+    this.status = options.status ?? 0;
+    this.code = options.code ?? null;
   }
 }
 
@@ -55,10 +65,15 @@ async function sendRequest(path: string, method: string, body?: unknown): Promis
   if (!response.ok) {
     const parsedError = apiErrorSchema.safeParse(await response.json().catch(() => null));
     if (!parsedError.success) {
-      throw new ApiError(`Request failed (${response.status})`);
+      throw new ApiError(`Request failed (${response.status})`, { status: response.status });
     }
-    const detail = parsedError.data.issues?.map((issue) => issue.message).join('; ');
-    throw new ApiError(detail || parsedError.data.error, parsedError.data.rowErrors);
+    const { error, issues, message, summary, rowErrors } = parsedError.data;
+    const detail = issues?.map((issue) => issue.message).join('; ') || message || error;
+    throw new ApiError(summary ? `${detail} (${summary})` : detail, {
+      rowErrors,
+      status: response.status,
+      code: error,
+    });
   }
   return response;
 }
@@ -108,6 +123,16 @@ export const api = {
     requestJson(`/questions/${questionId}`, 'PATCH', questionSchema, changes),
   deleteQuestion: (questionId: string): Promise<void> =>
     requestNoContent(`/questions/${questionId}`, 'DELETE'),
+  generateQuestions: (quizId: string, input: GenerateQuestionsInput): Promise<Question[]> =>
+    requestJson(`/quizzes/${quizId}/generate-questions`, 'POST', questionListSchema, input),
+  approveQuestion: (questionId: string): Promise<Question> =>
+    requestJson(`/questions/${questionId}/approve`, 'POST', questionSchema),
+  unapproveQuestion: (questionId: string): Promise<Question> =>
+    requestJson(`/questions/${questionId}/unapprove`, 'POST', questionSchema),
+  approveQuestions: (quizId: string, questionIds: string[]): Promise<ApproveQuestionsResult> =>
+    requestJson(`/quizzes/${quizId}/questions/approve`, 'POST', approveQuestionsResultSchema, {
+      questionIds,
+    }),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
   startSession: (sessionId: string): Promise<SessionSummary> =>

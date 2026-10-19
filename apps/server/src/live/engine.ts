@@ -142,7 +142,7 @@ export class LiveEngine {
     if (approvedQuestions.length === 0) {
       throw new EngineError(
         'no_approved_questions',
-        'The quiz needs at least one approved question',
+        'Approve at least one question before starting a live session',
       );
     }
 
@@ -204,6 +204,10 @@ export class LiveEngine {
 
   async startSession(sessionId: string, hostId: string): Promise<SessionSummary> {
     const state = this.requireHostedSession(sessionId, hostId);
+    if (state.record.status !== 'lobby') {
+      throw new EngineError('invalid_session_state', 'The session has already started');
+    }
+    state.questions = await this.reloadApprovedQuestions(state);
     if (state.record.status !== 'lobby') {
       throw new EngineError('invalid_session_state', 'The session has already started');
     }
@@ -433,6 +437,29 @@ export class LiveEngine {
       shuffled[swapIndex] = held;
     }
     return shuffled;
+  }
+
+  private async reloadApprovedQuestions(state: SessionState): Promise<LiveQuestion[]> {
+    const questionIds = state.record.question_ids;
+    const loaded = await this.repository.loadQuestionsByIds(questionIds);
+    const loadedById = new Map(loaded.map((question) => [question.id, question]));
+    const ordered: LiveQuestion[] = [];
+    for (const questionId of questionIds) {
+      const question = loadedById.get(questionId);
+      if (!question || !question.approved) {
+        throw new EngineError(
+          'questions_not_approved',
+          'Every question in the session must still be approved before it can start',
+        );
+      }
+      ordered.push({
+        id: question.id,
+        stem: question.stem,
+        options: question.options,
+        correctIndex: question.correctIndex,
+      });
+    }
+    return ordered;
   }
 
   private assertHost(state: SessionState, hostId: string) {
