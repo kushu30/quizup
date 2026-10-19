@@ -1,4 +1,5 @@
 import {
+  analyticsSnapshotSchema,
   apiErrorSchema,
   approveQuestionsResultSchema,
   csvImportResultSchema,
@@ -8,7 +9,9 @@ import {
   quizSchema,
   questionSchema,
   topicListSchema,
+  type AnalyticsSnapshot,
   type ApproveQuestionsResult,
+  type ExportType,
   type CsvImportResult,
   type GenerateQuestionsInput,
   type Question,
@@ -133,6 +136,12 @@ export const api = {
     requestJson(`/quizzes/${quizId}/questions/approve`, 'POST', approveQuestionsResultSchema, {
       questionIds,
     }),
+  getSessionSummary: (sessionId: string): Promise<AnalyticsSnapshot> =>
+    requestJson(`/sessions/${sessionId}/summary`, 'GET', analyticsSnapshotSchema),
+  downloadExport: async (sessionId: string, type: ExportType): Promise<Blob> => {
+    const response = await sendRequest(`/sessions/${sessionId}/export.csv?type=${type}`, 'GET');
+    return response.blob();
+  },
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
   startSession: (sessionId: string): Promise<SessionSummary> =>

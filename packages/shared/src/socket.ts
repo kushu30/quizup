@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AnalyticsSnapshot } from './analytics.js';
 import { DISPLAY_NAME_MAX_LENGTH, JOIN_CODE_LENGTH, QUESTION_OPTION_COUNT } from './tables.js';
 import { difficultySchema, sessionStatusSchema } from './enums.js';
 
@@ -202,4 +203,5 @@ export interface ServerToClientEvents {
   'leaderboard:update': (payload: LeaderboardUpdatePayload) => void;
   'session:end': (payload: SessionEndPayload) => void;
   'time:pong': (payload: TimePongPayload) => void;
+  'analytics:snapshot': (payload: AnalyticsSnapshot) => void;
 }

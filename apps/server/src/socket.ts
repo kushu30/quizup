@@ -150,6 +150,10 @@ export function attachSocketServer(
             if (state) {
               socket.emit('room:state', state);
             }
+            const snapshot = engine.getAnalyticsSnapshot(payload.sessionId, false);
+            if (snapshot) {
+              socket.emit('analytics:snapshot', snapshot);
+            }
             return;
           }
 

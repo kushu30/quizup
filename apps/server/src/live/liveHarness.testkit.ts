@@ -32,8 +32,34 @@ export const TEST_HOST: MeResponse = {
   role: 'host',
 };
 
+export const OTHER_HOST: MeResponse = {
+  id: randomUUID(),
+  email: 'other@test.dev',
+  name: 'Other',
+  role: 'host',
+};
+export const STUDENT_ACCOUNT: MeResponse = {
+  id: randomUUID(),
+  email: 'student@test.dev',
+  name: 'Student',
+  role: 'student',
+};
+export const ADMIN_ACCOUNT: MeResponse = {
+  id: randomUUID(),
+  email: 'admin@test.dev',
+  name: 'Admin',
+  role: 'admin',
+};
+
+const TOKEN_USERS: Record<string, MeResponse> = {
+  'host-token': TEST_HOST,
+  'other-host-token': OTHER_HOST,
+  'student-token': STUDENT_ACCOUNT,
+  'admin-token': ADMIN_ACCOUNT,
+};
+
 const verifier: AccessTokenVerifier = {
-  verify: async (accessToken) => (accessToken === 'host-token' ? TEST_HOST : null),
+  verify: async (accessToken) => TOKEN_USERS[accessToken] ?? null,
 };
 
 export function sleep(milliseconds: number) {
@@ -112,6 +138,13 @@ export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions>
     });
   }
 
+  async function request(path: string, token = 'host-token', method = 'GET') {
+    return fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   async function joinAsStudent(joinCode: string, displayName: string) {
     const socket = await connect();
     const ack = await socket.emitWithAck('room:join', { joinCode, displayName });
@@ -159,6 +192,7 @@ export async function startLiveHarness(engineOptions: Partial<LiveEngineOptions>
     nextEvent,
     collectEvents,
     hostRequest,
+    request,
     joinAsStudent,
     joinAsHost,
     createSession,

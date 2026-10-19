@@ -1,7 +1,8 @@
-import type { RoomStatePayload, SocketErrorCode } from '@quizup/shared';
+import type { AnalyticsSnapshot, RoomStatePayload, SocketErrorCode } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdaptiveTable } from '../components/AdaptiveTable';
+import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
@@ -17,6 +18,8 @@ export function HostConsole() {
   const { sessionId = '' } = useParams();
   const [socket, setSocket] = useState<QuizSocket | null>(null);
   const [room, setRoom] = useState<RoomStatePayload | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsSnapshot | null>(null);
+  const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState<SocketErrorCode | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,11 +37,14 @@ export function HostConsole() {
       }
       hostSocket = createQuizSocket(data.session?.access_token);
       hostSocket.on('connect', () => {
+        setConnected(true);
         hostSocket?.emit('room:join', { sessionId }, (ack) => {
           setJoinError(ack.ok ? null : ack.error);
         });
       });
+      hostSocket.on('disconnect', () => setConnected(false));
       hostSocket.on('room:state', setRoom);
+      hostSocket.on('analytics:snapshot', setAnalytics);
       setSocket(hostSocket);
     }
 
@@ -248,11 +254,18 @@ export function HostConsole() {
           <h2 className="text-2xl font-semibold">Final results</h2>
           <Leaderboard entries={room.leaderboard} />
           {room.adaptiveTable && <AdaptiveTable rows={room.adaptiveTable} />}
-          <Link to="/host" className="inline-block underline">
-            Back to dashboard
-          </Link>
+          <div className="flex gap-4">
+            <Link to={`/sessions/${sessionId}/summary`} className="inline-block underline">
+              Open the full summary and exports
+            </Link>
+            <Link to="/host" className="inline-block underline">
+              Back to dashboard
+            </Link>
+          </div>
         </section>
       )}
+
+      <AnalyticsPanel snapshot={analytics} connected={connected} />
 
       {room.status !== 'ended' && (
         <button

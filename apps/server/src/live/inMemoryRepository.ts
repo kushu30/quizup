@@ -11,7 +11,9 @@ import type {
   LiveRepository,
   NewParticipantInput,
   NewResponseInput,
+  SessionAnalyticsSource,
   SessionUpdate,
+  SummaryRecord,
 } from './types.js';
 
 interface StoredQuiz {
@@ -42,6 +44,8 @@ export class InMemoryLiveRepository implements LiveRepository {
   readonly participants: Participant[] = [];
   readonly responses: StoredResponse[] = [];
   readonly knowledgeStates: StoredKnowledgeState[] = [];
+  readonly storedSummaries = new Map<string, unknown>();
+  summaryWriteCount = 0;
 
   seedQuiz(input: {
     hostId: string;
@@ -222,6 +226,75 @@ export class InMemoryLiveRepository implements LiveRepository {
     } else {
       this.knowledgeStates.push({ ...input });
     }
+  }
+
+  async findSummaryRecord(sessionId: string): Promise<SummaryRecord | null> {
+    const stored = this.sessions.get(sessionId);
+    return stored
+      ? {
+          session: stored.session,
+          hostId: stored.hostId,
+          storedSummary: this.storedSummaries.get(sessionId) ?? null,
+        }
+      : null;
+  }
+
+  async saveSessionSummary(sessionId: string, summary: unknown) {
+    if (!this.storedSummaries.has(sessionId)) {
+      this.storedSummaries.set(sessionId, summary);
+      this.summaryWriteCount += 1;
+    }
+  }
+
+  async loadSessionAnalyticsSource(sessionId: string): Promise<SessionAnalyticsSource | null> {
+    const stored = this.sessions.get(sessionId);
+    if (!stored) {
+      return null;
+    }
+    const participants = this.participants.filter(
+      (participant) => participant.session_id === sessionId,
+    );
+    const participantIds = new Set(participants.map((participant) => participant.id));
+    const responses = this.responses.filter((response) => response.sessionId === sessionId);
+    const questionIds = new Set([
+      ...stored.session.question_ids,
+      ...responses.map((response) => response.questionId),
+    ]);
+    const questions = [...this.quizzes.values()]
+      .flatMap((quiz) => quiz.questions)
+      .filter((question) => questionIds.has(question.id))
+      .map((question) => ({
+        id: question.id,
+        stem: question.stem,
+        options: question.options,
+        topic: question.topic,
+        difficulty: question.difficulty,
+      }));
+    return {
+      session: stored.session,
+      hostId: stored.hostId,
+      participants: participants.map((participant) => ({
+        id: participant.id,
+        displayName: participant.display_name,
+        elo: participant.elo,
+        joinedAtMs: Date.parse(participant.joined_at),
+      })),
+      questions,
+      responses: responses.map((response) => ({
+        participantId: response.participantId,
+        questionId: response.questionId,
+        chosenIndex: response.chosenIndex,
+        correct: response.correct,
+        responseMs: response.responseMs,
+        points: response.points,
+        answeredAtMs: Date.parse(response.answeredAtIso),
+        participantEloBefore: response.participantEloBefore ?? null,
+        questionEloBefore: response.questionEloBefore ?? null,
+      })),
+      knowledgeStates: this.knowledgeStates.filter((state) =>
+        participantIds.has(state.participantId),
+      ),
+    };
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

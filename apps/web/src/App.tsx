@@ -10,6 +10,7 @@ import { Login } from './pages/Login';
 import { Play } from './pages/Play';
 import { QuestionBankPage } from './pages/QuestionBankPage';
 import { QuizEditor } from './pages/QuizEditor';
+import { SessionSummaryPage } from './pages/SessionSummaryPage';
 
 export function App() {
   return (
@@ -22,6 +23,7 @@ export function App() {
           <Route path="/host" element={<Host />} />
           <Route path="/host/quizzes/:quizId" element={<QuizEditor />} />
           <Route path="/host/sessions/:sessionId" element={<HostConsole />} />
+          <Route path="/sessions/:sessionId/summary" element={<SessionSummaryPage />} />
           <Route path="/host/questions" element={<QuestionBankPage />} />
         </Route>
         <Route path="/join" element={<Join />} />

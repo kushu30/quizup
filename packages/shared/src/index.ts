@@ -14,3 +14,5 @@ export * from './bkt.js';
 export * from './sampling.js';
 export * from './adaptive.js';
 export * from './adaptiveSimulation.js';
+export * from './analytics.js';
+export * from './csvExport.js';

@@ -95,6 +95,38 @@ Runs the unit tests (scoring, answer deadline and grace, clock offset, join code
 
 Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
 
+### Analytics
+
+The host live screen has an **Analytics** panel that updates in real time, and every ended session has a summary page with CSV exports.
+
+What the live panel shows (all of it comes from one server event, `analytics:snapshot`, sent only to the host; there is no polling):
+
+- **Live / Reconnecting** badge, driven by the socket connection.
+- **Leaderboard**: the points-based leaderboard.
+- **Students and projected final score**: score, correct/answered, and a projection (below).
+- **Mastery heatmap**: one row per student, one column per topic, colour = BKT mastery 0 to 1 with the number in the cell. A dash means no data yet. Rows are sorted by score (or name).
+- **Response time**: a 10-bucket histogram of how much of the time limit students used, switchable between the current question (current round in adaptive sessions) and the whole session.
+- **Question difficulty**: labeled difficulty against observed accuracy, flagged when an easy question is answered correctly less than 40% of the time or a hard one more than 80% of the time (needs at least 3 answers).
+
+Projection: a straight line is fitted (least squares, from running sums) to the student's cumulative score against the round number of each answer. It appears after 3 answers and predicts the score at the last round, never below the current score and never above the current score plus 1000 per remaining round. It is marked **low confidence** while the student has fewer than 6 answers. In adaptive sessions every student sees different questions, so projections are always marked low confidence (the tooltip says so). If the number of rounds is unknown, no projection is shown.
+
+Summary page: `/sessions/:id/summary` (linked from the end-of-session screen) shows the final leaderboard, a per-question table (labeled difficulty, observed accuracy, median response time, mismatch flag), the response-time histogram, the mastery heatmap, and each student's projection (taken once, at half the rounds) against their actual final score. The summary is saved when the session ends. Older sessions without one are rebuilt from the responses once; rebuilt summaries use the slowest answer as the time limit and have no projections.
+
+CSV export (two buttons on the summary page, downloaded through an authenticated request; cells that start with `=`, `+`, `-` or `@` get a leading single quote):
+
+- participants: Rank, Name, Final score, Answered, Correct, Accuracy, Avg response ms, Final Elo (adaptive sessions only), and one `Mastery: <topic>` column per topic.
+- responses: Participant, Question, Topic, Labeled difficulty, Chosen option, Correct, Response ms, Points, Participant Elo before, Question Elo before.
+
+Run `supabase db reset` to apply migration 0006 (summary columns on sessions).
+
+Load check (simulated):
+
+```sh
+npm run load:sim
+```
+
+It starts the server in-process with the in-memory repository, one host socket and 20 simulated student sockets, and measures the time from each student's answer to the first analytics snapshot the host receives that includes it. Two scenarios: answers spread at random delays across each round, and all 20 answering inside one second. It prints p50, p95, max, snapshot count and CPU per answer, and exits non-zero if p95 is over 500 ms. The numbers are simulated and local: the server and the simulated clients share one Node process on your machine, so they say nothing about a deployed server or real networks.
+
 ### Adaptive mode
 
 Every live session now keeps a skill rating per student (Elo) and a per-topic mastery estimate (Bayesian knowledge tracing), updated each time a question closes. Turning on **Adaptive mode** for a quiz (checkbox in the quiz editor, plus an optional number of rounds) changes only which questions students get: in synchronized rounds each student receives their own question, chosen by their current rating from the approved questions they have not seen. Scoring and the leaderboard stay points-based, and ratings and mastery are never sent to students. The host console shows a table with each student's rating and last question.

@@ -1,14 +1,17 @@
-import { sessionCreateSchema, sessionIdParamsSchema } from '@quizup/shared';
+import { exportQuerySchema, sessionCreateSchema, sessionIdParamsSchema } from '@quizup/shared';
+import type { Response } from 'express';
 import { Router } from 'express';
 import { createRequireAuth, getAuthUser, requireRole, type AccessTokenVerifier } from '../auth.js';
-import { asyncRoute, parseOrReject } from '../http.js';
+import type { AnalyticsAccess, AnalyticsService } from '../analytics/analyticsService.js';
+import { asyncRoute, parseOrReject, sendNotFound } from '../http.js';
 import type { LiveEngine } from '../live/engine.js';
 
 export function createSessionsRouter(dependencies: {
   engine: LiveEngine;
   verifier: AccessTokenVerifier;
+  analytics: AnalyticsService;
 }): Router {
-  const { engine, verifier } = dependencies;
+  const { engine, verifier, analytics } = dependencies;
   const router = Router();
 
   router.use(createRequireAuth(verifier), requireRole('host', 'admin'));
@@ -70,6 +73,61 @@ export function createSessionsRouter(dependencies: {
         return;
       }
       response.json(await engine.endSession(params.sessionId, getAuthUser(request).id));
+    }),
+  );
+
+  function sendDenied(
+    response: Response,
+    access: Exclude<AnalyticsAccess<unknown>, { kind: 'ok' }>,
+  ) {
+    if (access.kind === 'forbidden') {
+      response.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    sendNotFound(response, 'Session');
+  }
+
+  router.get(
+    '/:sessionId/summary',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const access = await analytics.getSummary(params.sessionId, getAuthUser(request));
+      if (access.kind !== 'ok') {
+        sendDenied(response, access);
+        return;
+      }
+      response.json(access.value);
+    }),
+  );
+
+  router.get(
+    '/:sessionId/export.csv',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      const query = params ? parseOrReject(exportQuerySchema, request.query, response) : null;
+      if (!params || !query) {
+        return;
+      }
+      const user = getAuthUser(request);
+      const access =
+        query.type === 'participants'
+          ? await analytics.getParticipantsCsv(params.sessionId, user)
+          : await analytics.getResponsesCsv(params.sessionId, user);
+      if (access.kind !== 'ok') {
+        sendDenied(response, access);
+        return;
+      }
+      response
+        .set('Content-Type', 'text/csv; charset=utf-8')
+        .set(
+          'Content-Disposition',
+          `attachment; filename="quizup-${params.sessionId.slice(0, 8)}-${query.type}.csv"`,
+        )
+        .set('Cache-Control', 'no-store')
+        .send(access.value);
     }),
   );
 

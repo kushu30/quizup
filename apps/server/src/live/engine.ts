@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import {
+  ANALYTICS_THROTTLE_MS,
   ANSWER_GRACE_MS,
   DEFAULT_BKT_PARAMS,
   INITIAL_PLAYER_RATING,
@@ -19,6 +20,7 @@ import {
   updateRatings,
   type Ack,
   type AdaptiveRow,
+  type AnalyticsSnapshot,
   type AnswerSubmitPayload,
   type Difficulty,
   type LeaderboardEntry,
@@ -32,6 +34,7 @@ import {
   type StudentJoinPayload,
   type YourQuestionResult,
 } from '@quizup/shared';
+import { SessionAnalytics } from '../analytics/sessionAnalytics.js';
 import { createCryptoRandomSource } from './randomSource.js';
 import {
   EngineError,
@@ -54,6 +57,7 @@ export interface LiveEngineOptions {
   endedSessionRetentionMs?: number;
   randomIndex?: (exclusiveMax: number) => number;
   random?: RandomSource;
+  analyticsThrottleMs?: number;
 }
 
 interface AnswerRecord {
@@ -119,6 +123,8 @@ interface SessionState {
   adaptiveRounds: number | null;
   totalRounds: number;
   persistence: Promise<void>;
+  analytics: SessionAnalytics;
+  analyticsTimer: NodeJS.Timeout | null;
   participants: Map<string, ParticipantState>;
   participantIdByName: Map<string, string>;
   reservedNames: Set<string>;
@@ -141,7 +147,7 @@ function tokenHashesMatch(candidateHash: string, storedHash: string): boolean {
 }
 
 export class LiveEngine {
-  private readonly repository: LiveRepository;
+  readonly repository: LiveRepository;
   private readonly publisher: LivePublisher;
   private readonly now: () => number;
   private readonly startDelayMs: number;
@@ -150,6 +156,7 @@ export class LiveEngine {
   private readonly endedSessionRetentionMs: number;
   private readonly randomIndex: (exclusiveMax: number) => number;
   private readonly random: RandomSource;
+  private readonly analyticsThrottleMs: number;
   private readonly sessionsById = new Map<string, SessionState>();
   private readonly sessionIdByJoinCode = new Map<string, string>();
   private readonly sessionIdByParticipantId = new Map<string, string>();
@@ -164,6 +171,7 @@ export class LiveEngine {
     this.endedSessionRetentionMs = options.endedSessionRetentionMs ?? DEFAULT_ENDED_RETENTION_MS;
     this.randomIndex = options.randomIndex ?? ((exclusiveMax) => randomInt(exclusiveMax));
     this.random = options.random ?? createCryptoRandomSource();
+    this.analyticsThrottleMs = options.analyticsThrottleMs ?? ANALYTICS_THROTTLE_MS;
   }
 
   async markAllStoredSessionsEnded(): Promise<void> {
@@ -219,6 +227,12 @@ export class LiveEngine {
         adaptiveRounds,
         totalRounds: adaptiveRounds ?? questions.length,
         persistence: Promise.resolve(),
+        analytics: new SessionAnalytics({
+          sessionId: record.id,
+          adaptive: adaptiveRounds !== null,
+          totalRounds: adaptiveRounds ?? questions.length,
+        }),
+        analyticsTimer: null,
         participants: new Map(),
         participantIdByName: new Map(),
         reservedNames: new Set(),
@@ -263,6 +277,9 @@ export class LiveEngine {
     state.questions = await this.reloadApprovedQuestions(state);
     if (state.record.status !== 'lobby') {
       throw new EngineError('invalid_session_state', 'The session has already started');
+    }
+    for (const question of state.questions) {
+      state.analytics.registerTopic(question.topic);
     }
     const startedAtIso = new Date(this.now()).toISOString();
     await this.repository.updateSession(state.record.id, {
@@ -371,6 +388,7 @@ export class LiveEngine {
         lastOutcome: null,
       };
       state.participants.set(participant.id, participant);
+      state.analytics.registerParticipant(participant.id, participant.displayName);
       state.participantIdByName.set(nameKey, participant.id);
       this.sessionIdByParticipantId.set(participant.id, state.record.id);
       this.requestHostRefresh(state);
@@ -472,7 +490,17 @@ export class LiveEngine {
       return { ok: false, error: 'server_error' };
     }
 
+    state.analytics.onResponse({
+      participantId,
+      questionId: question.id,
+      round: run.index + 1,
+      correct,
+      points,
+      responseMs,
+      durationMs: run.durationMs,
+    });
     this.requestHostRefresh(state);
+    this.requestAnalyticsEmit(state);
     this.closeIfEveryoneConnectedAnswered(state);
     return { ok: true };
   }
@@ -624,6 +652,18 @@ export class LiveEngine {
     };
     state.run = run;
     state.lastResult = null;
+    state.analytics.onRoundStart(index + 1);
+    for (const question of new Set(assignments.values())) {
+      state.analytics.onQuestionServed(
+        {
+          id: question.id,
+          stem: question.stem,
+          topic: question.topic,
+          difficulty: question.difficulty,
+        },
+        index + 1,
+      );
+    }
 
     if (sharedQuestion) {
       this.publisher.emitToSession(state.record.id, 'question:show', {
@@ -645,6 +685,7 @@ export class LiveEngine {
       }
     }
     this.flushHostState(state);
+    this.emitAnalytics(state);
     this.armCloseTimer(state, run);
   }
 
@@ -761,6 +802,8 @@ export class LiveEngine {
         answer.correct,
       );
       participant.mastery.set(topicKey, masteryAfter);
+      state.analytics.onMastery(participant.id, question.topic, masteryAfter);
+      state.analytics.setRating(participant.id, update.playerRating);
 
       jobs.push({
         question,
@@ -812,6 +855,7 @@ export class LiveEngine {
     }
 
     const ratingJobs = this.applyRatingUpdates(state, run);
+    state.analytics.onRoundClose(run.index + 1);
 
     const ranked = this.rankParticipants(state);
     const rankById = new Map(ranked.map((participant, position) => [participant.id, position + 1]));
@@ -865,6 +909,7 @@ export class LiveEngine {
     }
     this.enqueueRatingPersistence(state, ratingJobs);
     this.flushHostState(state);
+    this.emitAnalytics(state);
   }
 
   private hasEnded(state: SessionState): boolean {
@@ -907,6 +952,9 @@ export class LiveEngine {
       });
     });
     this.flushHostState(state);
+    const finalSnapshot = this.buildAnalyticsSnapshot(state, true);
+    this.clearAnalyticsTimer(state);
+    this.publisher.emitToHost(sessionId, 'analytics:snapshot', finalSnapshot);
 
     state.retentionTimer = setTimeout(
       () => this.forgetSession(state),
@@ -915,6 +963,11 @@ export class LiveEngine {
     state.retentionTimer.unref();
 
     await this.repository.updateSession(sessionId, { status: 'ended', ended_at: endedAtIso });
+    try {
+      await this.repository.saveSessionSummary(sessionId, finalSnapshot, endedAtIso);
+    } catch (error) {
+      console.error('Saving the session summary failed', error);
+    }
   }
 
   private forgetSession(state: SessionState) {
@@ -935,10 +988,57 @@ export class LiveEngine {
       clearTimeout(state.hostRefreshTimer);
       state.hostRefreshTimer = null;
     }
+    this.clearAnalyticsTimer(state);
     if (state.retentionTimer) {
       clearTimeout(state.retentionTimer);
       state.retentionTimer = null;
     }
+  }
+
+  private buildAnalyticsSnapshot(state: SessionState, includeMedians: boolean): AnalyticsSnapshot {
+    const ranked = this.rankParticipants(state);
+    return state.analytics.buildSnapshot({
+      status: state.record.status,
+      generatedAtMs: this.now(),
+      ranks: ranked.map((participant, position) => ({
+        participantId: participant.id,
+        rank: position + 1,
+      })),
+      leaderboard: this.buildLeaderboard(ranked),
+      includeMedians,
+    });
+  }
+
+  private clearAnalyticsTimer(state: SessionState) {
+    if (state.analyticsTimer) {
+      clearTimeout(state.analyticsTimer);
+      state.analyticsTimer = null;
+    }
+  }
+
+  private emitAnalytics(state: SessionState) {
+    this.clearAnalyticsTimer(state);
+    this.publisher.emitToHost(
+      state.record.id,
+      'analytics:snapshot',
+      this.buildAnalyticsSnapshot(state, state.record.status === 'ended'),
+    );
+  }
+
+  private requestAnalyticsEmit(state: SessionState) {
+    if (state.analyticsTimer || state.record.status === 'ended') {
+      return;
+    }
+    state.analyticsTimer = setTimeout(() => {
+      state.analyticsTimer = null;
+      this.emitAnalytics(state);
+    }, this.analyticsThrottleMs);
+    state.analyticsTimer.unref();
+  }
+
+  getAnalyticsSnapshot(sessionId: string, includeMedians = false): AnalyticsSnapshot | null {
+    const state = this.sessionsById.get(sessionId);
+    return state ? this.buildAnalyticsSnapshot(state, includeMedians) : null;
   }
 
   private requestHostRefresh(state: SessionState) {

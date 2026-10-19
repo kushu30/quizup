@@ -69,7 +69,45 @@ export interface LiveRepository {
     topic: string;
     pMastery: number;
   }) => Promise<void>;
+  findSummaryRecord: (sessionId: string) => Promise<SummaryRecord | null>;
+  saveSessionSummary: (
+    sessionId: string,
+    summary: unknown,
+    generatedAtIso: string,
+  ) => Promise<void>;
+  loadSessionAnalyticsSource: (sessionId: string) => Promise<SessionAnalyticsSource | null>;
   endAllNonEndedSessions: (endedAtIso: string) => Promise<void>;
+}
+
+export interface SessionAnalyticsSource {
+  session: Session;
+  hostId: string;
+  participants: { id: string; displayName: string; elo: number; joinedAtMs: number }[];
+  questions: {
+    id: string;
+    stem: string;
+    options: string[];
+    topic: string;
+    difficulty: Difficulty;
+  }[];
+  responses: {
+    participantId: string;
+    questionId: string;
+    chosenIndex: number;
+    correct: boolean;
+    responseMs: number;
+    points: number;
+    answeredAtMs: number;
+    participantEloBefore: number | null;
+    questionEloBefore: number | null;
+  }[];
+  knowledgeStates: { participantId: string; topic: string; pMastery: number }[];
+}
+
+export interface SummaryRecord {
+  session: Session;
+  hostId: string;
+  storedSummary: unknown;
 }
 
 export type EngineEventName = keyof ServerToClientEvents;

@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { AnalyticsService } from './analytics/analyticsService.js';
 import { requireAuth, type AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
 import { errorHandler } from './http.js';
@@ -57,7 +58,14 @@ export function createApp(dependencies: AppDependencies) {
   );
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);
-  app.use('/sessions', createSessionsRouter(dependencies));
+  app.use(
+    '/sessions',
+    createSessionsRouter({
+      engine: dependencies.engine,
+      verifier: dependencies.verifier,
+      analytics: new AnalyticsService(dependencies.engine),
+    }),
+  );
   app.use(errorHandler);
 
   return app;

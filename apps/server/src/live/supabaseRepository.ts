@@ -11,10 +11,13 @@ import type {
   LiveRepository,
   NewParticipantInput,
   NewResponseInput,
+  SessionAnalyticsSource,
   SessionUpdate,
+  SummaryRecord,
 } from './types.js';
 
 const UNIQUE_VIOLATION_CODE = '23505';
+const PAGE_SIZE = 1000;
 
 interface SupabaseErrorLike {
   code?: string;
@@ -50,6 +53,24 @@ function toLiveQuestion(row: QuestionRow): LiveQuestion {
 }
 
 const QUESTION_COLUMNS = 'id, stem, options, correct_index, topic, difficulty, elo_rating';
+
+async function fetchAllPages<Row>(
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown; error: SupabaseErrorLike | null }>,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await fetchPage(from, from + PAGE_SIZE - 1);
+    throwUnexpected(error);
+    const page = (data ?? []) as Row[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) {
+      return rows;
+    }
+  }
+}
 
 export class SupabaseLiveRepository implements LiveRepository {
   async findOwnedQuiz(quizId: string, hostId: string) {
@@ -211,6 +232,145 @@ export class SupabaseLiveRepository implements LiveRepository {
       { onConflict: 'participant_id,topic' },
     );
     throwUnexpected(error);
+  }
+
+  async findSummaryRecord(sessionId: string): Promise<SummaryRecord | null> {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .select('*, quizzes(host_id)')
+      .eq('id', sessionId)
+      .maybeSingle();
+    throwUnexpected(error);
+    if (!data) {
+      return null;
+    }
+    const {
+      quizzes,
+      analytics_summary: storedSummary,
+      ...sessionRow
+    } = data as {
+      quizzes: { host_id: string } | null;
+      analytics_summary: unknown;
+    };
+    return quizzes
+      ? {
+          session: sessionSchema.parse(sessionRow),
+          hostId: quizzes.host_id,
+          storedSummary: storedSummary ?? null,
+        }
+      : null;
+  }
+
+  async saveSessionSummary(sessionId: string, summary: unknown, generatedAtIso: string) {
+    const { error } = await supabaseAdmin
+      .from('sessions')
+      .update({ analytics_summary: summary, summary_generated_at: generatedAtIso })
+      .eq('id', sessionId)
+      .is('analytics_summary', null);
+    throwUnexpected(error);
+  }
+
+  async loadSessionAnalyticsSource(sessionId: string): Promise<SessionAnalyticsSource | null> {
+    const record = await this.findSummaryRecord(sessionId);
+    if (!record) {
+      return null;
+    }
+
+    const participantRows = await fetchAllPages<{
+      id: string;
+      display_name: string;
+      elo: number;
+      joined_at: string;
+    }>((from, to) =>
+      supabaseAdmin
+        .from('participants')
+        .select('id, display_name, elo, joined_at')
+        .eq('session_id', sessionId)
+        .order('joined_at', { ascending: true })
+        .range(from, to),
+    );
+    const responseRows = await fetchAllPages<{
+      participant_id: string;
+      question_id: string;
+      chosen_index: number;
+      correct: boolean;
+      response_ms: number;
+      points: number;
+      answered_at: string;
+      participant_elo_before: number | null;
+      question_elo_before: number | null;
+    }>((from, to) =>
+      supabaseAdmin
+        .from('responses')
+        .select(
+          'participant_id, question_id, chosen_index, correct, response_ms, points, answered_at, participant_elo_before, question_elo_before',
+        )
+        .eq('session_id', sessionId)
+        .order('answered_at', { ascending: true })
+        .range(from, to),
+    );
+
+    const questionIds = [
+      ...new Set([...record.session.question_ids, ...responseRows.map((row) => row.question_id)]),
+    ];
+    const questionRows =
+      questionIds.length === 0
+        ? []
+        : await fetchAllPages<{
+            id: string;
+            stem: string;
+            options: string[];
+            topic: string;
+            difficulty: Difficulty;
+          }>((from, to) =>
+            supabaseAdmin
+              .from('questions')
+              .select('id, stem, options, topic, difficulty')
+              .in('id', questionIds)
+              .range(from, to),
+          );
+    const participantIds = participantRows.map((row) => row.id);
+    const knowledgeRows =
+      participantIds.length === 0
+        ? []
+        : await fetchAllPages<{ participant_id: string; topic: string; p_mastery: number }>(
+            (from, to) =>
+              supabaseAdmin
+                .from('knowledge_states')
+                .select('participant_id, topic, p_mastery')
+                .in('participant_id', participantIds)
+                .range(from, to),
+          );
+
+    return {
+      session: record.session,
+      hostId: record.hostId,
+      participants: participantRows.map((row) => ({
+        id: row.id,
+        displayName: row.display_name,
+        elo: Number(row.elo),
+        joinedAtMs: Date.parse(row.joined_at),
+      })),
+      questions: questionRows,
+      responses: responseRows.map((row) => ({
+        participantId: row.participant_id,
+        questionId: row.question_id,
+        chosenIndex: row.chosen_index,
+        correct: row.correct,
+        responseMs: row.response_ms,
+        points: row.points,
+        answeredAtMs: Date.parse(row.answered_at),
+        participantEloBefore:
+          row.participant_elo_before === null ? null : Number(row.participant_elo_before),
+        questionEloBefore:
+          row.question_elo_before === null ? null : Number(row.question_elo_before),
+      })),
+      knowledgeStates: knowledgeRows.map((row) => ({
+        participantId: row.participant_id,
+        topic: row.topic,
+        pMastery: Number(row.p_mastery),
+      })),
+    };
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {
