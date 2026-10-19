@@ -338,3 +338,5 @@ Database: create a Supabase project and run `supabase link` then `supabase db pu
 | `VITE_GOOGLE_AUTH_ENABLED`  | web     | no       | `true` shows the Google button, default `false` |
 
 The server and the web app both fail at startup with a list of the invalid variables.
+
+..
