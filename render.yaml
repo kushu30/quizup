@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: quizup-server
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build -w packages/shared && npm run build -w apps/server
+    startCommand: npm run start -w apps/server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
