@@ -163,3 +163,22 @@ export const joinFormSchema = z.object({
   displayName: z.string().trim().min(1, 'Enter a display name').max(40, 'Max 40 characters'),
 });
 export type JoinForm = z.infer<typeof joinFormSchema>;
+
+export const emailSchema = z.string().trim().toLowerCase().email();
+
+export const hostAllowlistEntrySchema = z.object({
+  email: emailSchema,
+  granted_by: uuidSchema.nullable(),
+  created_at: timestampSchema,
+});
+export type HostAllowlistEntry = z.infer<typeof hostAllowlistEntrySchema>;
+
+export const hostAllowlistSchema = z.array(hostAllowlistEntrySchema);
+
+export const meResponseSchema = z.object({
+  id: uuidSchema,
+  email: z.string().email().nullable(),
+  name: z.string().nullable(),
+  role: userRoleSchema,
+});
+export type MeResponse = z.infer<typeof meResponseSchema>;

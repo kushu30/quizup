@@ -42,10 +42,29 @@ Other scripts: `npm run lint`, `npm run format`, `npm run typecheck`, `npm run b
 
 - `curl http://localhost:4000/health` returns `{"status":"ok","time":"...","uptimeSeconds":N}`.
 - Open `http://localhost:5173`. The landing page shows a green "Server OK" badge and a "Socket round trip" badge with the latency in milliseconds. Red badges mean CORS, the server URL or websockets are misconfigured.
-- Sign up at `/login` as a host and you land on `/host`. A student account sees "Hosts only". Unauthenticated visits to `/host` redirect to `/login`.
+- Sign up at `/login`: every new account is a student. `/host` redirects non-hosts to `/` with a "Host access required" message, and unauthenticated visits go to `/login`. See Roles and host access below.
 - `/join` validates the join code (6 letters or digits) and display name, then shows "joining arrives in Phase 1".
 
 With email confirmations disabled (the local default), sign-up signs you in immediately.
+
+### Roles and host access
+
+- `admin`: the superadmin. Set once by hand, never through the app.
+- `host`: only an email on the admin's host allowlist (`/admin`), and only once that email is confirmed.
+- `student`: everyone else, and the default. Joining a quiz is open to everyone, including anonymous users.
+
+Role never comes from client input. A database trigger assigns it at sign-up, and users can only update their own `name`.
+
+Bootstrap the admin: sign up with the admin email, then run this once in the Supabase SQL editor:
+
+```sql
+update public.profiles set role = 'admin' where email = '<admin email>';
+```
+
+Notes:
+
+- Turn Confirm email on in production. Hosts are only promoted once their email is confirmed.
+- Add a host's email to the allowlist after that person has created their account. Adding promotes them at once, and removing demotes them.
 
 ### Deploy
 

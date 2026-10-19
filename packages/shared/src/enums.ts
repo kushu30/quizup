@@ -3,9 +3,6 @@ import { z } from 'zod';
 export const userRoleSchema = z.enum(['host', 'student', 'admin']);
 export type UserRole = z.infer<typeof userRoleSchema>;
 
-export const signUpRoleSchema = z.enum(['host', 'student']);
-export type SignUpRole = z.infer<typeof signUpRoleSchema>;
-
 export const quizModeSchema = z.enum(['live', 'exam', 'coding']);
 export type QuizMode = z.infer<typeof quizModeSchema>;
 

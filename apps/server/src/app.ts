@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { requireAuth } from './auth.js';
 import { serverEnv } from './env.js';
 
 export function createApp() {
@@ -16,6 +17,10 @@ export function createApp() {
       time: new Date().toISOString(),
       uptimeSeconds: Math.round(process.uptime()),
     });
+  });
+
+  app.get('/me', requireAuth, (request, response) => {
+    response.json(request.authUser);
   });
 
   return app;

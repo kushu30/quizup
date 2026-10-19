@@ -2,7 +2,7 @@ import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 
 export function Layout() {
-  const { session, signOut } = useAuth();
+  const { session, canHost, isAdmin, signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -15,9 +15,16 @@ export function Layout() {
             <Link to="/join" className="hover:underline">
               Join
             </Link>
-            <Link to="/host" className="hover:underline">
-              Host
-            </Link>
+            {canHost && (
+              <Link to="/host" className="hover:underline">
+                Host
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin" className="hover:underline">
+                Admin
+              </Link>
+            )}
             {session ? (
               <button type="button" onClick={() => void signOut()} className="hover:underline">
                 Sign out

@@ -1,4 +1,3 @@
-import { signUpRoleSchema, type SignUpRole } from '@quizup/shared';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
@@ -13,12 +12,11 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<SignUpRole>('host');
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && session) {
-    return <Navigate to="/host" replace />;
+    return <Navigate to="/" replace />;
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -31,20 +29,20 @@ export function Login() {
       if (error) {
         setMessage(error.message);
       } else {
-        navigate('/host');
+        navigate('/');
       }
     } else {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { role, name } },
+        options: { data: { name } },
       });
       if (error) {
         setMessage(error.message);
       } else if (!data.session) {
         setMessage('Check your email to confirm your account, then sign in.');
       } else {
-        navigate('/host');
+        navigate('/');
       }
     }
 
@@ -64,17 +62,6 @@ export function Login() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
-            <label className="block text-sm">
-              I am a
-              <select
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
-                value={role}
-                onChange={(event) => setRole(signUpRoleSchema.parse(event.target.value))}
-              >
-                <option value="host">Host</option>
-                <option value="student">Student</option>
-              </select>
             </label>
           </>
         )}

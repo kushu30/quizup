@@ -7,6 +7,8 @@ interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  canHost: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -53,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       loading,
+      canHost: profile?.role === 'host' || profile?.role === 'admin',
+      isAdmin: profile?.role === 'admin',
       signOut: async () => {
         await supabase.auth.signOut();
       },
