@@ -3,6 +3,7 @@ import {
   participantSchema,
   sessionSchema,
   type Difficulty,
+  type LearnerProfile,
   type Participant,
   type ProctorEventRecord,
   type Session,
@@ -44,6 +45,7 @@ interface QuestionRow {
   topic: string;
   difficulty: Difficulty;
   elo_rating: number;
+  answers_count?: number;
 }
 
 function toLiveQuestion(row: QuestionRow): LiveQuestion {
@@ -55,10 +57,12 @@ function toLiveQuestion(row: QuestionRow): LiveQuestion {
     topic: row.topic,
     difficulty: row.difficulty,
     eloRating: row.elo_rating,
+    answersCount: Number(row.answers_count ?? 0),
   };
 }
 
-const QUESTION_COLUMNS = 'id, stem, options, correct_index, topic, difficulty, elo_rating';
+const QUESTION_COLUMNS =
+  'id, stem, options, correct_index, topic, difficulty, elo_rating, answers_count';
 
 async function fetchAllPages<Row>(
   fetchPage: (
@@ -196,6 +200,7 @@ export class SupabaseLiveRepository implements LiveRepository {
         session_id: input.sessionId,
         display_name: input.displayName,
         rejoin_token_hash: input.rejoinTokenHash,
+        user_id: input.userId ?? null,
       })
       .select('*')
       .single();
@@ -360,10 +365,11 @@ export class SupabaseLiveRepository implements LiveRepository {
             options: string[];
             topic: string;
             difficulty: Difficulty;
+            answers_count: number | null;
           }>((from, to) =>
             supabaseAdmin
               .from('questions')
-              .select('id, stem, options, topic, difficulty')
+              .select('id, stem, options, topic, difficulty, answers_count')
               .in('id', questionIds)
               .range(from, to),
           );
@@ -404,7 +410,14 @@ export class SupabaseLiveRepository implements LiveRepository {
         elo: Number(row.elo),
         joinedAtMs: Date.parse(row.joined_at),
       })),
-      questions: questionRows,
+      questions: questionRows.map((row) => ({
+        id: row.id,
+        stem: row.stem,
+        options: row.options,
+        topic: row.topic,
+        difficulty: row.difficulty,
+        answersCount: Number(row.answers_count ?? 0),
+      })),
       responses: responseRows.map((row) => ({
         participantId: row.participant_id,
         questionId: row.question_id,
@@ -635,6 +648,55 @@ export class SupabaseLiveRepository implements LiveRepository {
     throwUnexpected(readError);
     const stored = (data as { results_released_at: string | null }).results_released_at;
     return stored ? Date.parse(stored) : releasedAtMs;
+  }
+
+  async findLearnerProfile(userId: string): Promise<LearnerProfile | null> {
+    const { data, error } = await supabaseAdmin
+      .from('learner_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    throwUnexpected(error);
+    if (!data) {
+      return null;
+    }
+    const row = data as {
+      user_id: string;
+      elo: number;
+      topic_mastery: Record<string, number> | null;
+      answers_count: number;
+      last_session_id: string | null;
+    };
+    return {
+      userId: row.user_id,
+      elo: Number(row.elo),
+      topicMastery: row.topic_mastery ?? {},
+      answersCount: row.answers_count,
+      lastSessionId: row.last_session_id,
+    };
+  }
+
+  async applyLearnerProfile(input: {
+    userId: string;
+    sessionId: string;
+    elo: number;
+    topicMastery: Record<string, number>;
+    answersAdded: number;
+  }): Promise<boolean> {
+    const { data, error } = await supabaseAdmin.rpc('apply_learner_profile', {
+      target_user_id: input.userId,
+      target_session_id: input.sessionId,
+      new_elo: input.elo,
+      new_topic_mastery: input.topicMastery,
+      answers_added: input.answersAdded,
+    });
+    throwUnexpected(error);
+    return data === true;
+  }
+
+  async deleteLearnerProfile(userId: string) {
+    const { error } = await supabaseAdmin.from('learner_profiles').delete().eq('user_id', userId);
+    throwUnexpected(error);
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

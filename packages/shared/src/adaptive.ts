@@ -20,6 +20,7 @@ const quizSettingsBaseSchema = z.object({
     .max(EXAM_MAX_DURATION_MINUTES)
     .optional(),
   adaptive: z.boolean().default(false),
+  useLearnerHistory: z.boolean().default(true),
   adaptiveRounds: z.number().int().min(MIN_ADAPTIVE_ROUNDS).max(MAX_ADAPTIVE_ROUNDS).optional(),
 });
 

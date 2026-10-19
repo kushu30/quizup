@@ -45,6 +45,12 @@ export const STUDENT_ACCOUNT: MeResponse = {
   name: 'Student',
   role: 'student',
 };
+export const STUDENT_TWO_ACCOUNT: MeResponse = {
+  id: randomUUID(),
+  email: 'student2@test.dev',
+  name: 'Student Two',
+  role: 'student',
+};
 export const ADMIN_ACCOUNT: MeResponse = {
   id: randomUUID(),
   email: 'admin@test.dev',
@@ -56,6 +62,7 @@ const TOKEN_USERS: Record<string, MeResponse> = {
   'host-token': TEST_HOST,
   'other-host-token': OTHER_HOST,
   'student-token': STUDENT_ACCOUNT,
+  'student-two-token': STUDENT_TWO_ACCOUNT,
   'admin-token': ADMIN_ACCOUNT,
 };
 
@@ -159,8 +166,8 @@ export async function startLiveHarness(
     });
   }
 
-  async function joinAsStudent(joinCode: string, displayName: string) {
-    const socket = await connect();
+  async function joinAsStudent(joinCode: string, displayName: string, accessToken?: string) {
+    const socket = await connect(accessToken);
     const ack = await socket.emitWithAck('room:join', { joinCode, displayName });
     if (!ack.ok || ack.role !== 'student') {
       throw new Error(`Join failed for ${displayName}`);

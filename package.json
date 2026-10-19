@@ -21,7 +21,9 @@
     "llm:smoke": "npm run build -w packages/shared && npm run llm:smoke -w apps/server",
     "adaptive:sim": "npm run build -w packages/shared && npm run adaptive:sim -w apps/server",
     "load:sim": "npm run build -w packages/shared && npm run load:sim -w apps/server",
-    "proctor:sim": "npm run build -w packages/shared && npm run proctor:sim -w apps/server"
+    "proctor:sim": "npm run build -w packages/shared && npm run proctor:sim -w apps/server",
+    "bkt:fit": "npm run build -w packages/shared && npm run bkt:fit -w apps/server --",
+    "adaptive:eval": "npm run build -w packages/shared && npm run adaptive:eval -w apps/server --"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

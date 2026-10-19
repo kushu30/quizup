@@ -143,6 +143,16 @@ export const examAnswerSchema = z.object({
 });
 export type ExamAnswer = z.infer<typeof examAnswerSchema>;
 
+export const learnerProfileTableSchema = z.object({
+  user_id: uuidSchema,
+  elo: z.number(),
+  topic_mastery: z.record(z.string(), z.number()),
+  answers_count: z.number().int().nonnegative(),
+  last_session_id: uuidSchema.nullable(),
+  updated_at: timestampSchema,
+});
+export type LearnerProfileTableRow = z.infer<typeof learnerProfileTableSchema>;
+
 export const riskReportSchema = z.object({
   session_id: uuidSchema,
   participant_id: uuidSchema,

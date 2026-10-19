@@ -17,23 +17,27 @@ export function createSeededRandom(seed: number): RandomSource {
   };
 }
 
-export function questionWeight(questionRating: number, playerRating: number): number {
+export function questionWeight(
+  questionRating: number,
+  playerRating: number,
+  sigma: number = SAMPLING_SIGMA,
+): number {
   const distance = questionRating - playerRating;
-  return Math.max(
-    SAMPLING_WEIGHT_FLOOR,
-    Math.exp(-(distance * distance) / (2 * SAMPLING_SIGMA * SAMPLING_SIGMA)),
-  );
+  return Math.max(SAMPLING_WEIGHT_FLOOR, Math.exp(-(distance * distance) / (2 * sigma * sigma)));
 }
 
 export function pickWeighted<Candidate extends { rating: number }>(
   candidates: readonly Candidate[],
   playerRating: number,
   random: RandomSource,
+  sigma: number = SAMPLING_SIGMA,
 ): Candidate | null {
   if (candidates.length === 0) {
     return null;
   }
-  const weights = candidates.map((candidate) => questionWeight(candidate.rating, playerRating));
+  const weights = candidates.map((candidate) =>
+    questionWeight(candidate.rating, playerRating, sigma),
+  );
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const target = random.next() * totalWeight;
 
@@ -45,4 +49,15 @@ export function pickWeighted<Candidate extends { rating: number }>(
     }
   }
   return candidates[candidates.length - 1] as Candidate;
+}
+
+export function selectNextAdaptiveQuestion<Question extends { id: string; rating: number }>(
+  pool: readonly Question[],
+  servedIds: ReadonlySet<string>,
+  playerRating: number,
+  random: RandomSource,
+  sigma: number = SAMPLING_SIGMA,
+): Question | null {
+  const candidates = pool.filter((question) => !servedIds.has(question.id));
+  return pickWeighted(candidates, playerRating, random, sigma);
 }

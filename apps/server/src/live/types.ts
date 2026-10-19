@@ -1,5 +1,6 @@
 import type {
   Difficulty,
+  LearnerProfile,
   ExamProgressRow,
   ExamStudentView,
   Participant,
@@ -17,12 +18,14 @@ export interface LiveQuestion {
   topic: string;
   difficulty: Difficulty;
   eloRating: number;
+  answersCount: number;
 }
 
 export interface NewParticipantInput {
   sessionId: string;
   displayName: string;
   rejoinTokenHash: string;
+  userId?: string | null;
 }
 
 export interface NewResponseInput {
@@ -80,6 +83,15 @@ export interface LiveRepository extends ExamRepository {
     generatedAtIso: string,
   ) => Promise<void>;
   loadSessionAnalyticsSource: (sessionId: string) => Promise<SessionAnalyticsSource | null>;
+  findLearnerProfile: (userId: string) => Promise<LearnerProfile | null>;
+  applyLearnerProfile: (input: {
+    userId: string;
+    sessionId: string;
+    elo: number;
+    topicMastery: Record<string, number>;
+    answersAdded: number;
+  }) => Promise<boolean>;
+  deleteLearnerProfile: (userId: string) => Promise<void>;
   endAllNonEndedSessions: (endedAtIso: string) => Promise<void>;
 }
 
@@ -140,6 +152,7 @@ export interface SessionAnalyticsSource {
     options: string[];
     topic: string;
     difficulty: Difficulty;
+    answersCount?: number;
   }[];
   responses: {
     participantId: string;

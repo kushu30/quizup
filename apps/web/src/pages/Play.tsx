@@ -15,6 +15,7 @@ import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
+import { supabase } from '../lib/supabase';
 import { clearStoredJoin, readStoredJoin, writeStoredJoin } from '../lib/storedJoin';
 
 interface PlayState {
@@ -99,132 +100,146 @@ export function Play() {
   const serverNowMs = useServerNow(offsetMs);
 
   useEffect(() => {
-    const quizSocket = createQuizSocket();
-    setSocket(quizSocket);
-
-    function joinRoom() {
-      const stored = readStoredJoin(joinCode);
-      const displayName = stored?.displayName ?? stateDisplayName;
-      if (!displayName) {
-        setState((current) => ({ ...current, connected: true, joinError: 'invalid_payload' }));
-        return;
+    let cancelled = false;
+    let stopSocket: (() => void) | undefined;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) {
+        stopSocket = startSocket(data.session?.access_token);
       }
-      quizSocket.emit(
-        'room:join',
-        { joinCode, displayName, rejoinToken: stored?.rejoinToken },
-        (ack) => {
-          if (!ack.ok) {
-            if (ack.error === 'invalid_rejoin_token' || ack.error === 'session_not_found') {
-              clearStoredJoin(joinCode);
-            }
-            setState((current) => ({ ...current, connected: true, joinError: ack.error }));
-            return;
-          }
-          if (ack.role === 'student') {
-            writeStoredJoin(joinCode, {
-              participantId: ack.participantId,
-              rejoinToken: ack.rejoinToken,
-              displayName,
-            });
-            setState((current) => ({
-              ...current,
-              connected: true,
-              joinError: null,
-              participantId: ack.participantId,
-              displayName,
-            }));
-          }
-        },
-      );
-    }
-
-    function applyRoomState(room: RoomStatePayload) {
-      setState((current) => ({
-        ...current,
-        status: room.status,
-        question: room.currentQuestion,
-        questionClosed: room.questionClosed,
-        answered: room.youAnswered,
-        chosenIndex: room.youAnswered ? current.chosenIndex : null,
-        result: room.lastResult,
-        leaderboard: room.leaderboard,
-        standing: room.you ? { rank: room.you.rank, score: room.you.score } : null,
-        mode: room.mode,
-        exam: room.exam,
-      }));
-    }
-
-    quizSocket.on('connect', joinRoom);
-    quizSocket.on('disconnect', () => setState((current) => ({ ...current, connected: false })));
-    quizSocket.on('room:state', applyRoomState);
-    quizSocket.on('exam:released', () => {
-      setState((current) =>
-        current.exam ? { ...current, exam: { ...current.exam, resultsReleased: true } } : current,
-      );
     });
-    quizSocket.on('exam:submitted', () => {
-      setState((current) =>
-        current.exam
-          ? {
-              ...current,
-              exam: {
-                ...current.exam,
-                phase: 'submitted',
-                questions: [],
-                answers: {},
-                attempt: current.exam.attempt
-                  ? {
-                      ...current.exam.attempt,
-                      submittedAtServerMs: current.exam.attempt.deadlineAtServerMs,
-                    }
-                  : null,
-              },
-            }
-          : current,
-      );
-    });
-    quizSocket.on('question:show', (question) => {
-      setAnswerError(null);
-      setState((current) => ({
-        ...current,
-        status: 'running',
-        question,
-        questionClosed: false,
-        answered: false,
-        chosenIndex: null,
-        result: null,
-      }));
-    });
-    quizSocket.on('question:result', (result) => {
-      setState((current) => ({
-        ...current,
-        questionClosed: true,
-        result,
-        standing: result.you
-          ? { rank: result.you.rank, score: result.you.totalPoints }
-          : current.standing,
-      }));
-    });
-    quizSocket.on('leaderboard:update', (update) => {
-      setState((current) => ({
-        ...current,
-        leaderboard: update.entries,
-        standing: update.you ?? current.standing,
-      }));
-    });
-    quizSocket.on('session:end', (ended) => {
-      setState((current) => ({
-        ...current,
-        status: 'ended',
-        leaderboard: ended.entries,
-        standing: ended.you ?? current.standing,
-      }));
-    });
-
     return () => {
-      quizSocket.disconnect();
-      setSocket(null);
+      cancelled = true;
+      stopSocket?.();
     };
+
+    function startSocket(accessToken: string | undefined) {
+      const quizSocket = createQuizSocket(accessToken);
+      setSocket(quizSocket);
+
+      function joinRoom() {
+        const stored = readStoredJoin(joinCode);
+        const displayName = stored?.displayName ?? stateDisplayName;
+        if (!displayName) {
+          setState((current) => ({ ...current, connected: true, joinError: 'invalid_payload' }));
+          return;
+        }
+        quizSocket.emit(
+          'room:join',
+          { joinCode, displayName, rejoinToken: stored?.rejoinToken },
+          (ack) => {
+            if (!ack.ok) {
+              if (ack.error === 'invalid_rejoin_token' || ack.error === 'session_not_found') {
+                clearStoredJoin(joinCode);
+              }
+              setState((current) => ({ ...current, connected: true, joinError: ack.error }));
+              return;
+            }
+            if (ack.role === 'student') {
+              writeStoredJoin(joinCode, {
+                participantId: ack.participantId,
+                rejoinToken: ack.rejoinToken,
+                displayName,
+              });
+              setState((current) => ({
+                ...current,
+                connected: true,
+                joinError: null,
+                participantId: ack.participantId,
+                displayName,
+              }));
+            }
+          },
+        );
+      }
+
+      function applyRoomState(room: RoomStatePayload) {
+        setState((current) => ({
+          ...current,
+          status: room.status,
+          question: room.currentQuestion,
+          questionClosed: room.questionClosed,
+          answered: room.youAnswered,
+          chosenIndex: room.youAnswered ? current.chosenIndex : null,
+          result: room.lastResult,
+          leaderboard: room.leaderboard,
+          standing: room.you ? { rank: room.you.rank, score: room.you.score } : null,
+          mode: room.mode,
+          exam: room.exam,
+        }));
+      }
+
+      quizSocket.on('connect', joinRoom);
+      quizSocket.on('disconnect', () => setState((current) => ({ ...current, connected: false })));
+      quizSocket.on('room:state', applyRoomState);
+      quizSocket.on('exam:released', () => {
+        setState((current) =>
+          current.exam ? { ...current, exam: { ...current.exam, resultsReleased: true } } : current,
+        );
+      });
+      quizSocket.on('exam:submitted', () => {
+        setState((current) =>
+          current.exam
+            ? {
+                ...current,
+                exam: {
+                  ...current.exam,
+                  phase: 'submitted',
+                  questions: [],
+                  answers: {},
+                  attempt: current.exam.attempt
+                    ? {
+                        ...current.exam.attempt,
+                        submittedAtServerMs: current.exam.attempt.deadlineAtServerMs,
+                      }
+                    : null,
+                },
+              }
+            : current,
+        );
+      });
+      quizSocket.on('question:show', (question) => {
+        setAnswerError(null);
+        setState((current) => ({
+          ...current,
+          status: 'running',
+          question,
+          questionClosed: false,
+          answered: false,
+          chosenIndex: null,
+          result: null,
+        }));
+      });
+      quizSocket.on('question:result', (result) => {
+        setState((current) => ({
+          ...current,
+          questionClosed: true,
+          result,
+          standing: result.you
+            ? { rank: result.you.rank, score: result.you.totalPoints }
+            : current.standing,
+        }));
+      });
+      quizSocket.on('leaderboard:update', (update) => {
+        setState((current) => ({
+          ...current,
+          leaderboard: update.entries,
+          standing: update.you ?? current.standing,
+        }));
+      });
+      quizSocket.on('session:end', (ended) => {
+        setState((current) => ({
+          ...current,
+          status: 'ended',
+          leaderboard: ended.entries,
+          standing: ended.you ?? current.standing,
+        }));
+      });
+
+      return () => {
+        quizSocket.disconnect();
+        setSocket(null);
+      };
+    }
   }, [joinCode, stateDisplayName]);
 
   function submitAnswer(chosenIndex: number) {

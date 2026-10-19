@@ -3,6 +3,7 @@ import {
   ELO_MAX_RATING,
   ELO_MIN_RATING,
   initialQuestionRating,
+  type LearnerProfile,
   type Participant,
   type ProctorEventRecord,
   type Session,
@@ -29,7 +30,9 @@ interface StoredQuiz {
 }
 
 export type SeedQuestion = Pick<LiveQuestion, 'id' | 'stem' | 'options' | 'correctIndex'> &
-  Partial<Pick<LiveQuestion, 'topic' | 'difficulty' | 'eloRating'>> & { approved?: boolean };
+  Partial<Pick<LiveQuestion, 'topic' | 'difficulty' | 'eloRating' | 'answersCount'>> & {
+    approved?: boolean;
+  };
 
 export interface StoredResponse extends NewResponseInput {
   participantEloBefore?: number;
@@ -49,6 +52,7 @@ export class InMemoryLiveRepository implements LiveRepository {
   readonly responses: StoredResponse[] = [];
   readonly knowledgeStates: StoredKnowledgeState[] = [];
   readonly storedSummaries = new Map<string, unknown>();
+  readonly learnerProfiles = new Map<string, LearnerProfile>();
   summaryWriteCount = 0;
   readonly examAttempts: ExamAttemptRecord[] = [];
   readonly examAnswers: ExamAnswerRecord[] = [];
@@ -77,6 +81,7 @@ export class InMemoryLiveRepository implements LiveRepository {
           topic: question.topic ?? 'General',
           difficulty,
           eloRating: question.eloRating ?? initialQuestionRating(difficulty),
+          answersCount: question.answersCount ?? 0,
           approved: question.approved ?? true,
         };
       }),
@@ -103,6 +108,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         topic: question.topic,
         difficulty: question.difficulty,
         eloRating: question.eloRating,
+        answersCount: question.answersCount,
       }));
   }
 
@@ -171,7 +177,7 @@ export class InMemoryLiveRepository implements LiveRepository {
     const participant: Participant = {
       id: randomUUID(),
       session_id: input.sessionId,
-      user_id: null,
+      user_id: input.userId ?? null,
       display_name: input.displayName,
       elo: 1000,
       joined_at: new Date().toISOString(),
@@ -218,6 +224,7 @@ export class InMemoryLiveRepository implements LiveRepository {
           Math.max(question.eloRating + delta, ELO_MIN_RATING),
           ELO_MAX_RATING,
         );
+        question.answersCount += 1;
         return question.eloRating;
       }
     }
@@ -284,6 +291,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         options: question.options,
         topic: question.topic,
         difficulty: question.difficulty,
+        answersCount: question.answersCount,
       }));
     return {
       session: stored.session,
@@ -422,6 +430,36 @@ export class InMemoryLiveRepository implements LiveRepository {
       };
     }
     return Date.parse(stored.session.results_released_at as string);
+  }
+
+  async findLearnerProfile(userId: string): Promise<LearnerProfile | null> {
+    const profile = this.learnerProfiles.get(userId);
+    return profile ? { ...profile, topicMastery: { ...profile.topicMastery } } : null;
+  }
+
+  async applyLearnerProfile(input: {
+    userId: string;
+    sessionId: string;
+    elo: number;
+    topicMastery: Record<string, number>;
+    answersAdded: number;
+  }): Promise<boolean> {
+    const existing = this.learnerProfiles.get(input.userId);
+    if (existing && existing.lastSessionId === input.sessionId) {
+      return false;
+    }
+    this.learnerProfiles.set(input.userId, {
+      userId: input.userId,
+      elo: Math.min(Math.max(input.elo, ELO_MIN_RATING), ELO_MAX_RATING),
+      topicMastery: { ...(existing?.topicMastery ?? {}), ...input.topicMastery },
+      answersCount: (existing?.answersCount ?? 0) + input.answersAdded,
+      lastSessionId: input.sessionId,
+    });
+    return true;
+  }
+
+  async deleteLearnerProfile(userId: string) {
+    this.learnerProfiles.delete(userId);
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

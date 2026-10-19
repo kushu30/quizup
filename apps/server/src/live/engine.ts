@@ -8,13 +8,15 @@ import {
   QUESTION_OPTION_COUNT,
   QUESTION_START_DELAY_MS,
   bktUpdate,
+  clampProfileElo,
   clampRating,
   clampResponseMs,
   computePoints,
   generateJoinCode,
   getAnswerWindowStatus,
+  normalizeProfileMastery,
   normalizeTopicKey,
-  pickWeighted,
+  selectNextAdaptiveQuestion,
   quizSettingsSchema,
   resolveAdaptiveRounds,
   updateRatings,
@@ -83,6 +85,7 @@ interface ParticipantState {
   displayName: string;
   joinedAtMs: number;
   tokenHash: string;
+  userId: string | null;
   connected: boolean;
   score: number;
   totalResponseMs: number;
@@ -131,6 +134,7 @@ interface SessionState {
   analytics: SessionAnalytics;
   analyticsTimer: NodeJS.Timeout | null;
   exam: { durationMs: number } | null;
+  useLearnerHistory: boolean;
   resultsReleasedAtMs: number | null;
   finishing: boolean;
   participants: Map<string, ParticipantState>;
@@ -211,7 +215,13 @@ export class LiveEngine {
     const parsedSettings = quizSettingsSchema.safeParse(quiz.settings);
     const settings: QuizSettings = parsedSettings.success
       ? parsedSettings.data
-      : { mode: 'live', adaptive: false, adaptiveRounds: undefined, durationMinutes: undefined };
+      : {
+          mode: 'live',
+          adaptive: false,
+          useLearnerHistory: true,
+          adaptiveRounds: undefined,
+          durationMinutes: undefined,
+        };
     const examDurationMinutes =
       settings.mode === 'exam' && settings.durationMinutes !== undefined
         ? settings.durationMinutes
@@ -252,6 +262,7 @@ export class LiveEngine {
         }),
         analyticsTimer: null,
         exam: examDurationMinutes === null ? null : { durationMs: examDurationMinutes * 60_000 },
+        useLearnerHistory: settings.useLearnerHistory,
         resultsReleasedAtMs: null,
         finishing: false,
         participants: new Map(),
@@ -357,7 +368,10 @@ export class LiveEngine {
     return { ok: true, sessionId };
   }
 
-  async joinStudent(payload: StudentJoinPayload): Promise<RoomJoinAck> {
+  async joinStudent(
+    payload: StudentJoinPayload,
+    options: { userId?: string | null } = {},
+  ): Promise<RoomJoinAck> {
     const sessionId = this.sessionIdByJoinCode.get(payload.joinCode);
     const state = sessionId ? this.sessionsById.get(sessionId) : undefined;
     if (!state) {
@@ -399,6 +413,7 @@ export class LiveEngine {
         sessionId: state.record.id,
         displayName: payload.displayName,
         rejoinTokenHash: hashRejoinToken(rejoinToken),
+        userId: options.userId ?? null,
       });
       if (inserted === 'name_taken') {
         return { ok: false, error: 'name_taken' };
@@ -408,6 +423,7 @@ export class LiveEngine {
         displayName: inserted.display_name,
         joinedAtMs: Date.parse(inserted.joined_at),
         tokenHash: hashRejoinToken(rejoinToken),
+        userId: options.userId ?? null,
         connected: false,
         score: 0,
         totalResponseMs: 0,
@@ -417,8 +433,12 @@ export class LiveEngine {
         mastery: new Map(),
         lastOutcome: null,
       };
+      if (participant.userId && state.adaptiveRounds !== null && state.useLearnerHistory) {
+        await this.seedFromLearnerProfile(participant);
+      }
       state.participants.set(participant.id, participant);
       state.analytics.registerParticipant(participant.id, participant.displayName);
+      state.analytics.setRating(participant.id, participant.elo);
       state.participantIdByName.set(nameKey, participant.id);
       this.sessionIdByParticipantId.set(participant.id, state.record.id);
       this.requestHostRefresh(state);
@@ -589,6 +609,7 @@ export class LiveEngine {
         topic: question.topic,
         difficulty: question.difficulty,
         eloRating: question.eloRating,
+        answersCount: question.answersCount,
       });
     }
     return ordered;
@@ -634,10 +655,54 @@ export class LiveEngine {
   }
 
   private pickAdaptiveQuestion(state: SessionState, participant: ParticipantState) {
-    const candidates = state.questions
-      .filter((question) => !participant.servedQuestionIds.has(question.id))
-      .map((question) => ({ question, rating: question.eloRating }));
-    return pickWeighted(candidates, participant.elo, this.random)?.question ?? null;
+    const pool = state.questions.map((question) => ({
+      id: question.id,
+      rating: question.eloRating,
+      question,
+    }));
+    return (
+      selectNextAdaptiveQuestion(pool, participant.servedQuestionIds, participant.elo, this.random)
+        ?.question ?? null
+    );
+  }
+
+  private async seedFromLearnerProfile(participant: ParticipantState) {
+    if (!participant.userId) {
+      return;
+    }
+    try {
+      const profile = await this.repository.findLearnerProfile(participant.userId);
+      if (!profile) {
+        return;
+      }
+      participant.elo = clampProfileElo(profile.elo);
+      participant.mastery = normalizeProfileMastery(profile.topicMastery);
+      await this.repository.updateParticipantElo(participant.id, participant.elo);
+    } catch (error) {
+      console.error('Seeding from the learner profile failed', error);
+    }
+  }
+
+  private async writeLearnerProfiles(state: SessionState) {
+    if (state.adaptiveRounds === null || !state.useLearnerHistory) {
+      return;
+    }
+    for (const participant of state.participants.values()) {
+      if (!participant.userId || participant.answers.size === 0) {
+        continue;
+      }
+      try {
+        await this.repository.applyLearnerProfile({
+          userId: participant.userId,
+          sessionId: state.record.id,
+          elo: participant.elo,
+          topicMastery: Object.fromEntries(participant.mastery),
+          answersAdded: participant.answers.size,
+        });
+      } catch (error) {
+        console.error('Writing a learner profile failed', error);
+      }
+    }
   }
 
   private async showRound(state: SessionState, index: number) {
@@ -691,6 +756,7 @@ export class LiveEngine {
           stem: question.stem,
           topic: question.topic,
           difficulty: question.difficulty,
+          answersCount: question.answersCount,
         },
         index + 1,
       );
@@ -833,6 +899,8 @@ export class LiveEngine {
         answer.correct,
       );
       participant.mastery.set(topicKey, masteryAfter);
+      question.answersCount += 1;
+      state.analytics.setQuestionAnswersCount(question.id, question.answersCount);
       state.analytics.onMastery(participant.id, question.topic, masteryAfter);
       state.analytics.setRating(participant.id, update.playerRating);
 
@@ -998,6 +1066,7 @@ export class LiveEngine {
     state.retentionTimer.unref();
 
     await this.repository.updateSession(sessionId, { status: 'ended', ended_at: endedAtIso });
+    await this.writeLearnerProfiles(state);
     try {
       await this.repository.saveSessionSummary(sessionId, finalSnapshot, endedAtIso);
     } catch (error) {
@@ -1142,6 +1211,7 @@ export class LiveEngine {
           stem: question.stem,
           topic: question.topic,
           difficulty: question.difficulty,
+          answersCount: question.answersCount,
         },
         index + 1,
       );
@@ -1180,6 +1250,7 @@ export class LiveEngine {
                 topic: question.topic,
                 difficulty: question.difficulty,
                 eloRating: question.eloRating,
+                answersCount: question.answersCount,
               },
             ]
           : [];
@@ -1204,6 +1275,7 @@ export class LiveEngine {
         resultsReleasedAtMs: session.results_released_at
           ? Date.parse(session.results_released_at)
           : null,
+        useLearnerHistory: false,
         finishing: false,
         participants: new Map(),
         participantIdByName: new Map(),
@@ -1219,6 +1291,7 @@ export class LiveEngine {
           displayName: participant.displayName,
           joinedAtMs: participant.joinedAtMs,
           tokenHash: participant.tokenHash,
+          userId: null,
           connected: false,
           score: 0,
           totalResponseMs: 0,

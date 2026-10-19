@@ -6,6 +6,7 @@ import { Host } from './pages/Host';
 import { HostConsole } from './pages/HostConsole';
 import { Join } from './pages/Join';
 import { Landing } from './pages/Landing';
+import { LearnerProfilePage } from './pages/LearnerProfilePage';
 import { Login } from './pages/Login';
 import { Play } from './pages/Play';
 import { QuestionBankPage } from './pages/QuestionBankPage';
@@ -27,6 +28,7 @@ export function App() {
           <Route path="/host/questions" element={<QuestionBankPage />} />
         </Route>
         <Route path="/join" element={<Join />} />
+        <Route path="/me/learner-profile" element={<LearnerProfilePage />} />
         <Route path="/play/:code" element={<Play />} />
       </Route>
     </Routes>

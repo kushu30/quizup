@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { AnalyticsService } from './analytics/analyticsService.js';
-import { requireAuth, type AccessTokenVerifier } from './auth.js';
+import { createRequireAuth, requireAuth, type AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
 import { errorHandler } from './http.js';
 import type { ExamService } from './exam/examService.js';
@@ -48,6 +48,24 @@ export function createApp(dependencies: AppDependencies) {
   app.get('/me', requireAuth, (request, response) => {
     response.json(request.authUser);
   });
+
+  app.delete(
+    '/me/learner-profile',
+    createRequireAuth(dependencies.verifier),
+    async (request, response, next) => {
+      try {
+        const user = request.authUser;
+        if (!user) {
+          response.status(401).json({ error: 'Not authenticated' });
+          return;
+        }
+        await dependencies.engine.repository.deleteLearnerProfile(user.id);
+        response.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.use(
     '/quizzes',

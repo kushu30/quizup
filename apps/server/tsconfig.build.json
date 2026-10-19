@@ -4,6 +4,8 @@
     "src/**/*.test.ts",
     "src/**/*.testkit.ts",
     "src/analytics/loadSim.ts",
-    "src/exam/proctorSim.ts"
+    "src/exam/proctorSim.ts",
+    "src/adaptive/bktFitCli.ts",
+    "src/adaptive/evaluate.ts"
   ]
 }

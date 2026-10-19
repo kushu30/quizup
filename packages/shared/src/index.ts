@@ -17,3 +17,6 @@ export * from './adaptiveSimulation.js';
 export * from './analytics.js';
 export * from './csvExport.js';
 export * from './exam.js';
+export * from './learner.js';
+export * from './bktFit.js';
+export * from './adaptiveEval.js';

@@ -67,6 +67,7 @@ export function rebuildAnalyticsSnapshot(
         stem: question.stem,
         topic: question.topic,
         difficulty: question.difficulty,
+        answersCount: question.answersCount,
       },
       round,
     );

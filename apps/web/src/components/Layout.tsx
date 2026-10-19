@@ -25,6 +25,11 @@ export function Layout() {
                 Admin
               </Link>
             )}
+            {session && (
+              <Link to="/me/learner-profile" className="hover:underline">
+                My learning data
+              </Link>
+            )}
             {session ? (
               <button type="button" onClick={() => void signOut()} className="hover:underline">
                 Sign out

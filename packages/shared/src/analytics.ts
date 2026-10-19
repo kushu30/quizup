@@ -192,6 +192,8 @@ export const questionAnalyticsSchema = z.object({
   mismatch: mismatchSchema.nullable(),
   histogram: histogramSchema,
   medianResponseMs: z.number().nullable(),
+  ratingAnswers: z.number().int().nonnegative().default(0),
+  provisional: z.boolean().default(false),
 });
 export type QuestionAnalytics = z.infer<typeof questionAnalyticsSchema>;
 

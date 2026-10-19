@@ -30,6 +30,7 @@ export function QuizEditor() {
   const [examMode, setExamMode] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const [adaptive, setAdaptive] = useState(false);
+  const [useLearnerHistory, setUseLearnerHistory] = useState(true);
   const [adaptiveRounds, setAdaptiveRounds] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -50,6 +51,7 @@ export function QuizEditor() {
           : String(DEFAULT_EXAM_DURATION_MINUTES),
       );
       setAdaptive(settings.success ? settings.data.adaptive : false);
+      setUseLearnerHistory(settings.success ? settings.data.useLearnerHistory : true);
       setAdaptiveRounds(
         settings.success && settings.data.adaptiveRounds !== undefined
           ? String(settings.data.adaptiveRounds)
@@ -109,6 +111,7 @@ export function QuizEditor() {
         mode: examMode ? 'exam' : 'live',
         durationMinutes: examMode ? Number(durationMinutes) : undefined,
         adaptive: examMode ? false : adaptive,
+        useLearnerHistory,
         adaptiveRounds:
           !examMode && adaptive && adaptiveRounds.trim() !== ''
             ? Number(adaptiveRounds)
@@ -234,6 +237,16 @@ export function QuizEditor() {
               />
               Adaptive mode
             </label>
+            {adaptive && !examMode && (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={useLearnerHistory}
+                  onChange={(event) => setUseLearnerHistory(event.target.checked)}
+                />
+                Use learner history
+              </label>
+            )}
             {adaptive && !examMode && (
               <label className="flex items-center gap-2">
                 Rounds

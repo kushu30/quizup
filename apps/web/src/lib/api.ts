@@ -150,6 +150,7 @@ export const api = {
     requestJson(`/sessions/${sessionId}/release-results`, 'POST', releaseResultsResponseSchema),
   getProctorTimeline: (sessionId: string): Promise<ProctorParticipantTimeline[]> =>
     requestJson(`/sessions/${sessionId}/proctor`, 'GET', proctorTimelineResponseSchema),
+  deleteLearnerProfile: (): Promise<void> => requestNoContent('/me/learner-profile', 'DELETE'),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
   startSession: (sessionId: string): Promise<SessionSummary> =>

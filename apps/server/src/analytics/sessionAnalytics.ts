@@ -8,6 +8,7 @@ import {
   emptyProctorCounts,
   emptyQuestionAggregate,
   incrementBucket,
+  isProvisionalQuestion,
   medianOf,
   normalizeTopicKey,
   observedAccuracy,
@@ -37,6 +38,7 @@ export interface ServedQuestion {
   stem: string;
   topic: string;
   difficulty: Difficulty;
+  answersCount?: number;
 }
 
 export interface AnalyticsResponseEvent {
@@ -70,6 +72,7 @@ interface QuestionEntry {
   firstRound: number;
   aggregate: QuestionAggregate;
   responseMsSamples: number[];
+  answersCount: number;
 }
 
 export class SessionAnalytics {
@@ -128,7 +131,15 @@ export class SessionAnalytics {
         firstRound: round,
         aggregate: emptyQuestionAggregate(),
         responseMsSamples: [],
+        answersCount: question.answersCount ?? 0,
       });
+    }
+  }
+
+  setQuestionAnswersCount(questionId: string, answersCount: number) {
+    const entry = this.questions.get(questionId);
+    if (entry) {
+      entry.answersCount = answersCount;
     }
   }
 
@@ -246,6 +257,8 @@ export class SessionAnalytics {
           mismatch: difficultyMismatch(entry.meta.difficulty, accuracy, entry.aggregate.answered),
           histogram: entry.aggregate.histogram,
           medianResponseMs: input.includeMedians ? medianOf(entry.responseMsSamples) : null,
+          ratingAnswers: entry.answersCount,
+          provisional: isProvisionalQuestion(entry.answersCount),
         };
       });
 

@@ -1,4 +1,8 @@
-import type { DifficultyMismatch, QuestionAnalytics } from '@quizup/shared';
+import {
+  PROVISIONAL_QUESTION_ANSWERS,
+  type DifficultyMismatch,
+  type QuestionAnalytics,
+} from '@quizup/shared';
 import { memo } from 'react';
 import { useStableRows } from '../../lib/stableRows';
 
@@ -26,7 +30,17 @@ const QuestionRow = memo(function QuestionRow({
         {question.stem}
       </td>
       <td className="px-3 py-2">{question.topic}</td>
-      <td className="px-3 py-2 capitalize">{question.labeledDifficulty}</td>
+      <td className="px-3 py-2 capitalize">
+        {question.labeledDifficulty}
+        {question.provisional && (
+          <span
+            title={`Fewer than ${PROVISIONAL_QUESTION_ANSWERS} responses so far: this question's rating is still settling`}
+            className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs normal-case text-slate-700 dark:bg-slate-700 dark:text-slate-100"
+          >
+            provisional
+          </span>
+        )}
+      </td>
       <td className="px-3 py-2 tabular-nums">
         {question.accuracy === null
           ? '-'
