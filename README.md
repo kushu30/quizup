@@ -21,14 +21,14 @@ Open-source, self-hostable, AI-assisted real-time assessment platform. Hosts bui
 
 ## Tech stack
 
-| Part     | Technology                                             |
-| -------- | ------------------------------------------------------ |
-| Web      | React 18, Vite, TypeScript                             |
-| Server   | Node 22, Express, Socket.IO, TypeScript                |
+| Part     | Technology                                                 |
+| -------- | ---------------------------------------------------------- |
+| Web      | React 18, Vite, TypeScript                                 |
+| Server   | Node 22, Express, Socket.IO, TypeScript                    |
 | Database | Supabase (Postgres, Auth, Storage) with row-level security |
-| Shared   | Zod schemas and pure logic used by both apps           |
-| Tests    | Vitest, Testing Library                                |
-| Hosting  | Vercel (web), Render (server), Supabase (database)     |
+| Shared   | Zod schemas and pure logic used by both apps               |
+| Tests    | Vitest, Testing Library                                    |
+| Hosting  | Vercel (web), Render (server), Supabase (database)         |
 
 ## Repository layout
 
@@ -42,7 +42,7 @@ supabase/
   migrations/     Numbered SQL migrations (0001 to 0016)
   seed.sql        Local seed data
 docs/             Feature reference, email samples, plans
-.github/workflows CI and the keep-alive ping
+.github/workflows CI
 render.yaml       Render blueprint for the server
 vercel.json       Vercel config for the web app
 ```
@@ -70,10 +70,10 @@ npm install
 
 There are two env files, one per app. Both are git-ignored.
 
-| File                | Template                    |
-| ------------------- | --------------------------- |
-| `apps/server/.env`  | `apps/server/.env.example`  |
-| `apps/web/.env`     | `apps/web/.env.example`     |
+| File               | Template                   |
+| ------------------ | -------------------------- |
+| `apps/server/.env` | `apps/server/.env.example` |
+| `apps/web/.env`    | `apps/web/.env.example`    |
 
 Pick one way to get a database:
 
@@ -147,12 +147,12 @@ Email is off until `MAIL_FROM` and either `BREVO_API_KEY` or all of `SMTP_HOST`,
 
 ### Web (`apps/web/.env`)
 
-| Variable                   | Required | Description                                      |
-| -------------------------- | -------- | ------------------------------------------------ |
-| `VITE_SERVER_URL`          | yes      | Public URL of the server                         |
-| `VITE_SUPABASE_URL`        | yes      | Supabase project URL                             |
-| `VITE_SUPABASE_ANON_KEY`   | yes      | Supabase anon key                                |
-| `VITE_GOOGLE_AUTH_ENABLED` | no       | `true` shows the Google button, default `false`  |
+| Variable                   | Required | Description                                     |
+| -------------------------- | -------- | ----------------------------------------------- |
+| `VITE_SERVER_URL`          | yes      | Public URL of the server                        |
+| `VITE_SUPABASE_URL`        | yes      | Supabase project URL                            |
+| `VITE_SUPABASE_ANON_KEY`   | yes      | Supabase anon key                               |
+| `VITE_GOOGLE_AUTH_ENABLED` | no       | `true` shows the Google button, default `false` |
 
 Anything starting with `VITE_` is shipped to the browser. Never put a secret in the web env.
 
@@ -160,24 +160,24 @@ Anything starting with `VITE_` is shipped to the browser. Never put a secret in 
 
 Run from the repository root.
 
-| Command             | What it does                                              |
-| ------------------- | --------------------------------------------------------- |
-| `npm run dev`       | Shared (watch), server and web together                   |
-| `npm test`          | Whole test suite, no database needed                      |
-| `npm run lint`      | ESLint                                                    |
-| `npm run typecheck` | Type-check every workspace                                |
-| `npm run build`     | Production build of shared, server and web                |
-| `npm run format`    | Prettier                                                  |
+| Command             | What it does                               |
+| ------------------- | ------------------------------------------ |
+| `npm run dev`       | Shared (watch), server and web together    |
+| `npm test`          | Whole test suite, no database needed       |
+| `npm run lint`      | ESLint                                     |
+| `npm run typecheck` | Type-check every workspace                 |
+| `npm run build`     | Production build of shared, server and web |
+| `npm run format`    | Prettier                                   |
 
 Utilities (not part of CI):
 
-| Command                              | Purpose                                                      |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `npm run mail:smoke -- you@example.com` | Send one test email to check your mail settings           |
-| `npm run llm:smoke`                  | One real AI call to check your Gemini key                    |
-| `npm run adaptive:sim`               | Simulate an adaptive session, no database                    |
-| `npm run load:sim`, `proctor:sim`    | Simulated latency checks for analytics and proctoring        |
-| `npm run bkt:fit`, `adaptive:eval`   | Offline model fitting and evaluation, see [docs](docs/adaptive-evaluation.md) |
+| Command                                 | Purpose                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------- |
+| `npm run mail:smoke -- you@example.com` | Send one test email to check your mail settings                               |
+| `npm run llm:smoke`                     | One real AI call to check your Gemini key                                     |
+| `npm run adaptive:sim`                  | Simulate an adaptive session, no database                                     |
+| `npm run load:sim`, `proctor:sim`       | Simulated latency checks for analytics and proctoring                         |
+| `npm run bkt:fit`, `adaptive:eval`      | Offline model fitting and evaluation, see [docs](docs/adaptive-evaluation.md) |
 
 ## Testing and CI
 
@@ -211,7 +211,7 @@ Then open `/admin`, add a host's email to the allowlist after they have created 
 
 **Web (Vercel).** Import the repo. The root `vercel.json` sets install, build, output directory and the SPA rewrite. Set `VITE_SERVER_URL`, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
-**Keeping the free Render server awake.** Free services sleep after 15 idle minutes and take about a minute to wake. `.github/workflows/keep-alive.yml` calls `/health` every 10 minutes. It uses `https://quizup-api.kushu30.me` unless you set a repository variable named `SERVER_URL` (Settings, Secrets and variables, Actions, Variables). GitHub may start scheduled runs late and pauses them after 60 days without repository activity (re-enable under the Actions tab). As a backup, add a free monitor on cron-job.org or UptimeRobot that requests `<server>/health` every 5 minutes. Before a real exam, open `/health` yourself a few minutes early.
+**Keeping the free Render server awake.** Free services sleep after 15 idle minutes and take about a minute to wake. GitHub's scheduler proved unreliable for this, so use a free external monitor (cron-job.org or UptimeRobot) that requests `<server>/health` every 5 minutes. One always-on service fits in Render's 750 free hours a month. Before a real exam, open `/health` yourself a few minutes early.
 
 ## More documentation
 
