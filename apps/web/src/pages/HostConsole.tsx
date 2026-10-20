@@ -16,12 +16,13 @@ import { BrandMark } from '../components/branding/BrandMark';
 import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { LiveProctorPanel } from '../components/exam/LiveProctorPanel';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ProctoringChoiceDialog } from '../components/ProctoringChoiceDialog';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
 import { RosterPanel } from '../components/RosterPanel';
 import { StudentRoster } from '../components/StudentRoster';
-import { Button, Notice, Panel, buttonClasses } from '../components/ui';
+import { Button, Notice, PageLoader, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
@@ -45,6 +46,7 @@ export function HostConsole() {
   const [loadedTimelines, setLoadedTimelines] = useState<ProctorParticipantTimeline[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [choosingProctoring, setChoosingProctoring] = useState(false);
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState<SocketErrorCode | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -149,11 +151,7 @@ export function HostConsole() {
   }
 
   if (!room) {
-    return (
-      <p role="status" className="py-16 text-center text-lg text-muted">
-        Connecting...
-      </p>
-    );
+    return <PageLoader label="Connecting..." />;
   }
 
   const isExam = room.mode === 'exam';
@@ -552,17 +550,25 @@ export function HostConsole() {
         />
       )}
 
+      {confirmingEnd && (
+        <ConfirmDialog
+          title="End this session now?"
+          confirmLabel="End session"
+          cancelLabel="Keep running"
+          busy={busy}
+          onCancel={() => setConfirmingEnd(false)}
+          onConfirm={() => {
+            setConfirmingEnd(false);
+            void runCommand(() => api.endSession(sessionId));
+          }}
+        >
+          <p>Students will see their final results and nobody can answer any more.</p>
+        </ConfirmDialog>
+      )}
+
       {room.status !== 'ended' && (
         <div className="border-t border-rule pt-6">
-          <Button
-            variant="danger"
-            disabled={busy}
-            onClick={() => {
-              if (window.confirm('End this session now?')) {
-                void runCommand(() => api.endSession(sessionId));
-              }
-            }}
-          >
+          <Button variant="danger" disabled={busy} onClick={() => setConfirmingEnd(true)}>
             End session
           </Button>
         </div>

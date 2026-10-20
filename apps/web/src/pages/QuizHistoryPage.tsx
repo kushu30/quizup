@@ -1,7 +1,7 @@
 import type { Quiz, QuizSessionHistoryRow } from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Notice, PageHeader, TableFrame, buttonClasses } from '../components/ui';
+import { Notice, PageHeader, SkeletonList, TableFrame, buttonClasses } from '../components/ui';
 import { api, describeError } from '../lib/api';
 
 const STATUS_LABELS: Record<QuizSessionHistoryRow['status'], string> = {
@@ -57,9 +57,12 @@ export function QuizHistoryPage() {
       />
       {message && <Notice tone="danger">{message}</Notice>}
       {!rows && !message && (
-        <p role="status" className="text-muted">
-          Loading...
-        </p>
+        <>
+          <span role="status" className="sr-only">
+            Loading...
+          </span>
+          <SkeletonList rows={3} />
+        </>
       )}
       {rows && rows.length === 0 && (
         <p className="rounded-lg border border-dashed border-rule-strong px-5 py-10 text-center text-muted">

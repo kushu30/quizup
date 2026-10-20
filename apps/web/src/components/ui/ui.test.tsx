@@ -97,7 +97,7 @@ describe('SelectField and TextAreaField', () => {
         <TextAreaField label="Question" value="" onChange={() => undefined} error="Required" />
       </>,
     );
-    expect(screen.getByLabelText('Difficulty').tagName).toBe('SELECT');
+    expect(screen.getByRole('combobox', { name: 'Difficulty' })).toBeTruthy();
     const textarea = screen.getByLabelText('Question');
     expect(textarea.tagName).toBe('TEXTAREA');
     expect(textarea.getAttribute('aria-invalid')).toBe('true');

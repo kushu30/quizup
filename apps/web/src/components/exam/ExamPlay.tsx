@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { usePageFocus } from '../../lib/brandContext';
 import { exitFullscreenIfActive } from '../../lib/fullscreen';
 import type { QuizSocket } from '../../lib/socket';
-import { buttonClasses } from '../ui';
+import { PageLoader, buttonClasses } from '../ui';
 import { FeedbackForm } from '../FeedbackForm';
 import { ExamAttemptView } from './ExamAttemptView';
 import { ExamConsent } from './ExamConsent';
@@ -42,11 +42,7 @@ function ResultsPanel({ socket, released }: { socket: QuizSocket; released: bool
     );
   }
   if (!results) {
-    return (
-      <p role="status" className="py-12 text-center text-muted">
-        Loading your results...
-      </p>
-    );
+    return <PageLoader label="Loading your results..." compact />;
   }
   return (
     <div className="mx-auto max-w-2xl space-y-5">

@@ -535,7 +535,7 @@ export class SupabaseLiveRepository implements LiveRepository {
   async listQuizSessions(quizId: string) {
     const { data, error } = await supabaseAdmin
       .from('sessions')
-      .select('*, participants(count)')
+      .select('*, participants!session_id(count)')
       .eq('quiz_id', quizId);
     throwUnexpected(error);
     return (
@@ -577,7 +577,7 @@ export class SupabaseLiveRepository implements LiveRepository {
   async listParticipationsForUser(userId: string) {
     const { data, error } = await supabaseAdmin
       .from('participants')
-      .select('id, session_id, sessions(*, quizzes(title, settings))')
+      .select('id, session_id, sessions!session_id(*, quizzes(title, settings))')
       .eq('user_id', userId);
     throwUnexpected(error);
     const rows = (data ?? []) as unknown as {

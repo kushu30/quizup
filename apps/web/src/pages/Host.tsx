@@ -7,8 +7,16 @@ import {
 } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { QuizCard } from '../components/QuizCard';
-import { Button, Notice, PageHeader, TextField, buttonClasses } from '../components/ui';
+import {
+  Button,
+  Notice,
+  PageHeader,
+  SkeletonList,
+  TextField,
+  buttonClasses,
+} from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 
@@ -22,6 +30,7 @@ export function Host() {
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<Map<string, QuizActivity>>(new Map());
   const [runningQuizId, setRunningQuizId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<QuizWithCount | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -115,9 +124,12 @@ export function Host() {
         </Notice>
       )}
       {loading && (
-        <p role="status" className="text-muted">
-          Loading...
-        </p>
+        <>
+          <span role="status" className="sr-only">
+            Loading...
+          </span>
+          <SkeletonList rows={3} />
+        </>
       )}
       {!loading && quizzes.length === 0 && (
         <p className="rounded-lg border border-dashed border-rule-strong px-5 py-8 text-center text-muted">
@@ -133,14 +145,28 @@ export function Host() {
               activity={activity.get(quiz.id)}
               running={runningQuizId === quiz.id}
               onRun={() => void handleRun(quiz.id)}
-              onDelete={() => {
-                if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
-                  void handleDelete(quiz.id);
-                }
-              }}
+              onDelete={() => setPendingDelete(quiz)}
             />
           ))}
         </div>
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete this quiz?"
+          confirmLabel="Delete quiz"
+          cancelLabel="Keep quiz"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const target = pendingDelete;
+            setPendingDelete(null);
+            void handleDelete(target.id);
+          }}
+        >
+          <p>
+            <strong className="font-semibold text-ink">{pendingDelete.title}</strong> and all its
+            questions will be removed. This cannot be undone.
+          </p>
+        </ConfirmDialog>
       )}
     </div>
   );

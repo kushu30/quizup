@@ -16,6 +16,7 @@ import {
 } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { AccessModePicker } from '../components/AccessModePicker';
@@ -23,7 +24,15 @@ import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
-import { Button, Notice, PageHeader, Panel, TextField, buttonClasses } from '../components/ui';
+import {
+  Button,
+  Notice,
+  PageHeader,
+  PageLoader,
+  Panel,
+  TextField,
+  buttonClasses,
+} from '../components/ui';
 import { api, describeError } from '../lib/api';
 
 const SAVED_MESSAGE = 'Saved';
@@ -38,6 +47,7 @@ export function QuizEditor() {
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const examMode = assessmentType === 'exam';
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [counts, setCounts] = useState({ approved: 0, pending: 0 });
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_QUESTION_DURATION_SECONDS);
@@ -166,13 +176,7 @@ export function QuizEditor() {
     return (
       <div>
         <PageHeader title="Quiz" back={{ to: '/host', label: 'Back to dashboard' }} />
-        {message ? (
-          <Notice tone="danger">{message}</Notice>
-        ) : (
-          <p role="status" className="text-muted">
-            Loading...
-          </p>
-        )}
+        {message ? <Notice tone="danger">{message}</Notice> : <PageLoader label="Loading..." />}
       </div>
     );
   }
@@ -190,14 +194,7 @@ export function QuizEditor() {
             >
               History
             </Link>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
-                  void handleDeleteQuiz();
-                }
-              }}
-            >
+            <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
               Delete quiz
             </Button>
           </>
@@ -338,6 +335,23 @@ export function QuizEditor() {
           </Panel>
         </div>
       </div>
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete this quiz?"
+          confirmLabel="Delete quiz"
+          cancelLabel="Keep quiz"
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            void handleDeleteQuiz();
+          }}
+        >
+          <p>
+            <strong className="font-semibold text-ink">{quiz?.title}</strong> and all its questions
+            will be removed. This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

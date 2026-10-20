@@ -1,6 +1,7 @@
 import type { AnalyticsTopic } from '@quizup/shared';
 import { memo, useMemo, useState } from 'react';
 import { useStableRows } from '../../lib/stableRows';
+import { Dropdown } from '../ui/Dropdown';
 import { TableFrame } from '../ui';
 
 export interface HeatmapRow {
@@ -92,17 +93,20 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <span className="text-muted">Mastery per topic, 0 (none) to 1 (full)</span>
-        <label className="flex items-center gap-2 font-medium">
-          Sort by
-          <select
-            className="min-h-8 rounded-md border border-rule-strong bg-surface px-2 py-1 font-normal"
+        <div className="flex items-center gap-2 font-medium">
+          <span aria-hidden="true">Sort by</span>
+          <Dropdown
+            label="Sort by"
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as 'score' | 'name')}
-          >
-            <option value="score">Score</option>
-            <option value="name">Name</option>
-          </select>
-        </label>
+            options={[
+              { value: 'score', label: 'Score' },
+              { value: 'name', label: 'Name' },
+            ]}
+            onChange={(next) => setSortBy(next as 'score' | 'name')}
+            className="w-32"
+            triggerClassName="min-h-8 py-1 text-sm font-normal"
+          />
+        </div>
       </div>
       <TableFrame label="Mastery heatmap table">
         <table className="border-collapse">

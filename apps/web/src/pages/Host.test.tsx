@@ -171,4 +171,27 @@ describe('Host dashboard', () => {
     expect(await screen.findByText('Editing new-quiz')).toBeTruthy();
     expect(api.createQuiz).toHaveBeenCalledWith(expect.objectContaining({ title: 'Decimals' }));
   });
+
+  it('asks in a dialog, not the browser, before deleting a quiz', async () => {
+    const browserConfirm = vi.spyOn(window, 'confirm');
+    vi.mocked(api.deleteQuiz).mockResolvedValue(undefined);
+    renderHost();
+    await screen.findByRole('article', { name: 'Unit exam' });
+    fireEvent.click(within(card('Unit exam')).getByRole('button', { name: /delete/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete this quiz?' });
+    expect(dialog.textContent).toContain('Unit exam');
+    expect(browserConfirm).not.toHaveBeenCalled();
+    expect(api.deleteQuiz).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep quiz' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api.deleteQuiz).not.toHaveBeenCalled();
+
+    fireEvent.click(within(card('Unit exam')).getByRole('button', { name: /delete/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete quiz' }));
+    });
+    expect(api.deleteQuiz).toHaveBeenCalledWith(EXAM);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });

@@ -1,10 +1,14 @@
 import {
+  Children,
+  isValidElement,
   useId,
+  type ChangeEvent,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { Dropdown, type DropdownOption } from './Dropdown';
 
 const CONTROL =
   'block w-full rounded-md border border-rule-strong bg-surface px-3 py-2 text-base text-ink placeholder:text-muted/70 focus:border-board disabled:bg-paper disabled:text-muted aria-[invalid=true]:border-alert';
@@ -89,6 +93,16 @@ export function TextField({
 type SelectFieldProps = FieldChrome &
   Omit<SelectHTMLAttributes<HTMLSelectElement>, 'className' | 'id'> & { inputClassName?: string };
 
+function optionsFromChildren(children: ReactNode): DropdownOption[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (!isValidElement<{ value?: string | number; children?: ReactNode }>(child)) {
+      return [];
+    }
+    const label = Children.toArray(child.props.children).join('');
+    return [{ value: String(child.props.value ?? label), label }];
+  });
+}
+
 export function SelectField({
   label,
   error,
@@ -96,8 +110,11 @@ export function SelectField({
   className,
   inputClassName = '',
   children,
-  ...rest
+  value,
+  onChange,
+  disabled,
 }: SelectFieldProps) {
+  const options = optionsFromChildren(children);
   return (
     <Field
       label={label}
@@ -105,9 +122,20 @@ export function SelectField({
       hint={hint}
       className={className}
       renderControl={(attributes) => (
-        <select {...rest} {...attributes} className={`${CONTROL} ${inputClassName}`.trim()}>
-          {children}
-        </select>
+        <Dropdown
+          {...attributes}
+          label={label}
+          value={String(value ?? options[0]?.value ?? '')}
+          options={options}
+          disabled={disabled}
+          triggerClassName={inputClassName}
+          onChange={(next) =>
+            onChange?.({
+              target: { value: next },
+              currentTarget: { value: next },
+            } as ChangeEvent<HTMLSelectElement>)
+          }
+        />
       )}
     />
   );

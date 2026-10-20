@@ -20,6 +20,7 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 const SUBMIT_FALLBACK_AFTER_MS = 2000;
 const SUBMIT_ACK_TIMEOUT_MS = 10_000;
 const ANSWER_RETRY_MS = 3000;
+const PENDING_NOTICE_AFTER_MS = 3000;
 
 const CLOCK_STYLES = {
   calm: 'bg-board text-white',
@@ -96,6 +97,16 @@ export function ExamAttemptView({
   }, [sendAnswer]);
 
   const hasPending = pendingCount > 0;
+  const [stuck, setStuck] = useState(false);
+
+  useEffect(() => {
+    if (!hasPending) {
+      setStuck(false);
+      return;
+    }
+    const timer = setTimeout(() => setStuck(true), PENDING_NOTICE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [hasPending]);
 
   useEffect(() => {
     if (connected) {
@@ -252,7 +263,7 @@ export function ExamAttemptView({
           sent when you are back.
         </ConnectionBanner>
       )}
-      {pendingCount > 0 && (
+      {pendingCount > 0 && (!connected || stuck) && (
         <p role="status" className="text-sm font-medium text-muted">
           {pendingCount} {pendingCount === 1 ? 'answer' : 'answers'} waiting to send
         </p>

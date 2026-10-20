@@ -119,7 +119,7 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
       />
       {sendError && <Notice tone="danger">{sendError}</Notice>}
       <Button type="submit" variant="brand" disabled={sending}>
-        {sending ? 'Sending...' : 'Send feedback'}
+        Send feedback
       </Button>
     </form>
   );

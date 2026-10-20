@@ -38,7 +38,11 @@ describe('FeedbackForm', () => {
       target: { value: 'Question 3 was tricky' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sending...' }));
+    const sendingButton = screen.getByRole('button', {
+      name: 'Send feedback',
+    }) as HTMLButtonElement;
+    expect(sendingButton.disabled).toBe(true);
+    fireEvent.click(sendingButton);
     expect(submit).toHaveBeenCalledTimes(1);
     expect(submit).toHaveBeenCalledWith({ rating: 4, comment: 'Question 3 was tricky' });
     await finish();

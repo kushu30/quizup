@@ -197,7 +197,9 @@ function LayoutFrame() {
             : `px-4 py-8 sm:py-12 ${layout === 'wide' ? 'max-w-6xl' : 'max-w-3xl'}`
         }`}
       >
-        <Outlet />
+        <div key={location.pathname} className="animate-fade-in">
+          <Outlet />
+        </div>
       </main>
 
       {!focus && (

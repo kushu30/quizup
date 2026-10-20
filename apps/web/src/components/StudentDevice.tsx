@@ -28,7 +28,7 @@ export function StudentDevice({ devices }: { devices: DeviceInfo[] }) {
           />
         </svg>
       </summary>
-      <div className="mt-2 space-y-1 rounded-md bg-paper p-2 text-xs text-ink">
+      <div className="mt-2 space-y-1 rounded-md bg-paper p-2 text-xs text-ink group-open:animate-pop">
         {devices.length === 0 ? (
           <p>No device recorded</p>
         ) : (

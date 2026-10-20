@@ -2,6 +2,7 @@ import type { UserRole } from '@quizup/shared';
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
+import { PageLoader } from './ui';
 
 interface RequireRoleProps {
   roles: UserRole[];
@@ -13,11 +14,7 @@ export function RequireRole({ roles, deniedNotice, children }: RequireRoleProps)
   const { session, profile, loading } = useAuth();
 
   if (loading) {
-    return (
-      <p role="status" className="py-16 text-center text-muted">
-        Loading...
-      </p>
-    );
+    return <PageLoader label="Loading..." />;
   }
   if (!session) {
     return <Navigate to="/login" replace />;

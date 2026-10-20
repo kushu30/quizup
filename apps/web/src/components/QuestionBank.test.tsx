@@ -46,9 +46,9 @@ describe('QuestionBank', () => {
     render(<QuestionBank />);
     await screen.findByText('What is one half of 8?');
     expect(screen.getByLabelText('Search').tagName).toBe('INPUT');
-    expect(screen.getByLabelText('Topic').tagName).toBe('SELECT');
-    expect(screen.getByLabelText('Difficulty').tagName).toBe('SELECT');
-    expect(screen.getByLabelText('Status').tagName).toBe('SELECT');
+    expect(screen.getByRole('combobox', { name: 'Topic' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Difficulty' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Status' })).toBeTruthy();
   });
 
   it('hides the status filter when the list is locked to one status', async () => {

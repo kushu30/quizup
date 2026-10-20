@@ -16,7 +16,7 @@ import { QuestionDifficultyTable } from '../components/analytics/QuestionDifficu
 import { ResponseHistogram } from '../components/analytics/ResponseHistogram';
 import { BrandStrip } from '../components/branding/BrandStrip';
 import { FeedbackSummary } from '../components/FeedbackSummary';
-import { Button, Notice, PageHeader, Panel, TableFrame } from '../components/ui';
+import { Button, Notice, PageHeader, PageLoader, Panel, TableFrame } from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { saveBlob } from '../lib/download';
 
@@ -117,13 +117,7 @@ export function SessionSummaryPage() {
     return (
       <div>
         <PageHeader title="Session summary" back={{ to: '/host', label: 'Back to dashboard' }} />
-        {message ? (
-          <Notice tone="danger">{message}</Notice>
-        ) : (
-          <p role="status" className="text-muted">
-            Loading...
-          </p>
-        )}
+        {message ? <Notice tone="danger">{message}</Notice> : <PageLoader label="Loading..." />}
       </div>
     );
   }

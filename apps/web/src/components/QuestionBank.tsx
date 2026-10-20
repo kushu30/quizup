@@ -2,7 +2,7 @@ import type { ApprovalFilter, Difficulty, Question } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { api, describeError } from '../lib/api';
 import { QuestionForm } from './QuestionForm';
-import { Badge, Button, Notice, SelectField, TextField } from './ui';
+import { Badge, Button, Notice, PageLoader, SelectField, TextField } from './ui';
 
 interface QuestionBankProps {
   quizId?: string;
@@ -141,11 +141,7 @@ export function QuestionBank({
         )}
       </div>
       {message && <Notice tone="danger">{message}</Notice>}
-      {loading && (
-        <p role="status" className="text-muted">
-          Loading...
-        </p>
-      )}
+      {loading && <PageLoader label="Loading..." compact />}
       {!loading && questions.length === 0 && (
         <p className="rounded-md border border-dashed border-rule-strong px-4 py-6 text-center text-muted">
           {emptyMessage}

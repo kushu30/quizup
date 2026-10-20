@@ -2,7 +2,7 @@ import type { MyResultRow } from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { RequireRole } from '../components/RequireRole';
 import { BrandMark } from '../components/branding/BrandMark';
-import { Badge, Notice, PageHeader } from '../components/ui';
+import { Badge, Notice, PageHeader, SkeletonList } from '../components/ui';
 import { api, describeError } from '../lib/api';
 
 function typeLabel(row: MyResultRow): string {
@@ -43,9 +43,12 @@ function MyResultsContent() {
       />
       {message && <Notice tone="danger">{message}</Notice>}
       {!rows && !message && (
-        <p role="status" className="text-muted">
-          Loading...
-        </p>
+        <>
+          <span role="status" className="sr-only">
+            Loading...
+          </span>
+          <SkeletonList rows={3} />
+        </>
       )}
       {rows && rows.length === 0 && (
         <p className="rounded-lg border border-dashed border-rule-strong px-5 py-10 text-center text-muted">

@@ -181,6 +181,14 @@ describe('ExamAttemptView answers while offline', () => {
     expect(screen.queryByText(/waiting to send/)).toBeNull();
   });
 
+  it('says nothing while an answer is simply on its way', () => {
+    const { emit } = renderAttempt();
+    pickOption('A');
+    expect(emitted(emit, 'exam:answer')).toHaveLength(1);
+    expect(screen.queryByText(/waiting to send/)).toBeNull();
+    expect(screen.queryByText(/sending/i)).toBeNull();
+  });
+
   it('does not lose an offline answer when the server sends a fresh copy of the exam', () => {
     const { setConnected } = renderAttempt(false);
     pickOption('C');
@@ -194,10 +202,11 @@ describe('ExamAttemptView answers while offline', () => {
     const first = emitted(emit, 'exam:answer')[0]?.[2];
     act(() => first?.({ ok: false, error: 'not_in_room' }));
     expect(screen.getByRole('radio', { name: 'a' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText('1 answer waiting to send')).toBeTruthy();
+    expect(screen.queryByText(/waiting to send/)).toBeNull();
     act(() => {
       vi.advanceTimersByTime(3500);
     });
+    expect(screen.getByText('1 answer waiting to send')).toBeTruthy();
     expect(emitted(emit, 'exam:answer')).toHaveLength(2);
   });
 

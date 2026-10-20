@@ -18,7 +18,7 @@ import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { FeedbackForm } from '../components/FeedbackForm';
 import { StudentIntro } from '../components/StudentIntro';
-import { Button, Notice, buttonClasses } from '../components/ui';
+import { Button, Notice, PageLoader, buttonClasses } from '../components/ui';
 import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
@@ -409,11 +409,7 @@ export function Play() {
   }
 
   if (!state.participantId || !synced) {
-    return (
-      <p role="status" className="py-16 text-center text-lg text-muted">
-        Connecting...
-      </p>
-    );
+    return <PageLoader label="Connecting..." />;
   }
 
   if (
