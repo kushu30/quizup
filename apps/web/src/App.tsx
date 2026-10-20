@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { HostRoute } from './components/HostRoute';
 import { Layout } from './components/Layout';
 import { Admin } from './pages/Admin';
+import { GroupsPage } from './pages/GroupsPage';
 import { Host } from './pages/Host';
 import { HostConsole } from './pages/HostConsole';
 import { Join } from './pages/Join';
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/host/sessions/:sessionId" element={<HostConsole />} />
           <Route path="/sessions/:sessionId/summary" element={<SessionSummaryPage />} />
           <Route path="/host/questions" element={<QuestionBankPage />} />
+          <Route path="/host/groups" element={<GroupsPage />} />
         </Route>
         <Route path="/join" element={<Join />} />
         <Route path="/me/results" element={<MyResultsPage />} />

@@ -39,7 +39,7 @@ apps/
 packages/
   shared/         Zod schemas, scoring, Elo/BKT, shuffle and pool logic
 supabase/
-  migrations/     Numbered SQL migrations (0001 to 0015)
+  migrations/     Numbered SQL migrations (0001 to 0016)
   seed.sql        Local seed data
 docs/             Feature reference, email samples, plans
 .github/workflows CI and the keep-alive ping

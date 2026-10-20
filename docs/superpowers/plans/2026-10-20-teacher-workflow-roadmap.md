@@ -35,7 +35,7 @@ Render free services sleep after 15 idle minutes and take about a minute to wake
 1. **Shuffle** (Delivery block, off by default): question order per student, and option order per student. The order is derived from a seed stored per participant, so a reconnect shows the same order and the report shows what each student saw. Live (everyone together) sessions keep one shared order; shuffle applies to exams and self-paced sessions **(my call)**.
 2. **Question pools.** In Delivery, "Draw N questions at random from module X" rules, any number of them, plus "always include" for fixed questions. Each student gets their own draw, stored with their seed. The editor shows how many questions a student will see in total.
 
-## Phase 3: reusable student groups
+## Phase 3: reusable student groups (done)
 
 A **Students** page lists the host's groups; a group holds names and optional emails, filled by paste or CSV exactly as in the invite panel. In the invite panel, step 1 gains "Add a saved group". Adding a group to a quiz copies its members into that session's roster; later edits to the group do not change running sessions. Groups are private to their host.
 

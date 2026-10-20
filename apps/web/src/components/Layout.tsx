@@ -17,6 +17,8 @@ function isWidePath(pathname: string): boolean {
 interface NavItem {
   to: string;
   label: string;
+  /** A more specific item owns paths under this prefix, so this one is not highlighted there. */
+  yieldsTo?: string;
 }
 
 function desktopLinkClass({ isActive }: { isActive: boolean }) {
@@ -54,9 +56,18 @@ function LayoutFrame() {
     setMenuOpen(false);
   }, [location.pathname]);
 
+  function isItemActive(item: NavItem, isActive: boolean): boolean {
+    return isActive && !(item.yieldsTo && location.pathname.startsWith(item.yieldsTo));
+  }
+
   const items: NavItem[] = [
     { to: '/join', label: 'Join a quiz' },
-    ...(canHost ? [{ to: '/host', label: 'Host' }] : []),
+    ...(canHost
+      ? [
+          { to: '/host', label: 'Host', yieldsTo: '/host/groups' },
+          { to: '/host/groups', label: 'Students' },
+        ]
+      : []),
     ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
     ...(session ? [{ to: '/me/results', label: 'My results' }] : []),
   ];
@@ -111,7 +122,12 @@ function LayoutFrame() {
                 <ul className="flex items-center gap-7">
                   {items.map((item) => (
                     <li key={item.to}>
-                      <NavLink to={item.to} className={desktopLinkClass}>
+                      <NavLink
+                        to={item.to}
+                        className={({ isActive }) =>
+                          desktopLinkClass({ isActive: isItemActive(item, isActive) })
+                        }
+                      >
                         {item.label}
                       </NavLink>
                     </li>
@@ -156,7 +172,9 @@ function LayoutFrame() {
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
-                      className={mobileLinkClass}
+                      className={({ isActive }) =>
+                        mobileLinkClass({ isActive: isItemActive(item, isActive) })
+                      }
                       onClick={() => setMenuOpen(false)}
                     >
                       {item.label}

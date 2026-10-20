@@ -57,6 +57,11 @@ import {
   type RosterResponse,
   type RosterStudentInput,
   type SessionStartInput,
+  groupDetailSchema,
+  groupListSchema,
+  type GroupDetail,
+  type GroupSaveInput,
+  type GroupSummary,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -230,6 +235,14 @@ export const api = {
       rosterEmailTestResultSchema,
       payload,
     ),
+  listGroups: (): Promise<GroupSummary[]> => requestJson('/groups', 'GET', groupListSchema),
+  getGroup: (groupId: string): Promise<GroupDetail> =>
+    requestJson(`/groups/${groupId}`, 'GET', groupDetailSchema),
+  createGroup: (input: GroupSaveInput): Promise<GroupDetail> =>
+    requestJson('/groups', 'POST', groupDetailSchema, input),
+  updateGroup: (groupId: string, input: GroupSaveInput): Promise<GroupDetail> =>
+    requestJson(`/groups/${groupId}`, 'PUT', groupDetailSchema, input),
+  deleteGroup: (groupId: string): Promise<void> => requestNoContent(`/groups/${groupId}`, 'DELETE'),
   notifyHostAccess: async (email: string): Promise<void> => {
     await requestJson('/admin/host-access/notify', 'POST', hostAccessSentSchema, { email });
   },

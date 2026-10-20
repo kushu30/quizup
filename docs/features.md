@@ -228,3 +228,9 @@ Create a Google OAuth client with redirect URI `<supabase url>/auth/v1/callback`
   - Switching the assessment type resets the two shuffles to that type's defaults.
 - **Images.** Each question can have one picture (PNG, JPEG or WebP, up to 2 MB) with a required description for screen readers. It shows in the editor, the bank, the host console and on the student's screen, live and in exams. Images are stored in the public `question-images` bucket, in a folder named after the host; the server only accepts addresses from that bucket.
 - **Database.** Run `supabase db push` (or `supabase db reset` locally) to apply migrations 0014 (question position, `reorder_questions`) and 0015 (image columns and bucket) **before** deploying the server, because the server now reads those columns.
+
+## Saved student groups
+
+Hosts keep reusable class lists under **Students** in the top menu (`/host/groups`). A group has a name (unique per host, up to 60 characters) and up to 500 students, each with a name and an optional email, added by pasting lines or uploading a CSV exactly as in the invite panel. In an invited-only session, step 1 of the **Invited students** panel has **Add a saved group**: it copies the group's students into that session's roster and issues their tokens. Students already on the roster (same name, ignoring case) are skipped and counted. Later edits to a group never change a session that already used it, and deleting a group leaves those sessions alone. Groups are private to their host: another host's request returns 404.
+
+API (host or admin): `GET/POST /groups`, `GET/PUT/DELETE /groups/:groupId`. `PUT` replaces the name and all students in one transaction (`save_student_group`). Run `supabase db push` to apply migration 0016 (`student_groups`, `student_group_members`, server access only).

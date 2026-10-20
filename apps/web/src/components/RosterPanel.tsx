@@ -1,5 +1,6 @@
 import {
   buildTokensCsv,
+  groupStudentsToRosterInput,
   parseRosterText,
   type IssuedToken,
   type RosterEmailResult,
@@ -12,6 +13,7 @@ import { saveBlob } from '../lib/download';
 import { CopyButton } from './CopyButton';
 import { EmailTokensDialog } from './EmailTokensDialog';
 import { RosterAddStep } from './RosterAddStep';
+import { SavedGroupPicker } from './SavedGroupPicker';
 import { Button, Notice, Panel, TableFrame } from './ui';
 
 interface RosterPanelProps {
@@ -50,6 +52,7 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
   const [lineErrors, setLineErrors] = useState<RosterParseError[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [groupNote, setGroupNote] = useState<string | null>(null);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [emailDialog, setEmailDialog] = useState<{
     rosterIds: string[] | undefined;
@@ -96,6 +99,38 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
       setEntries(added.entries);
       rememberTokens(added.issued);
       setText('');
+    } catch (error) {
+      setMessage(describeError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddGroup(groupId: string) {
+    setMessage(null);
+    setBusy(true);
+    try {
+      const group = await api.getGroup(groupId);
+      const onList = new Set(entries.map((entry) => entry.displayName.toLowerCase()));
+      const fresh = groupStudentsToRosterInput(group).filter(
+        (student) => !onList.has(student.displayName.toLowerCase()),
+      );
+      const skipped = group.students.length - fresh.length;
+      if (fresh.length === 0) {
+        setMessage(
+          group.students.length === 0
+            ? `${group.name} has no students yet.`
+            : `Everyone in ${group.name} is already on the list.`,
+        );
+        return;
+      }
+      const added = await api.addRoster(sessionId, fresh);
+      setEntries(added.entries);
+      rememberTokens(added.issued);
+      setGroupNote(
+        `Added ${fresh.length} ${fresh.length === 1 ? 'student' : 'students'} from ${group.name}.` +
+          (skipped > 0 ? ` ${skipped} already on the list.` : ''),
+      );
     } catch (error) {
       setMessage(describeError(error));
     } finally {
@@ -158,6 +193,8 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
       <ol aria-label="How inviting students works" className="space-y-8">
         <li className="space-y-4">
           <StepHeading number={1} title="Add students" />
+          <SavedGroupPicker busy={busy} onAddGroup={(groupId) => void handleAddGroup(groupId)} />
+          {groupNote && <Notice tone="info">{groupNote}</Notice>}
           <RosterAddStep
             text={text}
             onTextChange={(next) => {
