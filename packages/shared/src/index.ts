@@ -20,3 +20,7 @@ export * from './exam.js';
 export * from './learner.js';
 export * from './bktFit.js';
 export * from './adaptiveEval.js';
+export * from './assessmentType.js';
+export * from './branding.js';
+export * from './feedback.js';
+export * from './history.js';

@@ -40,7 +40,8 @@ const view: ExamStudentView = {
     },
   ],
   answers: {},
-} as ExamStudentView;
+  resultsReleased: false,
+};
 
 function renderAttempt() {
   const { socket, emit } = makeSocket();

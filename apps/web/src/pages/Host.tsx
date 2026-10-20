@@ -1,11 +1,16 @@
-import { quizCreateSchema, type QuizWithCount } from '@quizup/shared';
+import {
+  DEFAULT_QUESTION_DURATION_SECONDS,
+  quizCreateSchema,
+  sessionCreateSchema,
+  type QuizActivity,
+  type QuizWithCount,
+} from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { QuizCard } from '../components/QuizCard';
 import { Button, Notice, PageHeader, TextField, buttonClasses } from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
-
-const MODE_LABELS: Record<string, string> = { live: 'Live', exam: 'Exam', coding: 'Coding' };
 
 export function Host() {
   const { profile } = useAuth();
@@ -15,10 +20,14 @@ export function Host() {
   const [titleError, setTitleError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activity, setActivity] = useState<Map<string, QuizActivity>>(new Map());
+  const [runningQuizId, setRunningQuizId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setQuizzes(await api.listQuizzes());
+      const loadedActivity = await api.getQuizActivity().catch(() => []);
+      setActivity(new Map(loadedActivity.map((entry) => [entry.quizId, entry])));
     } catch (error) {
       setMessage(describeError(error));
     } finally {
@@ -43,6 +52,23 @@ export function Host() {
       navigate(`/host/quizzes/${quiz.id}`);
     } catch (error) {
       setMessage(describeError(error));
+    }
+  }
+
+  async function handleRun(quizId: string) {
+    setRunningQuizId(quizId);
+    setMessage(null);
+    try {
+      const summary = await api.createSession(
+        sessionCreateSchema.parse({
+          quizId,
+          questionDurationSeconds: DEFAULT_QUESTION_DURATION_SECONDS,
+        }),
+      );
+      navigate(`/host/sessions/${summary.session.id}`);
+    } catch (error) {
+      setMessage(describeError(error));
+      setRunningQuizId(null);
     }
   }
 
@@ -99,33 +125,22 @@ export function Host() {
         </p>
       )}
       {quizzes.length > 0 && (
-        <ul className="divide-y divide-rule rounded-lg border border-rule bg-surface">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {quizzes.map((quiz) => (
-            <li key={quiz.id} className="flex items-center justify-between gap-4 px-5 py-4">
-              <Link to={`/host/quizzes/${quiz.id}`} className="group min-w-0 flex-1 rounded-sm">
-                <span className="block truncate font-semibold group-hover:underline">
-                  {quiz.title}
-                </span>
-                <span className="mt-0.5 block text-sm text-muted">
-                  {MODE_LABELS[quiz.mode] ?? quiz.mode}, {quiz.question_count}{' '}
-                  {quiz.question_count === 1 ? 'question' : 'questions'}
-                </span>
-              </Link>
-              <Button
-                variant="danger"
-                size="sm"
-                aria-label={`Delete ${quiz.title}`}
-                onClick={() => {
-                  if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
-                    void handleDelete(quiz.id);
-                  }
-                }}
-              >
-                Delete
-              </Button>
-            </li>
+            <QuizCard
+              key={quiz.id}
+              quiz={quiz}
+              activity={activity.get(quiz.id)}
+              running={runningQuizId === quiz.id}
+              onRun={() => void handleRun(quiz.id)}
+              onDelete={() => {
+                if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
+                  void handleDelete(quiz.id);
+                }
+              }}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

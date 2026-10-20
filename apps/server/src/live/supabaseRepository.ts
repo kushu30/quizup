@@ -3,7 +3,6 @@ import {
   participantSchema,
   sessionSchema,
   type Difficulty,
-  type LearnerProfile,
   type Participant,
   type ProctorEventRecord,
   type Session,
@@ -177,7 +176,7 @@ export class SupabaseLiveRepository implements LiveRepository {
   async findSessionWithHost(sessionId: string) {
     const { data, error } = await supabaseAdmin
       .from('sessions')
-      .select('*, quizzes(host_id)')
+      .select('*, quizzes(host_id, title, settings)')
       .eq('id', sessionId)
       .maybeSingle();
     throwUnexpected(error);
@@ -439,6 +438,137 @@ export class SupabaseLiveRepository implements LiveRepository {
     };
   }
 
+  async listQuizSessions(quizId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .select('*, participants(count)')
+      .eq('quiz_id', quizId);
+    throwUnexpected(error);
+    return (
+      (data ?? []) as ({ analytics_summary: unknown; participants: { count: number }[] } & Record<
+        string,
+        unknown
+      >)[]
+    ).map((row) => ({
+      session: sessionSchema.parse(row),
+      participantCount: row.participants[0]?.count ?? 0,
+      summary: row.analytics_summary ?? null,
+    }));
+  }
+
+  async listSessionsForHost(hostId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('sessions')
+      .select('*, quizzes!inner(host_id)')
+      .eq('quizzes.host_id', hostId);
+    throwUnexpected(error);
+    return ((data ?? []) as Record<string, unknown>[]).map((row) => sessionSchema.parse(row));
+  }
+
+  async listFeedbackRatings(sessionIds: string[]) {
+    if (sessionIds.length === 0) {
+      return [];
+    }
+    const { data, error } = await supabaseAdmin
+      .from('session_feedback')
+      .select('session_id, rating')
+      .in('session_id', sessionIds);
+    throwUnexpected(error);
+    return ((data ?? []) as { session_id: string; rating: number }[]).map((row) => ({
+      sessionId: row.session_id,
+      rating: row.rating,
+    }));
+  }
+
+  async listParticipationsForUser(userId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('participants')
+      .select('id, session_id, sessions(*, quizzes(title, settings))')
+      .eq('user_id', userId);
+    throwUnexpected(error);
+    const rows = (data ?? []) as unknown as {
+      id: string;
+      session_id: string;
+      sessions:
+        | ({
+            analytics_summary: unknown;
+            quizzes: { title: string; settings: unknown } | null;
+          } & Record<string, unknown>)
+        | null;
+    }[];
+    const sessionIds = [...new Set(rows.map((row) => row.session_id))];
+    const counts = new Map<string, number>();
+    if (sessionIds.length > 0) {
+      const everyone = await fetchAllPages<{ session_id: string }>((from, to) =>
+        supabaseAdmin
+          .from('participants')
+          .select('session_id')
+          .in('session_id', sessionIds)
+          .range(from, to),
+      );
+      for (const participant of everyone) {
+        counts.set(participant.session_id, (counts.get(participant.session_id) ?? 0) + 1);
+      }
+    }
+    return rows.flatMap((row) => {
+      if (!row.sessions?.quizzes) {
+        return [];
+      }
+      return [
+        {
+          session: sessionSchema.parse(row.sessions),
+          quizTitle: row.sessions.quizzes.title,
+          quizSettings: row.sessions.quizzes.settings,
+          participantId: row.id,
+          participantCount: counts.get(row.session_id) ?? 0,
+          summary: row.sessions.analytics_summary ?? null,
+        },
+      ];
+    });
+  }
+
+  async upsertSessionFeedback(input: {
+    sessionId: string;
+    participantId: string;
+    rating: number;
+    comment: string | null;
+  }) {
+    const { error } = await supabaseAdmin.from('session_feedback').upsert(
+      {
+        session_id: input.sessionId,
+        participant_id: input.participantId,
+        rating: input.rating,
+        comment: input.comment,
+      },
+      { onConflict: 'session_id,participant_id' },
+    );
+    throwUnexpected(error);
+  }
+
+  async listSessionFeedback(sessionId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('session_feedback')
+      .select('participant_id, rating, comment, created_at, participants(display_name)')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    throwUnexpected(error);
+    return (
+      (data ?? []) as unknown as {
+        participant_id: string;
+        rating: number;
+        comment: string | null;
+        created_at: string;
+        participants: { display_name: string } | null;
+      }[]
+    ).map((row) => ({
+      participantId: row.participant_id,
+      displayName: row.participants?.display_name ?? 'Student',
+      rating: row.rating,
+      comment: row.comment,
+      createdAt: row.created_at,
+    }));
+  }
+
   async listOpenExamSessions(): Promise<OpenExamSession[]> {
     const { data, error } = await supabaseAdmin
       .from('sessions')
@@ -450,7 +580,9 @@ export class SupabaseLiveRepository implements LiveRepository {
     throwUnexpected(error);
 
     const opened: OpenExamSession[] = [];
-    for (const row of (data ?? []) as { quizzes: { host_id: string } | null }[]) {
+    for (const row of (data ?? []) as {
+      quizzes: { host_id: string; title: string; settings: unknown } | null;
+    }[]) {
       const { quizzes, ...sessionRow } = row;
       if (!quizzes) {
         continue;
@@ -472,6 +604,8 @@ export class SupabaseLiveRepository implements LiveRepository {
       opened.push({
         session,
         hostId: quizzes.host_id,
+        quizTitle: quizzes.title,
+        quizSettings: quizzes.settings,
         participants: participantRows.map((participant) => ({
           id: participant.id,
           displayName: participant.display_name,
@@ -648,55 +782,6 @@ export class SupabaseLiveRepository implements LiveRepository {
     throwUnexpected(readError);
     const stored = (data as { results_released_at: string | null }).results_released_at;
     return stored ? Date.parse(stored) : releasedAtMs;
-  }
-
-  async findLearnerProfile(userId: string): Promise<LearnerProfile | null> {
-    const { data, error } = await supabaseAdmin
-      .from('learner_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    throwUnexpected(error);
-    if (!data) {
-      return null;
-    }
-    const row = data as {
-      user_id: string;
-      elo: number;
-      topic_mastery: Record<string, number> | null;
-      answers_count: number;
-      last_session_id: string | null;
-    };
-    return {
-      userId: row.user_id,
-      elo: Number(row.elo),
-      topicMastery: row.topic_mastery ?? {},
-      answersCount: row.answers_count,
-      lastSessionId: row.last_session_id,
-    };
-  }
-
-  async applyLearnerProfile(input: {
-    userId: string;
-    sessionId: string;
-    elo: number;
-    topicMastery: Record<string, number>;
-    answersAdded: number;
-  }): Promise<boolean> {
-    const { data, error } = await supabaseAdmin.rpc('apply_learner_profile', {
-      target_user_id: input.userId,
-      target_session_id: input.sessionId,
-      new_elo: input.elo,
-      new_topic_mastery: input.topicMastery,
-      answers_added: input.answersAdded,
-    });
-    throwUnexpected(error);
-    return data === true;
-  }
-
-  async deleteLearnerProfile(userId: string) {
-    const { error } = await supabaseAdmin.from('learner_profiles').delete().eq('user_id', userId);
-    throwUnexpected(error);
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

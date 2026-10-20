@@ -1,4 +1,5 @@
 import type {
+  Branding,
   ExamStudentView,
   LeaderboardEntry,
   QuestionResultPayload,
@@ -12,11 +13,15 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { ExamPlay } from '../components/exam/ExamPlay';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
+import { FeedbackForm } from '../components/FeedbackForm';
+import { StudentIntro } from '../components/StudentIntro';
+import { BrandStrip } from '../components/branding/BrandStrip';
 import { Notice, buttonClasses } from '../components/ui';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
+import { markIntroDone, readIntroDone, shouldShowIntro } from '../lib/introGate';
 import { clearStoredJoin, readStoredJoin, writeStoredJoin } from '../lib/storedJoin';
 
 interface PlayState {
@@ -34,6 +39,9 @@ interface PlayState {
   standing: { rank: number; score: number } | null;
   mode: 'live' | 'exam';
   exam: ExamStudentView | null;
+  adaptive: boolean;
+  quizTitle: string;
+  branding: Branding | null;
 }
 
 const INITIAL_STATE: PlayState = {
@@ -51,6 +59,9 @@ const INITIAL_STATE: PlayState = {
   standing: null,
   mode: 'live',
   exam: null,
+  adaptive: false,
+  quizTitle: '',
+  branding: null,
 };
 
 const OPTION_STYLES = [
@@ -86,6 +97,7 @@ const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
   no_open_attempt: 'You have no open exam attempt.',
   attempt_expired: 'Your time is up.',
   not_submitted: 'Submit your exam first.',
+  feedback_not_open: 'Feedback opens when the quiz ends.',
 };
 
 export function Play() {
@@ -98,6 +110,7 @@ export function Play() {
   const [state, setState] = useState<PlayState>(INITIAL_STATE);
   const [answerError, setAnswerError] = useState<string | null>(null);
   const { offsetMs, synced } = useClockSync(socket);
+  const [introDone, setIntroDone] = useState(() => readIntroDone(joinCode));
   const serverNowMs = useServerNow(offsetMs);
 
   useEffect(() => {
@@ -166,6 +179,9 @@ export function Play() {
           standing: room.you ? { rank: room.you.rank, score: room.you.score } : null,
           mode: room.mode,
           exam: room.exam,
+          adaptive: room.adaptive,
+          quizTitle: room.quizTitle,
+          branding: room.branding,
         }));
       }
 
@@ -282,28 +298,59 @@ export function Play() {
     );
   }
 
-  if (state.mode === 'exam' && state.exam && socket) {
+  if (
+    shouldShowIntro({
+      introDone,
+      mode: state.mode,
+      status: state.status,
+      examPhase: state.exam?.phase ?? null,
+    })
+  ) {
     return (
-      <ExamPlay
-        socket={socket}
-        view={state.exam}
+      <StudentIntro
+        quizTitle={state.quizTitle}
         displayName={state.displayName}
-        offsetMs={offsetMs}
-        connected={state.connected}
-        onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
+        branding={state.branding}
+        assessmentType={state.mode === 'exam' ? 'exam' : state.adaptive ? 'adaptive' : 'live'}
+        durationMinutes={state.exam?.durationMinutes}
+        onDone={() => {
+          markIntroDone(joinCode);
+          setIntroDone(true);
+        }}
       />
     );
   }
 
+  const brandStrip = <BrandStrip branding={state.branding} />;
+
+  if (state.mode === 'exam' && state.exam && socket) {
+    return (
+      <>
+        {brandStrip}
+        <ExamPlay
+          socket={socket}
+          view={state.exam}
+          displayName={state.displayName}
+          offsetMs={offsetMs}
+          connected={state.connected}
+          onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
+        />
+      </>
+    );
+  }
+
   const header = (
-    <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
-      <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
-      {state.standing && (
-        <span className="shrink-0 text-muted">
-          Rank {state.standing.rank}, {state.standing.score.toLocaleString()} points
-        </span>
-      )}
-    </div>
+    <>
+      {brandStrip}
+      <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
+        <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
+        {state.standing && (
+          <span className="shrink-0 text-muted">
+            Rank {state.standing.rank}, {state.standing.score.toLocaleString()} points
+          </span>
+        )}
+      </div>
+    </>
   );
 
   if (state.status === 'ended') {
@@ -327,6 +374,9 @@ export function Play() {
           )}
         </div>
         <Leaderboard entries={state.leaderboard} highlightParticipantId={state.participantId} />
+        {socket && (
+          <FeedbackForm submit={(payload) => socket.emitWithAck('feedback:submit', payload)} />
+        )}
       </div>
     );
   }

@@ -6,12 +6,13 @@ import { Host } from './pages/Host';
 import { HostConsole } from './pages/HostConsole';
 import { Join } from './pages/Join';
 import { Landing } from './pages/Landing';
-import { LearnerProfilePage } from './pages/LearnerProfilePage';
 import { Login } from './pages/Login';
 import { Play } from './pages/Play';
 import { QuestionBankPage } from './pages/QuestionBankPage';
 import { QuizEditor } from './pages/QuizEditor';
 import { SessionSummaryPage } from './pages/SessionSummaryPage';
+import { MyResultsPage } from './pages/MyResultsPage';
+import { QuizHistoryPage } from './pages/QuizHistoryPage';
 
 export function App() {
   return (
@@ -23,13 +24,14 @@ export function App() {
         <Route element={<HostRoute />}>
           <Route path="/host" element={<Host />} />
           <Route path="/host/quizzes/:quizId" element={<QuizEditor />} />
+          <Route path="/host/quizzes/:quizId/history" element={<QuizHistoryPage />} />
           <Route path="/host/sessions/:sessionId" element={<HostConsole />} />
           <Route path="/sessions/:sessionId/summary" element={<SessionSummaryPage />} />
           <Route path="/host/questions" element={<QuestionBankPage />} />
         </Route>
         <Route path="/join" element={<Join />} />
+        <Route path="/me/results" element={<MyResultsPage />} />
         <Route path="/join/:code" element={<Join />} />
-        <Route path="/me/learner-profile" element={<LearnerProfilePage />} />
         <Route path="/play/:code" element={<Play />} />
       </Route>
     </Routes>

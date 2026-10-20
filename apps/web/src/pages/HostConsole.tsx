@@ -1,15 +1,18 @@
-import type {
-  AnalyticsSnapshot,
-  ExamProgressRow,
-  ProctorEventRecord,
-  ProctorParticipantTimeline,
-  RoomStatePayload,
-  SocketErrorCode,
+import {
+  hasBranding,
+  type AnalyticsSnapshot,
+  type ExamProgressRow,
+  type ProctorEventRecord,
+  type ProctorParticipantTimeline,
+  type RoomStatePayload,
+  type SocketErrorCode,
 } from '@quizup/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdaptiveTable } from '../components/AdaptiveTable';
+import { CopyButton } from '../components/CopyButton';
 import { JoinQr } from '../components/JoinQr';
+import { BrandMark } from '../components/branding/BrandMark';
 import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
@@ -19,6 +22,7 @@ import { Button, Notice, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
+import { readableTextOn } from '../lib/brandColor';
 import { mergeProctorEvents } from '../lib/proctorEvents';
 import { api, describeError } from '../lib/api';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
@@ -150,6 +154,8 @@ export function HostConsole() {
 
   const isExam = room.mode === 'exam';
   const joinUrl = `${window.location.origin}/join/${room.joinCode}`;
+  const panelColor = room.branding?.brandColor ?? '#1e5446';
+  const panelText = readableTextOn(panelColor);
   const selectedRow = examRows?.find((row) => row.participantId === selectedStudentId) ?? null;
   const selectedEvents = selectedStudentId
     ? mergeProctorEvents(
@@ -175,8 +181,19 @@ export function HostConsole() {
           aria-label="Join details"
           className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6"
         >
-          <div className="rounded-lg bg-board p-6 text-center text-white">
-            <p className="text-base font-medium text-white/85">Join code</p>
+          <div
+            className="rounded-lg p-6 text-center"
+            style={{ backgroundColor: panelColor, color: panelText }}
+          >
+            {hasBranding(room.branding) && (
+              <div className="mb-5 flex justify-center border-b border-current/20 pb-4 text-left">
+                <BrandMark
+                  branding={room.branding}
+                  tone={panelText === '#ffffff' ? 'dark' : 'light'}
+                />
+              </div>
+            )}
+            <p className="text-base font-medium opacity-85">Join code</p>
             <p className="mt-1 text-hero font-bold tracking-[0.18em] whitespace-nowrap tabular-nums sm:text-display lg:text-[3.5rem]">
               {room.joinCode}
             </p>
@@ -187,10 +204,19 @@ export function HostConsole() {
             >
               <JoinQr url={joinUrl} />
             </div>
-            <p className="mt-4 text-sm text-white/85">Scan, or open</p>
-            <p className="text-sm font-semibold break-all text-white select-all">
+            <p className="mt-4 text-sm opacity-85">Scan, or open</p>
+            <p className="text-sm font-semibold break-all select-all">
               {joinUrl.replace(/^https?:\/\//, '')}
             </p>
+            <div className="mt-3">
+              <CopyButton
+                text={joinUrl}
+                label="Copy link"
+                variant={panelText === '#ffffff' ? 'accent' : 'primary'}
+                size="sm"
+                statusClassName="min-h-5 text-sm opacity-85"
+              />
+            </div>
           </div>
           {room.status !== 'lobby' && <StudentRoster participants={room.participants} />}
         </aside>
@@ -202,6 +228,7 @@ export function HostConsole() {
             <section aria-labelledby="lobby-heading" className="space-y-8">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div className="min-w-0 space-y-2">
+                  <p className="text-sm font-medium break-words text-muted">{room.quizTitle}</p>
                   <h1 id="lobby-heading" className="text-title font-semibold tracking-tight">
                     Waiting for students
                   </h1>

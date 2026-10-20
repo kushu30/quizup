@@ -45,15 +45,15 @@ describe('Layout', () => {
     expect(screen.getAllByRole('link', { name: 'Log in' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Host' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'My learning data' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'My results' })).toBeNull();
   });
 
-  it('shows host, admin and learning data links according to the account', () => {
+  it('shows host, admin and results links according to the account', () => {
     setAuth({ session: {}, canHost: true, isAdmin: true });
     renderAt('/');
     expect(screen.getAllByRole('link', { name: 'Host' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Admin' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'My learning data' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'My results' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Log in' })).toBeNull();
   });
 

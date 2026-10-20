@@ -13,6 +13,7 @@ import {
   type MeResponse,
   type ServerToClientEvents,
   type SocketErrorCode,
+  feedbackSubmitPayloadSchema,
 } from '@quizup/shared';
 import { Server } from 'socket.io';
 import type { z } from 'zod';
@@ -22,6 +23,7 @@ import type { ExamService } from './exam/examService.js';
 import type { LiveEngine } from './live/engine.js';
 import type { SocketData, SocketPublisher } from './live/socketPublisher.js';
 import { createRateLimiter } from './rateLimiter.js';
+import { submitFeedback } from './feedback/feedback.js';
 
 export type QuizSocketServer = Server<
   ClientToServerEvents,
@@ -246,6 +248,23 @@ export function attachSocketServer(
           const participantId = studentParticipantId();
           (ack as AckCallback)(
             participantId ? await exam.saveAnswer(participantId, payload) : failure('not_in_room'),
+          );
+        },
+        rawPayload,
+      );
+    });
+
+    socket.on('feedback:submit', (rawPayload, rawAck) => {
+      handle(
+        feedbackSubmitPayloadSchema,
+        examLimiter,
+        rawAck,
+        async (payload, ack) => {
+          const participantId = studentParticipantId();
+          (ack as AckCallback)(
+            participantId
+              ? await submitFeedback({ engine, exam }, participantId, payload)
+              : failure('not_in_room'),
           );
         },
         rawPayload,

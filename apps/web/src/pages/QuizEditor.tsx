@@ -3,23 +3,25 @@ import {
   MAX_QUESTION_DURATION_SECONDS,
   MIN_QUESTION_DURATION_SECONDS,
   DEFAULT_EXAM_DURATION_MINUTES,
-  EXAM_MAX_DURATION_MINUTES,
-  EXAM_MIN_DURATION_MINUTES,
-  MAX_ADAPTIVE_ROUNDS,
-  MIN_ADAPTIVE_ROUNDS,
+  assessmentTypeOf,
   quizSettingsSchema,
   quizUpdateSchema,
   sessionCreateSchema,
+  settingsForAssessmentType,
+  splitStoredBranding,
+  type Branding,
+  type AssessmentType,
   type Quiz,
-  type QuizMode,
 } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
+import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
+import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
-import { Button, Notice, PageHeader, Panel, SelectField, TextField } from '../components/ui';
+import { Button, Notice, PageHeader, Panel, TextField, buttonClasses } from '../components/ui';
 import { api, describeError } from '../lib/api';
 
 const SAVED_MESSAGE = 'Saved';
@@ -29,12 +31,9 @@ export function QuizEditor() {
   const navigate = useNavigate();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [title, setTitle] = useState('');
-  const [mode, setMode] = useState<QuizMode>('live');
-  const [examMode, setExamMode] = useState(false);
+  const [assessmentType, setAssessmentType] = useState<AssessmentType>('live');
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
-  const [adaptive, setAdaptive] = useState(false);
-  const [useLearnerHistory, setUseLearnerHistory] = useState(true);
-  const [adaptiveRounds, setAdaptiveRounds] = useState('');
+  const examMode = assessmentType === 'exam';
   const [message, setMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [counts, setCounts] = useState({ approved: 0, pending: 0 });
@@ -45,20 +44,12 @@ export function QuizEditor() {
       const loaded = await api.getQuiz(quizId);
       setQuiz(loaded);
       setTitle(loaded.title);
-      setMode(loaded.mode);
       const settings = quizSettingsSchema.safeParse(loaded.settings);
-      setExamMode(settings.success && settings.data.mode === 'exam');
+      setAssessmentType(settings.success ? assessmentTypeOf(settings.data) : 'live');
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
           : String(DEFAULT_EXAM_DURATION_MINUTES),
-      );
-      setAdaptive(settings.success ? settings.data.adaptive : false);
-      setUseLearnerHistory(settings.success ? settings.data.useLearnerHistory : true);
-      setAdaptiveRounds(
-        settings.success && settings.data.adaptiveRounds !== undefined
-          ? String(settings.data.adaptiveRounds)
-          : '',
       );
     } catch (error) {
       setMessage(describeError(error));
@@ -109,16 +100,12 @@ export function QuizEditor() {
     event.preventDefault();
     const parsed = quizUpdateSchema.safeParse({
       title,
-      mode,
+      mode: examMode ? 'exam' : 'live',
       settings: {
-        mode: examMode ? 'exam' : 'live',
-        durationMinutes: examMode ? Number(durationMinutes) : undefined,
-        adaptive: examMode ? false : adaptive,
-        useLearnerHistory,
-        adaptiveRounds:
-          !examMode && adaptive && adaptiveRounds.trim() !== ''
-            ? Number(adaptiveRounds)
-            : undefined,
+        ...(quiz?.settings ?? {}),
+        adaptiveRounds: undefined,
+        durationMinutes: undefined,
+        ...settingsForAssessmentType(assessmentType, Number(durationMinutes)),
       },
     });
     if (!parsed.success) {
@@ -131,6 +118,13 @@ export function QuizEditor() {
     } catch (error) {
       setMessage(describeError(error));
     }
+  }
+
+  async function handleSaveBranding(branding: Branding) {
+    const parsed = quizUpdateSchema.parse({
+      settings: { ...(quiz?.settings ?? {}), branding },
+    });
+    setQuiz(await api.updateQuiz(quizId, parsed));
   }
 
   async function handleDeleteQuiz() {
@@ -178,24 +172,30 @@ export function QuizEditor() {
     );
   }
 
-  const checkboxClass = 'h-4 w-4 shrink-0 rounded border-rule-strong accent-board';
-
   return (
     <div>
       <PageHeader
         title={quiz.title}
         back={{ to: '/host', label: 'Back to dashboard' }}
         actions={
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
-                void handleDeleteQuiz();
-              }
-            }}
-          >
-            Delete quiz
-          </Button>
+          <>
+            <Link
+              to={`/host/quizzes/${quiz.id}/history`}
+              className={buttonClasses('secondary', 'md')}
+            >
+              History
+            </Link>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (window.confirm(`Delete "${quiz.title}" and all its questions?`)) {
+                  void handleDeleteQuiz();
+                }
+              }}
+            >
+              Delete quiz
+            </Button>
+          </>
         }
       />
       {message && (
@@ -213,82 +213,12 @@ export function QuizEditor() {
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
               />
-              <SelectField
-                label="Quiz type"
-                value={mode}
-                onChange={(event) => setMode(event.target.value as QuizMode)}
-              >
-                <option value="live">Live</option>
-                <option value="exam">Exam</option>
-                <option value="coding">Coding</option>
-              </SelectField>
-              <fieldset className="space-y-3 border-t border-rule pt-4">
-                <legend className="sr-only">How questions are delivered</legend>
-                <label className="flex items-center gap-3 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    className={checkboxClass}
-                    checked={examMode}
-                    onChange={(event) => setExamMode(event.target.checked)}
-                  />
-                  Exam mode
-                </label>
-                {examMode && (
-                  <TextField
-                    label="Exam length in minutes"
-                    type="number"
-                    min={EXAM_MIN_DURATION_MINUTES}
-                    max={EXAM_MAX_DURATION_MINUTES}
-                    className="pl-7"
-                    inputClassName="w-28"
-                    value={durationMinutes}
-                    onChange={(event) => setDurationMinutes(event.target.value)}
-                  />
-                )}
-                <label
-                  className={`flex items-center gap-3 text-sm font-medium ${examMode ? 'text-muted' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    className={checkboxClass}
-                    checked={adaptive && !examMode}
-                    disabled={examMode}
-                    onChange={(event) => setAdaptive(event.target.checked)}
-                  />
-                  Adaptive mode
-                </label>
-                {adaptive && !examMode && (
-                  <div className="space-y-3 pl-7">
-                    <label className="flex items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        className={checkboxClass}
-                        checked={useLearnerHistory}
-                        onChange={(event) => setUseLearnerHistory(event.target.checked)}
-                      />
-                      Use learner history
-                    </label>
-                    <TextField
-                      label="Rounds"
-                      type="number"
-                      min={MIN_ADAPTIVE_ROUNDS}
-                      max={MAX_ADAPTIVE_ROUNDS}
-                      placeholder="auto"
-                      hint="Leave empty to choose automatically."
-                      inputClassName="w-28"
-                      value={adaptiveRounds}
-                      onChange={(event) => setAdaptiveRounds(event.target.value)}
-                    />
-                  </div>
-                )}
-                <p className="text-sm text-muted">
-                  {examMode
-                    ? 'Each student gets a private timer and a personal question order. Scores and leaderboards stay hidden until you release results. Browser signals are recorded after students consent. Adaptive mode is off in exams. Save to apply.'
-                    : adaptive
-                      ? 'Each student gets their own questions matched to their rating. Rounds default to the smaller of 10 and the approved question count. Save to apply.'
-                      : 'Everyone gets the same questions in the same order.'}
-                </p>
-              </fieldset>
+              <AssessmentTypePicker
+                value={assessmentType}
+                onChange={setAssessmentType}
+                durationMinutes={durationMinutes}
+                onDurationChange={setDurationMinutes}
+              />
               <Button type="submit" className="w-full">
                 Save details
               </Button>
@@ -331,6 +261,20 @@ export function QuizEditor() {
         </div>
 
         <div className="min-w-0 space-y-6">
+          <Panel
+            title="Branding"
+            description="Your institution's look on every student screen, powered by QuizUp."
+          >
+            <BrandingForm
+              key={quiz.id}
+              initial={splitStoredBranding(quiz.settings).branding ?? {}}
+              hostId={quiz.host_id}
+              quizId={quiz.id}
+              quizTitle={quiz.title}
+              onSave={handleSaveBranding}
+            />
+          </Panel>
+
           <Panel title="Add questions">
             <div className="divide-y divide-rule">
               <section aria-labelledby="write-question-heading" className="space-y-3 pb-6">

@@ -29,6 +29,14 @@ import {
   type RowError,
   type SessionCreateInput,
   type SessionSummary,
+  sessionFeedbackResponseSchema,
+  type SessionFeedbackResponse,
+  myResultsSchema,
+  quizActivityListSchema,
+  type QuizActivity,
+  quizSessionHistorySchema,
+  type MyResultRow,
+  type QuizSessionHistoryRow,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -150,7 +158,15 @@ export const api = {
     requestJson(`/sessions/${sessionId}/release-results`, 'POST', releaseResultsResponseSchema),
   getProctorTimeline: (sessionId: string): Promise<ProctorParticipantTimeline[]> =>
     requestJson(`/sessions/${sessionId}/proctor`, 'GET', proctorTimelineResponseSchema),
-  deleteLearnerProfile: (): Promise<void> => requestNoContent('/me/learner-profile', 'DELETE'),
+  listQuizSessions: (quizId: string): Promise<QuizSessionHistoryRow[]> =>
+    requestJson(`/quizzes/${quizId}/sessions`, 'GET', quizSessionHistorySchema),
+  getMyResults: (): Promise<MyResultRow[]> => requestJson('/me/results', 'GET', myResultsSchema),
+  getQuizActivity: (): Promise<QuizActivity[]> =>
+    requestJson('/me/quiz-activity', 'GET', quizActivityListSchema),
+  getSessionFeedback: (sessionId: string): Promise<SessionFeedbackResponse> =>
+    requestJson(`/sessions/${sessionId}/feedback`, 'GET', sessionFeedbackResponseSchema),
+  getSession: (sessionId: string): Promise<SessionSummary> =>
+    requestJson(`/sessions/${sessionId}`, 'GET', sessionSummarySchema),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
   startSession: (sessionId: string): Promise<SessionSummary> =>

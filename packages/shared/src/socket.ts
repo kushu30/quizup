@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { brandingSchema } from './branding.js';
+import type { FeedbackSubmitPayload } from './feedback.js';
 import type { AnalyticsSnapshot } from './analytics.js';
 import type {
   ExamAnswerPayload,
@@ -39,6 +41,7 @@ export const SOCKET_ERROR_CODES = [
   'no_open_attempt',
   'attempt_expired',
   'not_submitted',
+  'feedback_not_open',
 ] as const;
 export const socketErrorCodeSchema = z.enum(SOCKET_ERROR_CODES);
 export type SocketErrorCode = z.infer<typeof socketErrorCodeSchema>;
@@ -165,6 +168,8 @@ export type AdaptiveRound = z.infer<typeof adaptiveRoundSchema>;
 export const roomStatePayloadSchema = z.object({
   sessionId: z.string().uuid(),
   joinCode: z.string(),
+  quizTitle: z.string(),
+  branding: brandingSchema.nullable(),
   status: sessionStatusSchema,
   role: z.enum(['host', 'student']),
   serverNowMs: z.number(),
@@ -212,6 +217,7 @@ export interface ClientToServerEvents {
   'answer:submit': (payload: AnswerSubmitPayload, ack: (response: AnswerSubmitAck) => void) => void;
   'time:ping': (payload: TimePingPayload, ack: (response: TimePingAck) => void) => void;
   'proctor:event': (payload: ProctorEventPayload, ack: (response: Ack) => void) => void;
+  'feedback:submit': (payload: FeedbackSubmitPayload, ack: (response: Ack) => void) => void;
   'exam:start': (payload: ExamStartPayload, ack: (response: ExamViewAck) => void) => void;
   'exam:answer': (payload: ExamAnswerPayload, ack: (response: ExamAnswerAck) => void) => void;
   'exam:submit': (payload: Record<string, never>, ack: (response: ExamViewAck) => void) => void;

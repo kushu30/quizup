@@ -41,7 +41,7 @@ export function Layout() {
     { to: '/join', label: 'Join a quiz' },
     ...(canHost ? [{ to: '/host', label: 'Host' }] : []),
     ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
-    ...(session ? [{ to: '/me/learner-profile', label: 'My learning data' }] : []),
+    ...(session ? [{ to: '/me/results', label: 'My results' }] : []),
   ];
 
   return (

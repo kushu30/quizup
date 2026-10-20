@@ -1,7 +1,9 @@
 import { EXAM_CONSENT_VERSION, type ExamResults, type ExamStudentView } from '@quizup/shared';
 import { useEffect, useState } from 'react';
+import { exitFullscreenIfActive } from '../../lib/fullscreen';
 import type { QuizSocket } from '../../lib/socket';
 import { buttonClasses } from '../ui';
+import { FeedbackForm } from '../FeedbackForm';
 import { ExamAttemptView } from './ExamAttemptView';
 import { ExamConsent } from './ExamConsent';
 
@@ -93,6 +95,13 @@ export function ExamPlay({
   const [declined, setDeclined] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const examOver = view.phase === 'submitted' || view.phase === 'closed';
+
+  useEffect(() => {
+    if (examOver) {
+      exitFullscreenIfActive();
+    }
+  }, [examOver]);
 
   function accept() {
     void document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -161,7 +170,14 @@ export function ExamPlay({
   }
 
   if (view.phase === 'submitted') {
-    return <ResultsPanel socket={socket} released={view.resultsReleased} />;
+    return (
+      <div className="space-y-8">
+        <ResultsPanel socket={socket} released={view.resultsReleased} />
+        <div className="mx-auto max-w-2xl">
+          <FeedbackForm submit={(payload) => socket.emitWithAck('feedback:submit', payload)} />
+        </div>
+      </div>
+    );
   }
 
   return (

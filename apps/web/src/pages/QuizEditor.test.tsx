@@ -1,9 +1,11 @@
 import type { Question, Quiz } from '@quizup/shared';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../lib/api';
 import { QuizEditor } from './QuizEditor';
+
+vi.mock('../lib/supabase', () => ({ supabase: { storage: { from: vi.fn() } } }));
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {
@@ -101,27 +103,77 @@ describe('QuizEditor', () => {
     }
   });
 
-  it('labels the title and mode controls', async () => {
+  it('labels the title and offers one assessment type choice', async () => {
     renderEditor();
     expect(((await screen.findByLabelText('Quiz title')) as HTMLInputElement).value).toBe(
       'Fractions',
     );
-    expect(screen.getByLabelText('Exam mode')).toBeTruthy();
-    expect(screen.getByLabelText('Adaptive mode')).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Assessment type' })).toBeTruthy();
+    expect((screen.getByRole('radio', { name: /Live quiz/ }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(screen.queryByLabelText('Exam mode')).toBeNull();
+    expect(screen.queryByLabelText('Rounds')).toBeNull();
   });
 
-  it('saves exam settings with adaptive selection switched off', async () => {
+  it('saves a timed exam with its length', async () => {
     renderEditor();
     await screen.findByDisplayValue('Fractions');
-    fireEvent.click(screen.getByLabelText('Adaptive mode'));
-    fireEvent.click(screen.getByLabelText('Exam mode'));
+    fireEvent.click(screen.getByRole('radio', { name: /Timed exam/ }));
     fireEvent.change(screen.getByLabelText('Exam length in minutes'), { target: { value: '45' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
     await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
     const [id, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
     expect(id).toBe(QUIZ_ID);
+    expect(changes?.mode).toBe('exam');
     expect(changes?.settings).toMatchObject({ mode: 'exam', durationMinutes: 45, adaptive: false });
     expect(await screen.findByText('Saved')).toBeTruthy();
+  });
+
+  it('saves an adaptive quiz as a live quiz with adaptive selection', async () => {
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    fireEvent.click(screen.getByRole('radio', { name: /Adaptive quiz/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    const [, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
+    expect(changes?.mode).toBe('live');
+    expect(changes?.settings).toMatchObject({ mode: 'live', adaptive: true });
+  });
+
+  it('shows the saved assessment type when the quiz loads', async () => {
+    vi.mocked(api.getQuiz).mockResolvedValue({
+      ...quiz,
+      mode: 'exam',
+      settings: { mode: 'exam', durationMinutes: 40, adaptive: false },
+    });
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect((screen.getByRole('radio', { name: /Timed exam/ }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((screen.getByLabelText('Exam length in minutes') as HTMLInputElement).value).toBe('40');
+  });
+
+  it('saves branding without touching the assessment settings', async () => {
+    vi.mocked(api.getQuiz).mockResolvedValue({
+      ...quiz,
+      mode: 'exam',
+      settings: { mode: 'exam', durationMinutes: 40, adaptive: false },
+    });
+    renderEditor();
+    const branding = await screen.findByRole('region', { name: 'Branding' });
+    fireEvent.change(within(branding).getByLabelText('Institution name'), {
+      target: { value: 'Lincoln High' },
+    });
+    fireEvent.click(within(branding).getByRole('button', { name: 'Save branding' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    const [, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
+    expect(changes?.settings).toMatchObject({
+      mode: 'exam',
+      durationMinutes: 40,
+      branding: { institutionName: 'Lincoln High' },
+    });
   });
 
   it('keeps the start button disabled until a question is approved', async () => {

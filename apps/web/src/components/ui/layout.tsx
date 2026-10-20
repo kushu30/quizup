@@ -72,7 +72,7 @@ export function Panel({
 }
 
 const TABLE_STYLES =
-  'overflow-x-auto rounded-lg border border-rule bg-surface [&_table]:w-full [&_table]:text-left [&_table]:text-sm [&_thead]:bg-paper [&_th]:px-3 [&_th]:py-2.5 [&_th]:font-medium [&_th]:text-muted [&_td]:px-3 [&_td]:py-2.5 [&_tbody_tr]:border-t [&_tbody_tr]:border-rule';
+  'relative overflow-x-auto rounded-lg border border-rule bg-surface [&_table]:w-full [&_table]:text-left [&_table]:text-sm [&_thead]:bg-paper [&_th]:px-3 [&_th]:py-2.5 [&_th]:font-medium [&_th]:text-muted [&_td]:px-3 [&_td]:py-2.5 [&_tbody_tr]:border-t [&_tbody_tr]:border-rule';
 
 export function TableFrame({ label, children }: { label?: string; children: ReactNode }) {
   return label ? (

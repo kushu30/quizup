@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  PROVISIONAL_QUESTION_ANSWERS,
-  clampProfileElo,
-  isProvisionalQuestion,
-  normalizeProfileMastery,
-} from './learner.js';
+import { PROVISIONAL_QUESTION_ANSWERS, isProvisionalQuestion } from './learner.js';
 import {
   SAMPLING_SIGMA,
   pickWeighted,
@@ -20,29 +15,6 @@ describe('provisional questions', () => {
     expect(isProvisionalQuestion(29)).toBe(true);
     expect(isProvisionalQuestion(30)).toBe(false);
     expect(isProvisionalQuestion(500)).toBe(false);
-  });
-});
-
-describe('profile helpers', () => {
-  it('clamps Elo to 100..3000 and falls back for invalid numbers', () => {
-    expect(clampProfileElo(1234)).toBe(1234);
-    expect(clampProfileElo(5000)).toBe(3000);
-    expect(clampProfileElo(-20)).toBe(100);
-    expect(clampProfileElo(Number.NaN)).toBe(1000);
-    expect(clampProfileElo(Number.POSITIVE_INFINITY)).toBe(1000);
-  });
-
-  it('normalizes topic keys and clamps mastery into 0..1', () => {
-    const mastery = normalizeProfileMastery({
-      ' Algebra ': 0.8,
-      GEOMETRY: 1.7,
-      stats: -0.2,
-      bad: Number.NaN,
-    });
-    expect(mastery.get('algebra')).toBe(0.8);
-    expect(mastery.get('geometry')).toBe(1);
-    expect(mastery.get('stats')).toBe(0);
-    expect(mastery.has('bad')).toBe(false);
   });
 });
 
@@ -85,10 +57,10 @@ describe('selectNextAdaptiveQuestion', () => {
   });
 });
 
-describe('quiz settings and learner history', () => {
-  it('defaults use of learner history to on and accepts off', () => {
-    expect(quizSettingsSchema.parse({}).useLearnerHistory).toBe(true);
-    expect(quizSettingsSchema.parse({ useLearnerHistory: false }).useLearnerHistory).toBe(false);
-    expect(quizSettingsSchema.safeParse({ useLearnerHistory: 'no' }).success).toBe(false);
+describe('retired learner history setting', () => {
+  it('still reads stored settings that contain it and drops it', () => {
+    const parsed = quizSettingsSchema.parse({ adaptive: true, useLearnerHistory: false });
+    expect(parsed.adaptive).toBe(true);
+    expect('useLearnerHistory' in parsed).toBe(false);
   });
 });

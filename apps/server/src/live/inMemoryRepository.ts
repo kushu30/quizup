@@ -3,7 +3,6 @@ import {
   ELO_MAX_RATING,
   ELO_MIN_RATING,
   initialQuestionRating,
-  type LearnerProfile,
   type Participant,
   type ProctorEventRecord,
   type Session,
@@ -47,12 +46,18 @@ export interface StoredKnowledgeState {
 
 export class InMemoryLiveRepository implements LiveRepository {
   readonly quizzes = new Map<string, StoredQuiz>();
+  readonly sessionFeedback: {
+    sessionId: string;
+    participantId: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+  }[] = [];
   readonly sessions = new Map<string, { session: Session; hostId: string }>();
   readonly participants: Participant[] = [];
   readonly responses: StoredResponse[] = [];
   readonly knowledgeStates: StoredKnowledgeState[] = [];
   readonly storedSummaries = new Map<string, unknown>();
-  readonly learnerProfiles = new Map<string, LearnerProfile>();
   summaryWriteCount = 0;
   readonly examAttempts: ExamAttemptRecord[] = [];
   readonly examAnswers: ExamAnswerRecord[] = [];
@@ -323,6 +328,85 @@ export class InMemoryLiveRepository implements LiveRepository {
     };
   }
 
+  async listQuizSessions(quizId: string) {
+    return [...this.sessions.values()]
+      .filter((stored) => stored.session.quiz_id === quizId)
+      .map((stored) => ({
+        session: stored.session,
+        participantCount: this.participants.filter(
+          (participant) => participant.session_id === stored.session.id,
+        ).length,
+        summary: this.storedSummaries.get(stored.session.id) ?? null,
+      }));
+  }
+
+  async listSessionsForHost(hostId: string) {
+    return [...this.sessions.values()]
+      .filter((stored) => stored.hostId === hostId)
+      .map((stored) => stored.session);
+  }
+
+  async listFeedbackRatings(sessionIds: string[]) {
+    return this.sessionFeedback
+      .filter((row) => sessionIds.includes(row.sessionId))
+      .map((row) => ({ sessionId: row.sessionId, rating: row.rating }));
+  }
+
+  async listParticipationsForUser(userId: string) {
+    return this.participants
+      .filter((participant) => participant.user_id === userId)
+      .flatMap((participant) => {
+        const stored = this.sessions.get(participant.session_id);
+        const quiz = stored ? this.quizzes.get(stored.session.quiz_id) : undefined;
+        if (!stored || !quiz) {
+          return [];
+        }
+        return [
+          {
+            session: stored.session,
+            quizTitle: quiz.title,
+            quizSettings: quiz.settings,
+            participantId: participant.id,
+            participantCount: this.participants.filter(
+              (other) => other.session_id === participant.session_id,
+            ).length,
+            summary: this.storedSummaries.get(participant.session_id) ?? null,
+          },
+        ];
+      });
+  }
+
+  async upsertSessionFeedback(input: {
+    sessionId: string;
+    participantId: string;
+    rating: number;
+    comment: string | null;
+  }) {
+    const existing = this.sessionFeedback.find(
+      (row) => row.sessionId === input.sessionId && row.participantId === input.participantId,
+    );
+    if (existing) {
+      existing.rating = input.rating;
+      existing.comment = input.comment;
+      return;
+    }
+    this.sessionFeedback.push({ ...input, createdAt: new Date().toISOString() });
+  }
+
+  async listSessionFeedback(sessionId: string) {
+    return this.sessionFeedback
+      .filter((row) => row.sessionId === sessionId)
+      .map((row) => ({
+        participantId: row.participantId,
+        displayName:
+          this.participants.find((participant) => participant.id === row.participantId)
+            ?.display_name ?? 'Student',
+        rating: row.rating,
+        comment: row.comment,
+        createdAt: row.createdAt,
+      }));
+  }
+
   async listOpenExamSessions(): Promise<OpenExamSession[]> {
     return [...this.sessions.values()]
       .filter(
@@ -334,6 +418,8 @@ export class InMemoryLiveRepository implements LiveRepository {
       .map((stored) => ({
         session: stored.session,
         hostId: stored.hostId,
+        quizTitle: this.quizzes.get(stored.session.quiz_id)?.title ?? '',
+        quizSettings: this.quizzes.get(stored.session.quiz_id)?.settings ?? {},
         participants: this.participants
           .filter((participant) => participant.session_id === stored.session.id)
           .map((participant) => ({
@@ -430,36 +516,6 @@ export class InMemoryLiveRepository implements LiveRepository {
       };
     }
     return Date.parse(stored.session.results_released_at as string);
-  }
-
-  async findLearnerProfile(userId: string): Promise<LearnerProfile | null> {
-    const profile = this.learnerProfiles.get(userId);
-    return profile ? { ...profile, topicMastery: { ...profile.topicMastery } } : null;
-  }
-
-  async applyLearnerProfile(input: {
-    userId: string;
-    sessionId: string;
-    elo: number;
-    topicMastery: Record<string, number>;
-    answersAdded: number;
-  }): Promise<boolean> {
-    const existing = this.learnerProfiles.get(input.userId);
-    if (existing && existing.lastSessionId === input.sessionId) {
-      return false;
-    }
-    this.learnerProfiles.set(input.userId, {
-      userId: input.userId,
-      elo: Math.min(Math.max(input.elo, ELO_MIN_RATING), ELO_MAX_RATING),
-      topicMastery: { ...(existing?.topicMastery ?? {}), ...input.topicMastery },
-      answersCount: (existing?.answersCount ?? 0) + input.answersAdded,
-      lastSessionId: input.sessionId,
-    });
-    return true;
-  }
-
-  async deleteLearnerProfile(userId: string) {
-    this.learnerProfiles.delete(userId);
   }
 
   async endAllNonEndedSessions(endedAtIso: string) {

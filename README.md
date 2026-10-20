@@ -95,11 +95,9 @@ Runs the unit tests (scoring, answer deadline and grace, clock offset, join code
 
 Limitation: live session state (current question, timers, who answered) lives in the memory of one server process. Run a single instance. On boot every session that is not ended is marked ended, and a restart ends any running session.
 
-### Learner history
+### Learner history (removed)
 
-Signed-in students who join an **adaptive** session start from what QuizUp learned about them before: their skill rating (Elo, clamped to 100..3000) and their per-topic mastery are read from a `learner_profiles` row. Students who join without signing in always start from the defaults, and nothing is stored for them. When the session ends, each signed-in participant's final rating and topic mastery are written back once (a `last_session_id` marker stops a repeat of the same session from applying twice; answers are added to `answers_count`). The quiz editor has a **Use learner history** checkbox (on by default, shown for adaptive quizzes); when it is off the session neither reads nor writes profiles.
-
-Students can erase their profile at any time from **My learning data** in the top bar (`DELETE /me/learner-profile`). Clients can read and delete only their own profile row; only the server writes it. Question ratings stay global in `questions`, with a new `answers_count` that the host difficulty table uses to mark a question **provisional** until it has 30 responses. Run `supabase db reset` to apply migration 0008.
+Per-student learner profiles were removed. Every participant, signed in or not, starts an adaptive session from the default rating, and nothing about a student is carried between sessions. Migration 0009 drops the `learner_profiles` table and the `apply_learner_profile` function, so applying it deletes any stored profiles permanently. Question ratings and `answers_count` (the **provisional** marker in the host difficulty table, until a question has 30 responses) are unaffected. Run `supabase db reset` to apply migration 0009.
 
 ### BKT fitting
 
@@ -192,7 +190,7 @@ What this says honestly: the production setting (sigma 200) is better than fixed
 
 ### Exam mode and proctoring
 
-Turn on **Exam mode** (with a duration in minutes) in the quiz editor. Adaptive mode and Elo/BKT updates are off for exams. Students join with the code and wait in the lobby; the host opens the exam; each student sees a consent screen, and accepting it creates their attempt with a private timer and a personal question and option order, and requests full screen. Attempts are stored in the database, so a refresh or a server restart does not reset them (the student resumes with the same join code, name and rejoin token). The server auto-submits expired attempts, and ending the session submits all open ones. There is no leaderboard; the host sees a progress table (alphabetical) and a per-student proctor timeline, and releases results with the Release results button. Until then students only see "Submitted. Results will be released by your host." Release works from the database alone, even after a restart. Run `supabase db reset` to apply migration 0007.
+Choose **Timed exam** as the assessment type (with a length in minutes) in the quiz editor. Adaptive selection and Elo/BKT updates are off for exams. Students join with the code and wait in the lobby; the host opens the exam; each student sees a consent screen, and accepting it creates their attempt with a private timer and a personal question and option order, and requests full screen. Attempts are stored in the database, so a refresh or a server restart does not reset them (the student resumes with the same join code, name and rejoin token). The server auto-submits expired attempts, and ending the session submits all open ones. There is no leaderboard; the host sees a progress table (alphabetical) and a per-student proctor timeline, and releases results with the Release results button. Until then students only see "Submitted. Results will be released by your host." Release works from the database alone, even after a restart. Run `supabase db reset` to apply migration 0007.
 
 What each signal means and how it is captured (all in the student's browser, only during an open attempt):
 
@@ -258,7 +256,7 @@ It starts the server in-process with the in-memory repository, one host socket a
 
 ### Adaptive mode
 
-Every live session now keeps a skill rating per student (Elo) and a per-topic mastery estimate (Bayesian knowledge tracing), updated each time a question closes. Turning on **Adaptive mode** for a quiz (checkbox in the quiz editor, plus an optional number of rounds) changes only which questions students get: in synchronized rounds each student receives their own question, chosen by their current rating from the approved questions they have not seen. Scoring and the leaderboard stay points-based, and ratings and mastery are never sent to students. The host console shows a table with each student's rating and last question.
+Every live session now keeps a skill rating per student (Elo) and a per-topic mastery estimate (Bayesian knowledge tracing), updated each time a question closes. Choosing **Adaptive quiz** as the assessment type in the quiz editor (the number of rounds is automatic: the smaller of 10 and the approved question count) changes only which questions students get: in synchronized rounds each student receives their own question, chosen by their current rating from the approved questions they have not seen. Scoring and the leaderboard stay points-based, and ratings and mastery are never sent to students. The host console shows a table with each student's rating and last question.
 
 Constants (all exported from `packages/shared`):
 
@@ -281,6 +279,24 @@ npm run adaptive:sim
 ```
 
 It simulates 10 rounds over 30 questions for a strong (ability 1400) and a weak (ability 600) student, prints both difficulty sequences and rating trajectories, and a summary over 200 seeds. It is not run in CI.
+
+### Branded assessments
+
+In the quiz editor, **Branding** sets how the assessment looks to students: a logo (PNG, JPEG or WebP, up to 1 MB, uploaded to the Supabase Storage bucket `branding`), the institution name, and optional tagline, brand colour, welcome message and instructions. Branding is stored in `quizzes.settings.branding` and validated by `brandingSchema` (https logo links only, `#RRGGBB` colours, length limits). The server sends `quizTitle` and `branding` in `room:state`, so students never read quiz rows directly; a broken stored branding value is ignored rather than breaking the session.
+
+Students first see an intro (logo, institution, title, welcome) and then instructions (the host's text plus standard rules for the assessment type) before the lobby or the exam consent screen. Play screens show a compact "<institution>, powered by QuizUp" strip; the host console join panel and the session summary carry the same brand. Text on the brand colour switches between dark and light by contrast. Quizzes without branding look as before, with QuizUp branding only.
+
+Run `supabase db reset` to apply migration 0010, which creates the public `branding` bucket (1 MB limit, PNG, JPEG and WebP only) and lets hosts and admins write only inside a folder named after their own user id.
+
+### Student feedback
+
+When a live quiz ends, or once a student submits their exam, students see a short form: a rating from 1 to 5 and an optional comment (up to 500 characters). It is sent over the socket (`feedback:submit`) and accepted only after the session has ended or the student's own exam attempt is submitted; sending again replaces the earlier answer (one row per student per session). Hosts see the average, the count and every comment on the session summary (`GET /sessions/:id/feedback`, host of the session or admin). Run `supabase db reset` to apply migration 0011 (`session_feedback`, server access only).
+
+### History
+
+Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:quizId/history`) listing every session: when it started, its type and status, how many students joined, the average score (from the stored session summary) and the average feedback rating. Ended sessions link to the full summary and CSV exports; sessions still open link back to the host console. Served by `GET /quizzes/:quizId/sessions` (quiz owner only).
+
+Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/results`): each assessment they joined while signed in, with the institution brand, score and rank. Exam scores stay hidden until the host releases results. Students who join without signing in have no history, because nothing links their answers to an account.
 
 ### AI question generation
 

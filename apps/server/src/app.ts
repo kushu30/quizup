@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { AnalyticsService } from './analytics/analyticsService.js';
-import { createRequireAuth, requireAuth, type AccessTokenVerifier } from './auth.js';
+import { requireAuth, type AccessTokenVerifier } from './auth.js';
 import { serverEnv } from './env.js';
 import { errorHandler } from './http.js';
 import type { ExamService } from './exam/examService.js';
@@ -20,6 +20,7 @@ import { createGenerationRouter } from './routes/generation.js';
 import { questionsRouter } from './routes/questions.js';
 import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
+import { createHistoryRouter } from './history/historyRouter.js';
 
 export interface AppDependencies {
   engine: LiveEngine;
@@ -49,24 +50,6 @@ export function createApp(dependencies: AppDependencies) {
     response.json(request.authUser);
   });
 
-  app.delete(
-    '/me/learner-profile',
-    createRequireAuth(dependencies.verifier),
-    async (request, response, next) => {
-      try {
-        const user = request.authUser;
-        if (!user) {
-          response.status(401).json({ error: 'Not authenticated' });
-          return;
-        }
-        await dependencies.engine.repository.deleteLearnerProfile(user.id);
-        response.status(204).end();
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
   app.use(
     '/quizzes',
     createGenerationRouter({
@@ -76,6 +59,7 @@ export function createApp(dependencies: AppDependencies) {
       repository: dependencies.generationRepository ?? supabaseGenerationRepository,
     }),
   );
+  app.use(createHistoryRouter({ engine: dependencies.engine, verifier: dependencies.verifier }));
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);
   app.use(

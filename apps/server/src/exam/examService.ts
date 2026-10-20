@@ -304,6 +304,11 @@ export class ExamService implements ExamHooks {
     return reference && context ? { reference, context } : null;
   }
 
+  hasSubmitted(participantId: string): boolean {
+    const entry = this.entries.get(participantId);
+    return Boolean(entry && entry.attempt.submittedAtMs !== null);
+  }
+
   async startAttempt(participantId: string, consentVersion: string): Promise<ExamViewResult> {
     const resolved = this.resolve(participantId);
     if (!resolved) {

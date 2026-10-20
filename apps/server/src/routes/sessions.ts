@@ -6,6 +6,7 @@ import type { AnalyticsAccess, AnalyticsService } from '../analytics/analyticsSe
 import type { ExamService } from '../exam/examService.js';
 import { asyncRoute, parseOrReject, sendNotFound } from '../http.js';
 import type { LiveEngine } from '../live/engine.js';
+import { getSessionFeedback } from '../feedback/feedback.js';
 
 export function createSessionsRouter(dependencies: {
   engine: LiveEngine;
@@ -102,6 +103,22 @@ export function createSessionsRouter(dependencies: {
         return;
       }
       response.json(access.value);
+    }),
+  );
+
+  router.get(
+    '/:sessionId/feedback',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const feedback = await getSessionFeedback(engine, params.sessionId, getAuthUser(request));
+      if (!feedback) {
+        response.status(404).json({ error: 'session_not_found' });
+        return;
+      }
+      response.json(feedback);
     }),
   );
 

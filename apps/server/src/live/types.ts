@@ -1,6 +1,5 @@
 import type {
   Difficulty,
-  LearnerProfile,
   ExamProgressRow,
   ExamStudentView,
   Participant,
@@ -60,6 +59,36 @@ export interface LiveRepository extends ExamRepository {
     examDurationMinutes: number | null;
   }) => Promise<Session | null>;
   findSessionWithHost: (sessionId: string) => Promise<{ session: Session; hostId: string } | null>;
+  listQuizSessions: (
+    quizId: string,
+  ) => Promise<{ session: Session; participantCount: number; summary: unknown }[]>;
+  listSessionsForHost: (hostId: string) => Promise<Session[]>;
+  listFeedbackRatings: (sessionIds: string[]) => Promise<{ sessionId: string; rating: number }[]>;
+  listParticipationsForUser: (userId: string) => Promise<
+    {
+      session: Session;
+      quizTitle: string;
+      quizSettings: unknown;
+      participantId: string;
+      participantCount: number;
+      summary: unknown;
+    }[]
+  >;
+  upsertSessionFeedback: (input: {
+    sessionId: string;
+    participantId: string;
+    rating: number;
+    comment: string | null;
+  }) => Promise<void>;
+  listSessionFeedback: (sessionId: string) => Promise<
+    {
+      participantId: string;
+      displayName: string;
+      rating: number;
+      comment: string | null;
+      createdAt: string;
+    }[]
+  >;
   updateSession: (sessionId: string, update: SessionUpdate) => Promise<void>;
   insertParticipant: (input: NewParticipantInput) => Promise<Participant | 'name_taken'>;
   insertResponse: (input: NewResponseInput) => Promise<'inserted' | 'duplicate'>;
@@ -83,15 +112,6 @@ export interface LiveRepository extends ExamRepository {
     generatedAtIso: string,
   ) => Promise<void>;
   loadSessionAnalyticsSource: (sessionId: string) => Promise<SessionAnalyticsSource | null>;
-  findLearnerProfile: (userId: string) => Promise<LearnerProfile | null>;
-  applyLearnerProfile: (input: {
-    userId: string;
-    sessionId: string;
-    elo: number;
-    topicMastery: Record<string, number>;
-    answersAdded: number;
-  }) => Promise<boolean>;
-  deleteLearnerProfile: (userId: string) => Promise<void>;
   endAllNonEndedSessions: (endedAtIso: string) => Promise<void>;
 }
 
@@ -119,6 +139,8 @@ export interface ExamAnswerRecord {
 export interface OpenExamSession {
   session: Session;
   hostId: string;
+  quizTitle: string;
+  quizSettings: unknown;
   participants: {
     id: string;
     displayName: string;

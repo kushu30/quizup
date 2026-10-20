@@ -3,6 +3,9 @@ import {
   PROCTOR_TYPE_LABELS,
   type AnalyticsSnapshot,
   type ExportType,
+  splitStoredBranding,
+  type Branding,
+  type SessionFeedbackResponse,
 } from '@quizup/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -10,6 +13,8 @@ import { Leaderboard } from '../components/Leaderboard';
 import { MasteryHeatmap } from '../components/analytics/MasteryHeatmap';
 import { QuestionDifficultyTable } from '../components/analytics/QuestionDifficultyTable';
 import { ResponseHistogram } from '../components/analytics/ResponseHistogram';
+import { BrandStrip } from '../components/branding/BrandStrip';
+import { FeedbackSummary } from '../components/FeedbackSummary';
 import { Button, Notice, PageHeader, Panel, TableFrame } from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { saveBlob } from '../lib/download';
@@ -24,6 +29,43 @@ export function SessionSummaryPage() {
   const [summary, setSummary] = useState<AnalyticsSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<ExportType | null>(null);
+  const [feedback, setFeedback] = useState<SessionFeedbackResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getSessionFeedback(sessionId)
+      .then((loaded) => {
+        if (!cancelled) {
+          setFeedback(loaded);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const [brand, setBrand] = useState<{ quizTitle: string; branding: Branding | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getSession(sessionId)
+      .then((session) => api.getQuiz(session.session.quiz_id))
+      .then((quiz) => {
+        if (!cancelled) {
+          setBrand({
+            quizTitle: quiz.title,
+            branding: splitStoredBranding(quiz.settings).branding,
+          });
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,9 +136,10 @@ export function SessionSummaryPage() {
 
   return (
     <div className="space-y-6">
+      {brand && <BrandStrip branding={brand.branding} />}
       <PageHeader
-        title="Session summary"
-        description={facts}
+        title={brand?.quizTitle ?? 'Session summary'}
+        description={brand ? `Session summary. ${facts}` : facts}
         back={{ to: '/host', label: 'Back to dashboard' }}
         actions={(['participants', 'responses'] as const).map((type) => (
           <Button
@@ -130,6 +173,8 @@ export function SessionSummaryPage() {
           />
         </Panel>
       </div>
+
+      <FeedbackSummary feedback={feedback} />
 
       <Panel title="Questions">
         <QuestionDifficultyTable questions={summary.questions} showMedian />
