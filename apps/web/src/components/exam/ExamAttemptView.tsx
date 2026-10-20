@@ -5,6 +5,7 @@ import { useProctor } from '../../hooks/useProctor';
 import { useServerNow } from '../../hooks/useServerNow';
 import type { QuizSocket } from '../../lib/socket';
 import { ConnectionBanner } from '../ConnectionBanner';
+import { QuestionImage } from '../QuestionImage';
 import { Button, Notice, buttonClasses } from '../ui';
 
 interface ExamAttemptViewProps {
@@ -301,6 +302,7 @@ export function ExamAttemptView({
             <span className="mr-2 text-muted">{currentIndex + 1}.</span>
             {question.stem}
           </h1>
+          <QuestionImage imageUrl={question.imageUrl} imageAlt={question.imageAlt} />
           <div className="grid gap-3" role="radiogroup" aria-label="Answer options">
             {question.options.map((option, optionIndex) => {
               const checked = answers[question.questionId] === optionIndex;

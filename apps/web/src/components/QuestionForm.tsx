@@ -1,5 +1,6 @@
 import { questionInputSchema, type QuestionInput } from '@quizup/shared';
 import { useId, useState, type FormEvent } from 'react';
+import { QuestionImageField } from './QuestionImageField';
 import { Button, Notice, SelectField, TextAreaField, TextField } from './ui';
 
 interface QuestionFormProps {
@@ -7,6 +8,7 @@ interface QuestionFormProps {
   submitLabel: string;
   onSubmit: (input: QuestionInput) => Promise<void>;
   onCancel?: () => void;
+  modules?: string[];
 }
 
 const EMPTY_QUESTION: QuestionInput = {
@@ -19,11 +21,18 @@ const EMPTY_QUESTION: QuestionInput = {
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
-export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: QuestionFormProps) {
+export function QuestionForm({
+  initialValue,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  modules = [],
+}: QuestionFormProps) {
   const [draft, setDraft] = useState<QuestionInput>(initialValue ?? EMPTY_QUESTION);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const radioName = useId();
+  const moduleListId = useId();
 
   function setOption(optionIndex: number, text: string) {
     setDraft((current) => ({
@@ -44,7 +53,7 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
     try {
       await onSubmit(parsed.data);
       if (!initialValue) {
-        setDraft(EMPTY_QUESTION);
+        setDraft({ ...EMPTY_QUESTION, topic: draft.topic });
       }
     } catch (error) {
       setErrors([error instanceof Error ? error.message : 'Could not save the question']);
@@ -56,11 +65,21 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextField
-          label="Topic"
-          value={draft.topic}
-          onChange={(event) => setDraft({ ...draft, topic: event.target.value })}
-        />
+        <div>
+          <TextField
+            label="Module (optional)"
+            list={moduleListId}
+            placeholder="For example, Module 1"
+            hint="Leave it empty to file the question under Unsorted. You can move questions later."
+            value={draft.topic}
+            onChange={(event) => setDraft({ ...draft, topic: event.target.value })}
+          />
+          <datalist id={moduleListId}>
+            {modules.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </div>
         <SelectField
           label="Difficulty"
           value={draft.difficulty}
@@ -81,6 +100,13 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
         rows={2}
         value={draft.stem}
         onChange={(event) => setDraft({ ...draft, stem: event.target.value })}
+      />
+      <QuestionImageField
+        imageUrl={draft.image_url ?? null}
+        imageAlt={draft.image_alt ?? null}
+        onChange={({ imageUrl, imageAlt }) =>
+          setDraft({ ...draft, image_url: imageUrl, image_alt: imageAlt })
+        }
       />
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-medium">Options</legend>

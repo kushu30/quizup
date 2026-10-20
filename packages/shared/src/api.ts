@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { quizSettingsSchema } from './adaptive.js';
 import { difficultySchema, quizModeSchema } from './enums.js';
+import { QUESTION_IMAGE_ALT_MAX, QUESTION_IMAGE_URL_MAX } from './questionImage.js';
 import { QUESTION_OPTION_COUNT, questionSchema, quizSchema } from './tables.js';
 
 export const MAX_QUESTION_BANK_LIMIT = 500;
@@ -33,8 +34,11 @@ export const quizWithCountSchema = quizSchema.extend({
 export type QuizWithCount = z.infer<typeof quizWithCountSchema>;
 export const quizWithCountListSchema = z.array(quizWithCountSchema);
 
+export const DEFAULT_MODULE = 'Unsorted';
+
+const moduleNameSchema = z.string().trim().min(1, 'Module name is required').max(80);
+
 const questionFieldsSchema = z.object({
-  topic: z.string().trim().min(1, 'Topic is required').max(80),
   stem: z.string().trim().min(1, 'Question text is required').max(1000),
   options: z
     .array(z.string().trim().min(1, 'Every option needs text').max(300))
@@ -45,7 +49,21 @@ const questionFieldsSchema = z.object({
     .min(0)
     .max(QUESTION_OPTION_COUNT - 1),
   difficulty: difficultySchema,
+  image_url: z
+    .string()
+    .url()
+    .max(QUESTION_IMAGE_URL_MAX)
+    .refine((value) => value.startsWith('https://'), 'The image address must use https')
+    .nullable()
+    .optional(),
+  image_alt: z.string().trim().max(QUESTION_IMAGE_ALT_MAX).nullable().optional(),
 });
+
+const IMAGE_ALT_MESSAGE = 'Describe the image for students who cannot see it';
+
+function imageHasDescription(fields: { image_url?: string | null; image_alt?: string | null }) {
+  return !fields.image_url || Boolean(fields.image_alt?.trim());
+}
 
 function optionsAreDistinct(options: string[] | undefined): boolean {
   if (!options) {
@@ -57,20 +75,49 @@ function optionsAreDistinct(options: string[] | undefined): boolean {
 
 const DISTINCT_OPTIONS_MESSAGE = 'Options must be different from each other';
 
-export const questionInputSchema = questionFieldsSchema.refine(
-  (fields) => optionsAreDistinct(fields.options),
-  { message: DISTINCT_OPTIONS_MESSAGE, path: ['options'] },
-);
+export const questionInputSchema = questionFieldsSchema
+  .extend({
+    topic: z
+      .string()
+      .trim()
+      .max(80)
+      .optional()
+      .transform((value) => value || DEFAULT_MODULE),
+  })
+  .refine((fields) => optionsAreDistinct(fields.options), {
+    message: DISTINCT_OPTIONS_MESSAGE,
+    path: ['options'],
+  })
+  .refine(imageHasDescription, { message: IMAGE_ALT_MESSAGE, path: ['image_alt'] });
 export type QuestionInput = z.infer<typeof questionInputSchema>;
 
 export const questionUpdateSchema = questionFieldsSchema
   .partial()
+  .extend({ topic: moduleNameSchema.optional() })
   .refine((fields) => Object.keys(fields).length > 0, 'Nothing to update')
   .refine((fields) => optionsAreDistinct(fields.options), {
     message: DISTINCT_OPTIONS_MESSAGE,
     path: ['options'],
-  });
+  })
+  .refine(imageHasDescription, { message: IMAGE_ALT_MESSAGE, path: ['image_alt'] });
 export type QuestionUpdateInput = z.infer<typeof questionUpdateSchema>;
+
+export const questionMoveSchema = z.object({
+  questionIds: z.array(uuidSchema).min(1).max(MAX_QUESTION_BANK_LIMIT),
+  topic: moduleNameSchema,
+});
+export const questionOrderSchema = z.object({
+  questionIds: z
+    .array(uuidSchema)
+    .min(1)
+    .max(MAX_QUESTION_BANK_LIMIT)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each question can be listed once'),
+});
+export type QuestionOrderInput = z.infer<typeof questionOrderSchema>;
+
+export const questionMoveResultSchema = z.object({ moved: z.number().int().nonnegative() });
+export type QuestionMoveResult = z.infer<typeof questionMoveResultSchema>;
+export type QuestionMoveInput = z.infer<typeof questionMoveSchema>;
 
 export const questionListSchema = z.array(questionSchema);
 export const topicListSchema = z.array(z.string());

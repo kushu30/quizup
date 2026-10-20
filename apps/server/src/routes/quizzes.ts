@@ -3,6 +3,7 @@ import {
   csvImportBodySchema,
   parseQuestionsCsv,
   questionInputSchema,
+  questionOrderSchema,
   quizCreateSchema,
   quizIdParamsSchema,
   quizSchema,
@@ -13,7 +14,10 @@ import {
 import { Router } from 'express';
 import { getAuthUser, requireAuth, requireRole } from '../auth.js';
 import { asyncRoute, parseOrReject, sendNotFound, throwIfSupabaseError } from '../http.js';
+import { serverEnv } from '../env.js';
 import { findOwnedQuiz } from '../ownership.js';
+import { isOwnQuestionImageUrl } from '../questionImageUrl.js';
+import { reorderQuestions, supabaseOrderRepository } from '../questionOrder.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 export const quizzesRouter = Router();
@@ -127,6 +131,10 @@ quizzesRouter.post(
     if (!params || !input) {
       return;
     }
+    if (input.image_url && !isOwnQuestionImageUrl(input.image_url, serverEnv.SUPABASE_URL)) {
+      response.status(400).json({ error: 'The image must be uploaded through QuizUp' });
+      return;
+    }
     const quiz = await findOwnedQuiz(params.quizId, getAuthUser(request).id);
     if (!quiz) {
       sendNotFound(response, 'Quiz');
@@ -172,6 +180,32 @@ quizzesRouter.post(
     );
     throwIfSupabaseError(error);
     response.status(201).json({ imported: questions.length });
+  }),
+);
+
+quizzesRouter.post(
+  '/:quizId/questions/order',
+  asyncRoute(async (request, response) => {
+    const params = parseOrReject(quizIdParamsSchema, request.params, response);
+    const body = params ? parseOrReject(questionOrderSchema, request.body, response) : null;
+    if (!params || !body) {
+      return;
+    }
+    const outcome = await reorderQuestions(
+      supabaseOrderRepository,
+      getAuthUser(request).id,
+      params.quizId,
+      body.questionIds,
+    );
+    if (outcome === 'quiz_not_found') {
+      sendNotFound(response, 'Quiz');
+      return;
+    }
+    if (outcome === 'invalid_order') {
+      response.status(400).json({ error: 'The order must only list questions of this quiz' });
+      return;
+    }
+    response.status(204).end();
   }),
 );
 

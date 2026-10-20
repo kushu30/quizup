@@ -51,6 +51,9 @@ import {
   type StudentJoinPayload,
   type QuizSettings,
   type YourQuestionResult,
+  questionImageOf,
+  selectQuestionIds,
+  type DeliverySettings,
 } from '@quizup/shared';
 import { SessionAnalytics } from '../analytics/sessionAnalytics.js';
 import { createCryptoRandomSource } from './randomSource.js';
@@ -152,7 +155,7 @@ interface SessionState {
   persistence: Promise<void>;
   analytics: SessionAnalytics;
   analyticsTimer: NodeJS.Timeout | null;
-  exam: { durationMs: number } | null;
+  exam: { durationMs: number; delivery: DeliverySettings } | null;
   quizTitle: string;
   branding: Branding | null;
   accessMode: AccessMode;
@@ -169,6 +172,17 @@ interface SessionState {
 }
 
 export type RoomViewer = { role: 'host' } | { role: 'student'; participantId: string };
+
+function deliveryOf(storedSettings: unknown): DeliverySettings {
+  const parsed = quizSettingsSchema.safeParse(splitStoredBranding(storedSettings).settings);
+  return parsed.success
+    ? {
+        shuffleQuestions: parsed.data.shuffleQuestions,
+        shuffleOptions: parsed.data.shuffleOptions,
+        pools: parsed.data.pools,
+      }
+    : { shuffleQuestions: true, shuffleOptions: true, pools: [] };
+}
 
 function accessModeOf(storedSettings: unknown): AccessMode {
   const parsed = quizSettingsSchema.safeParse(splitStoredBranding(storedSettings).settings);
@@ -237,8 +251,6 @@ export class LiveEngine {
       );
     }
 
-    const questions = this.shuffle(approvedQuestions);
-    const questionIds = questions.map((question) => question.id);
     const stored = splitStoredBranding(quiz.settings);
     const parsedSettings = quizSettingsSchema.safeParse(stored.settings);
     const settings: QuizSettings = parsedSettings.success
@@ -247,9 +259,31 @@ export class LiveEngine {
           mode: 'live',
           adaptive: false,
           accessMode: 'open',
+          shuffleQuestions: false,
+          shuffleOptions: false,
+          pools: [],
           adaptiveRounds: undefined,
           durationMinutes: undefined,
         };
+    const isExam = settings.mode === 'exam' && settings.durationMinutes !== undefined;
+    const delivery: DeliverySettings = {
+      shuffleQuestions: settings.shuffleQuestions,
+      shuffleOptions: settings.shuffleOptions,
+      pools: settings.pools,
+    };
+    let questions = approvedQuestions;
+    if (!isExam && !settings.adaptive) {
+      const chosen = new Set(
+        selectQuestionIds(approvedQuestions, settings.pools, {
+          next: () => this.randomIndex(1_000_000) / 1_000_000,
+        }),
+      );
+      questions = approvedQuestions.filter((question) => chosen.has(question.id));
+      if (settings.shuffleQuestions) {
+        questions = this.shuffle(questions);
+      }
+    }
+    const questionIds = questions.map((question) => question.id);
     const examDurationMinutes =
       settings.mode === 'exam' && settings.durationMinutes !== undefined
         ? settings.durationMinutes
@@ -289,7 +323,10 @@ export class LiveEngine {
           mode: examDurationMinutes === null ? 'live' : 'exam',
         }),
         analyticsTimer: null,
-        exam: examDurationMinutes === null ? null : { durationMs: examDurationMinutes * 60_000 },
+        exam:
+          examDurationMinutes === null
+            ? null
+            : { durationMs: examDurationMinutes * 60_000, delivery },
         quizTitle: quiz.title,
         branding: stored.branding,
         accessMode: settings.accessMode,
@@ -964,6 +1001,7 @@ export class LiveEngine {
         difficulty: question.difficulty,
         eloRating: question.eloRating,
         answersCount: question.answersCount,
+        ...questionImageOf(question),
       });
     }
     return ordered;
@@ -1081,6 +1119,7 @@ export class LiveEngine {
       this.publisher.emitToSession(state.record.id, 'question:show', {
         questionId: sharedQuestion.id,
         stem: sharedQuestion.stem,
+        ...questionImageOf(sharedQuestion),
         options: sharedQuestion.options,
         startsAtServerMs: run.startsAtServerMs,
         durationMs: run.durationMs,
@@ -1090,6 +1129,7 @@ export class LiveEngine {
         this.publisher.emitToParticipant(participantId, 'question:show', {
           questionId: question.id,
           stem: question.stem,
+          ...questionImageOf(question),
           options: question.options,
           startsAtServerMs: run.startsAtServerMs,
           durationMs: run.durationMs,
@@ -1477,6 +1517,7 @@ export class LiveEngine {
       hostId: state.hostId,
       durationMs: state.exam.durationMs,
       questions: state.questions,
+      delivery: state.exam.delivery,
       resultsReleasedAtMs: state.resultsReleasedAtMs,
     };
   }
@@ -1598,6 +1639,7 @@ export class LiveEngine {
                 difficulty: question.difficulty,
                 eloRating: question.eloRating,
                 answersCount: question.answersCount,
+                ...questionImageOf(question),
               },
             ]
           : [];
@@ -1618,7 +1660,7 @@ export class LiveEngine {
           mode: 'exam',
         }),
         analyticsTimer: null,
-        exam: { durationMs: minutes * 60_000 },
+        exam: { durationMs: minutes * 60_000, delivery: deliveryOf(entry.quizSettings) },
         quizTitle: entry.quizTitle,
         branding: splitStoredBranding(entry.quizSettings).branding,
         accessMode: accessModeOf(entry.quizSettings),
@@ -1783,6 +1825,7 @@ export class LiveEngine {
           ? {
               questionId: visibleQuestion.id,
               stem: visibleQuestion.stem,
+              ...questionImageOf(visibleQuestion),
               options: visibleQuestion.options,
               startsAtServerMs: run.startsAtServerMs,
               durationMs: run.durationMs,

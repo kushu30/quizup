@@ -50,6 +50,8 @@ interface QuestionRow {
   difficulty: Difficulty;
   elo_rating: number;
   answers_count?: number;
+  image_url?: string | null;
+  image_alt?: string | null;
 }
 
 function toDevices(value: unknown): DeviceInfo[] {
@@ -85,11 +87,12 @@ function toLiveQuestion(row: QuestionRow): LiveQuestion {
     difficulty: row.difficulty,
     eloRating: row.elo_rating,
     answersCount: Number(row.answers_count ?? 0),
+    ...(row.image_url ? { imageUrl: row.image_url, imageAlt: row.image_alt ?? '' } : {}),
   };
 }
 
 const QUESTION_COLUMNS =
-  'id, stem, options, correct_index, topic, difficulty, elo_rating, answers_count';
+  'id, stem, options, correct_index, topic, difficulty, elo_rating, answers_count, image_url, image_alt';
 
 async function fetchAllPages<Row>(
   fetchPage: (
@@ -158,7 +161,9 @@ export class SupabaseLiveRepository implements LiveRepository {
       .from('questions')
       .select(QUESTION_COLUMNS)
       .eq('quiz_id', quizId)
-      .eq('approved', true);
+      .eq('approved', true)
+      .order('position', { ascending: true })
+      .order('id', { ascending: true });
     throwUnexpected(error);
     return ((data ?? []) as QuestionRow[]).map(toLiveQuestion);
   }

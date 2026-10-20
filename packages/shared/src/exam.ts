@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { createSeededRandom } from './sampling.js';
+import { questionImagePayloadShape } from './questionImage.js';
+import { createSeededRandom, shuffleInPlace } from './sampling.js';
 import { QUESTION_OPTION_COUNT } from './tables.js';
 
 export const EXAM_CONSENT_VERSION = 'exam-consent-2026-10-v1';
@@ -180,6 +181,7 @@ export const proctorTimelineResponseSchema = z.array(proctorParticipantTimelineS
 export const examQuestionViewSchema = z.object({
   questionId: z.string().uuid(),
   stem: z.string(),
+  ...questionImagePayloadShape,
   options: z.array(z.string()).length(QUESTION_OPTION_COUNT),
 });
 export type ExamQuestionView = z.infer<typeof examQuestionViewSchema>;
@@ -284,16 +286,6 @@ export const examEmptyPayloadSchema = z.object({}).strict();
 export interface ExamOrders {
   questionOrder: string[];
   optionOrders: Record<string, number[]>;
-}
-
-function shuffleInPlace<Item>(items: Item[], next: () => number): Item[] {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(next() * (index + 1));
-    const held = items[index] as Item;
-    items[index] = items[swapIndex] as Item;
-    items[swapIndex] = held;
-  }
-  return items;
 }
 
 export function buildExamOrders(

@@ -22,6 +22,7 @@ import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
 import { RosterPanel } from '../components/RosterPanel';
 import { StudentRoster } from '../components/StudentRoster';
+import { QuestionImage } from '../components/QuestionImage';
 import { Button, Notice, PageLoader, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { useClockSync } from '../hooks/useClockSync';
@@ -390,6 +391,7 @@ export function HostConsole() {
                 >
                   {question.stem}
                 </h1>
+                <QuestionImage imageUrl={question.imageUrl} imageAlt={question.imageAlt} />
               </div>
 
               {!room.questionClosed && (

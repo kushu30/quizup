@@ -12,6 +12,7 @@ import {
   type Branding,
   type AccessMode,
   type AssessmentType,
+  type PoolRule,
   type Quiz,
 } from '@quizup/shared';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -21,6 +22,7 @@ import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { AccessModePicker } from '../components/AccessModePicker';
 import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
+import { DeliveryOptions, type ModuleCount } from '../components/DeliveryOptions';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
@@ -44,12 +46,17 @@ export function QuizEditor() {
   const [title, setTitle] = useState('');
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('live');
   const [accessMode, setAccessMode] = useState<AccessMode>('open');
+  const [shuffleQuestions, setShuffleQuestions] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(false);
+  const [pools, setPools] = useState<PoolRule[]>([]);
+  const [approvedModules, setApprovedModules] = useState<ModuleCount[]>([]);
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const examMode = assessmentType === 'exam';
   const [message, setMessage] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [counts, setCounts] = useState({ approved: 0, pending: 0 });
+  const [modules, setModules] = useState<string[]>([]);
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_QUESTION_DURATION_SECONDS);
 
   const loadQuiz = useCallback(async () => {
@@ -60,6 +67,9 @@ export function QuizEditor() {
       const settings = quizSettingsSchema.safeParse(loaded.settings);
       setAssessmentType(settings.success ? assessmentTypeOf(settings.data) : 'live');
       setAccessMode(settings.success ? settings.data.accessMode : 'open');
+      setShuffleQuestions(settings.success ? settings.data.shuffleQuestions : false);
+      setShuffleOptions(settings.success ? settings.data.shuffleOptions : false);
+      setPools(settings.success ? settings.data.pools : []);
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
@@ -83,11 +93,39 @@ export function QuizEditor() {
       .then(([approved, pending]) => {
         if (!cancelled) {
           setCounts({ approved: approved.length, pending: pending.length });
+          const byModule = new Map<string, number>();
+          for (const question of approved) {
+            byModule.set(question.topic, (byModule.get(question.topic) ?? 0) + 1);
+          }
+          setApprovedModules(
+            [...byModule.entries()]
+              .map(([name, count]) => ({ name, count }))
+              .sort((first, second) => first.name.localeCompare(second.name)),
+          );
         }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
           setMessage(describeError(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quizId, refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listTopics(quizId)
+      .then((names) => {
+        if (!cancelled) {
+          setModules(names);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModules([]);
         }
       });
     return () => {
@@ -110,6 +148,12 @@ export function QuizEditor() {
     }
   }
 
+  function handleAssessmentTypeChange(next: AssessmentType) {
+    setAssessmentType(next);
+    setShuffleQuestions(next === 'exam');
+    setShuffleOptions(next === 'exam');
+  }
+
   async function handleSaveDetails(event: FormEvent) {
     event.preventDefault();
     const parsed = quizUpdateSchema.safeParse({
@@ -121,6 +165,9 @@ export function QuizEditor() {
         durationMinutes: undefined,
         ...settingsForAssessmentType(assessmentType, Number(durationMinutes)),
         accessMode,
+        shuffleQuestions: assessmentType === 'adaptive' ? false : shuffleQuestions,
+        shuffleOptions: examMode ? shuffleOptions : false,
+        pools: assessmentType === 'adaptive' ? [] : pools,
       },
     });
     if (!parsed.success) {
@@ -217,11 +264,23 @@ export function QuizEditor() {
               />
               <AssessmentTypePicker
                 value={assessmentType}
-                onChange={setAssessmentType}
+                onChange={handleAssessmentTypeChange}
                 durationMinutes={durationMinutes}
                 onDurationChange={setDurationMinutes}
               />
               <AccessModePicker value={accessMode} onChange={setAccessMode} />
+              {assessmentType !== 'adaptive' && (
+                <DeliveryOptions
+                  assessmentType={assessmentType === 'exam' ? 'exam' : 'live'}
+                  shuffleQuestions={shuffleQuestions}
+                  shuffleOptions={shuffleOptions}
+                  pools={pools}
+                  modules={approvedModules}
+                  onShuffleQuestionsChange={setShuffleQuestions}
+                  onShuffleOptionsChange={setShuffleOptions}
+                  onPoolsChange={setPools}
+                />
+              )}
               <Button type="submit" className="w-full">
                 Save details
               </Button>
@@ -286,6 +345,7 @@ export function QuizEditor() {
                 </h3>
                 <QuestionForm
                   submitLabel="Add question"
+                  modules={modules}
                   onSubmit={async (input) => {
                     await api.createQuestion(quizId, input);
                     refreshQuestions();
@@ -318,6 +378,7 @@ export function QuizEditor() {
             <QuestionBank
               quizId={quizId}
               lockedApproval="pending"
+              ordered
               emptyMessage="Nothing waiting for review"
               refreshKey={refreshKey}
               onChanged={refreshQuestions}
@@ -328,6 +389,7 @@ export function QuizEditor() {
             <QuestionBank
               quizId={quizId}
               lockedApproval="approved"
+              ordered
               emptyMessage="No approved questions yet"
               refreshKey={refreshKey}
               onChanged={refreshQuestions}

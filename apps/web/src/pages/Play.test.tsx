@@ -276,4 +276,20 @@ describe('Play proctoring in a live quiz', () => {
     });
     expect(proctorEvents()).toHaveLength(0);
   });
+
+  it('shows the question’s picture with its description', async () => {
+    await renderPlay();
+    fake.fire('connect');
+    act(() => fake.joins().at(-1)?.ack?.(OK));
+    const running = RUNNING(false);
+    fake.fire('room:state', {
+      ...running,
+      currentQuestion: {
+        ...(running.currentQuestion as NonNullable<RoomStatePayload['currentQuestion']>),
+        imageUrl: 'https://x.test/a.png',
+        imageAlt: 'A cat on a sofa',
+      },
+    });
+    expect(screen.getByRole('img', { name: 'A cat on a sofa' })).toBeTruthy();
+  });
 });

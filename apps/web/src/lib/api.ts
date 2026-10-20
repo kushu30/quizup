@@ -2,6 +2,8 @@ import {
   analyticsSnapshotSchema,
   apiErrorSchema,
   approveQuestionsResultSchema,
+  questionMoveResultSchema,
+  type QuestionMoveResult,
   proctorTimelineResponseSchema,
   releaseResultsResponseSchema,
   csvImportResultSchema,
@@ -121,8 +123,8 @@ async function requestJson<Parsed>(
   return parser.parse(await response.json());
 }
 
-async function requestNoContent(path: string, method: string): Promise<void> {
-  await sendRequest(path, method);
+async function requestNoContent(path: string, method: string, body?: unknown): Promise<void> {
+  await sendRequest(path, method, body);
 }
 
 function buildQueryString(query: Record<string, string | number | undefined>): string {
@@ -158,6 +160,10 @@ export const api = {
     requestNoContent(`/questions/${questionId}`, 'DELETE'),
   generateQuestions: (quizId: string, input: GenerateQuestionsInput): Promise<Question[]> =>
     requestJson(`/quizzes/${quizId}/generate-questions`, 'POST', questionListSchema, input),
+  reorderQuestions: (quizId: string, questionIds: string[]): Promise<void> =>
+    requestNoContent(`/quizzes/${quizId}/questions/order`, 'POST', { questionIds }),
+  moveQuestions: (questionIds: string[], topic: string): Promise<QuestionMoveResult> =>
+    requestJson('/questions/move', 'POST', questionMoveResultSchema, { questionIds, topic }),
   approveQuestion: (questionId: string): Promise<Question> =>
     requestJson(`/questions/${questionId}/approve`, 'POST', questionSchema),
   unapproveQuestion: (questionId: string): Promise<Question> =>

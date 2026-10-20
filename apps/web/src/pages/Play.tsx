@@ -18,6 +18,7 @@ import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { FeedbackForm } from '../components/FeedbackForm';
 import { StudentIntro } from '../components/StudentIntro';
+import { QuestionImage } from '../components/QuestionImage';
 import { Button, Notice, PageLoader, buttonClasses } from '../components/ui';
 import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
@@ -564,6 +565,7 @@ export function Play() {
       {hasStarted && (
         <>
           <h1 className="text-xl font-semibold break-words sm:text-2xl">{state.question.stem}</h1>
+          <QuestionImage imageUrl={state.question.imageUrl} imageAlt={state.question.imageAlt} />
           <div role="group" aria-label="Answers" className="grid gap-3 sm:grid-cols-2">
             {state.question.options.map((option, optionIndex) => {
               const chosen = state.chosenIndex === optionIndex;

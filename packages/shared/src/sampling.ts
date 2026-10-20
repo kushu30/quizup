@@ -61,3 +61,13 @@ export function selectNextAdaptiveQuestion<Question extends { id: string; rating
   const candidates = pool.filter((question) => !servedIds.has(question.id));
   return pickWeighted(candidates, playerRating, random, sigma);
 }
+
+export function shuffleInPlace<Item>(items: Item[], next: () => number): Item[] {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(next() * (index + 1));
+    const held = items[index] as Item;
+    items[index] = items[swapIndex] as Item;
+    items[swapIndex] = held;
+  }
+  return items;
+}

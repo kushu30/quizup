@@ -1,6 +1,7 @@
 import {
   questionBankQuerySchema,
   questionIdParamsSchema,
+  questionMoveSchema,
   questionSchema,
   questionUpdateSchema,
   topicsQuerySchema,
@@ -9,6 +10,9 @@ import { Router } from 'express';
 import { getAuthUser, requireAuth, requireRole } from '../auth.js';
 import { asyncRoute, parseOrReject, sendNotFound, throwIfSupabaseError } from '../http.js';
 import { findOwnedQuestion, listOwnedQuizIds } from '../ownership.js';
+import { serverEnv } from '../env.js';
+import { isOwnQuestionImageUrl } from '../questionImageUrl.js';
+import { moveQuestionsToModule, supabaseModuleRepository } from '../questionModules.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 export const questionsRouter = Router();
@@ -47,10 +51,10 @@ questionsRouter.get(
       listing = listing.or(`stem.ilike.%${searchTerm}%,topic.ilike.%${searchTerm}%`);
     }
 
-    const { data, error } = await listing
-      .order('topic', { ascending: true })
-      .order('stem', { ascending: true })
-      .limit(query.limit);
+    const ordered = query.quizId
+      ? listing.order('position', { ascending: true }).order('id', { ascending: true })
+      : listing.order('topic', { ascending: true }).order('stem', { ascending: true });
+    const { data, error } = await ordered.limit(query.limit);
     throwIfSupabaseError(error);
     response.json((data ?? []).map((row) => questionSchema.parse(row)));
   }),
@@ -78,12 +82,33 @@ questionsRouter.get(
   }),
 );
 
+questionsRouter.post(
+  '/move',
+  asyncRoute(async (request, response) => {
+    const body = parseOrReject(questionMoveSchema, request.body, response);
+    if (!body) {
+      return;
+    }
+    const moved = await moveQuestionsToModule(
+      supabaseModuleRepository,
+      getAuthUser(request).id,
+      body.questionIds,
+      body.topic,
+    );
+    response.json({ moved });
+  }),
+);
+
 questionsRouter.patch(
   '/:questionId',
   asyncRoute(async (request, response) => {
     const params = parseOrReject(questionIdParamsSchema, request.params, response);
     const changes = params ? parseOrReject(questionUpdateSchema, request.body, response) : null;
     if (!params || !changes) {
+      return;
+    }
+    if (changes.image_url && !isOwnQuestionImageUrl(changes.image_url, serverEnv.SUPABASE_URL)) {
+      response.status(400).json({ error: 'The image must be uploaded through QuizUp' });
       return;
     }
     const question = await findOwnedQuestion(params.questionId, getAuthUser(request).id);

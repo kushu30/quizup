@@ -311,4 +311,30 @@ describe('ExamAttemptView without proctoring', () => {
     fireEvent.contextMenu(document);
     expect(emitted(emit, 'proctor:event').length).toBeGreaterThan(0);
   });
+
+  it('shows a question’s picture above its answers', () => {
+    const { socket } = makeSocket();
+    const withImage: ExamStudentView = {
+      ...view,
+      questions: [
+        {
+          ...(view.questions[0] as (typeof view.questions)[number]),
+          imageUrl: 'https://x.test/a.png',
+          imageAlt: 'A cat on a sofa',
+        },
+        view.questions[1] as (typeof view.questions)[number],
+      ],
+    };
+    render(
+      <ExamAttemptView
+        socket={socket}
+        view={withImage}
+        offsetMs={0}
+        connected
+        proctored={false}
+        onViewChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'A cat on a sofa' })).toBeTruthy();
+  });
 });

@@ -50,6 +50,7 @@ const approvedQuestion: Question = {
   elo_rating: 1000,
   source: 'manual',
   approved: true,
+  position: 1,
 };
 
 function SessionProbe() {
@@ -228,6 +229,157 @@ describe('QuizEditor', () => {
     expect(api.createSession).toHaveBeenCalledWith({
       quizId: QUIZ_ID,
       questionDurationSeconds: 30,
+    });
+  });
+
+  it('suggests this quiz’s modules when writing a question', async () => {
+    vi.mocked(api.listTopics).mockResolvedValue(['Module 1', 'Module 2']);
+    renderEditor();
+    const field = await screen.findByLabelText('Module (optional)');
+    const list = document.getElementById(field.getAttribute('list') ?? '');
+    expect(
+      Array.from(list?.querySelectorAll('option') ?? []).map((o) => o.getAttribute('value')),
+    ).toEqual(['Module 1', 'Module 2']);
+    expect(api.listTopics).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  describe('shuffling question order', () => {
+    it('is off by default, with a plain explanation', async () => {
+      renderEditor();
+      const box = (await screen.findByLabelText('Shuffle question order')) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      expect(
+        screen.getByText(/Off: students get the questions in the order shown below/),
+      ).toBeTruthy();
+    });
+
+    it('is saved with the other details', async () => {
+      renderEditor();
+      fireEvent.click(await screen.findByLabelText('Shuffle question order'));
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(api.updateQuiz).mock.calls[0]?.[1]?.settings).toMatchObject({
+        shuffleQuestions: true,
+      });
+    });
+
+    it('shows a quiz that was saved with shuffling on', async () => {
+      vi.mocked(api.getQuiz).mockResolvedValue({ ...quiz, settings: { shuffleQuestions: true } });
+      renderEditor();
+      expect(
+        ((await screen.findByLabelText('Shuffle question order')) as HTMLInputElement).checked,
+      ).toBe(true);
+    });
+
+    it('is not offered for an adaptive quiz, which picks questions by rating', async () => {
+      renderEditor();
+      await screen.findByDisplayValue('Fractions');
+      fireEvent.click(screen.getByRole('radio', { name: /Adaptive/ }));
+      expect(screen.queryByLabelText('Shuffle question order')).toBeNull();
+    });
+  });
+
+  describe('delivery by assessment type', () => {
+    const examQuiz = {
+      ...quiz,
+      mode: 'exam' as const,
+      settings: { mode: 'exam', durationMinutes: 30 },
+    };
+
+    it('shows both shuffles on for an exam that never chose', async () => {
+      vi.mocked(api.getQuiz).mockResolvedValue(examQuiz as Quiz);
+      renderEditor();
+      expect(
+        ((await screen.findByLabelText('Shuffle question order')) as HTMLInputElement).checked,
+      ).toBe(true);
+      expect((screen.getByLabelText('Shuffle answer options') as HTMLInputElement).checked).toBe(
+        true,
+      );
+    });
+
+    it('resets the shuffles to the new type’s defaults when the type changes', async () => {
+      renderEditor();
+      await screen.findByLabelText('Shuffle question order');
+      expect(screen.queryByLabelText('Shuffle answer options')).toBeNull();
+      fireEvent.click(screen.getByRole('radio', { name: /Timed exam/ }));
+      expect((screen.getByLabelText('Shuffle question order') as HTMLInputElement).checked).toBe(
+        true,
+      );
+      expect((screen.getByLabelText('Shuffle answer options') as HTMLInputElement).checked).toBe(
+        true,
+      );
+      fireEvent.click(screen.getByRole('radio', { name: /Live quiz/ }));
+      expect((screen.getByLabelText('Shuffle question order') as HTMLInputElement).checked).toBe(
+        false,
+      );
+      expect(screen.queryByLabelText('Shuffle answer options')).toBeNull();
+    });
+
+    it('saves an exam with its shuffles turned off', async () => {
+      vi.mocked(api.getQuiz).mockResolvedValue(examQuiz as Quiz);
+      renderEditor();
+      fireEvent.click(await screen.findByLabelText('Shuffle question order'));
+      fireEvent.click(screen.getByLabelText('Shuffle answer options'));
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(api.updateQuiz).mock.calls[0]?.[1]?.settings).toMatchObject({
+        mode: 'exam',
+        shuffleQuestions: false,
+        shuffleOptions: false,
+      });
+    });
+  });
+
+  describe('question pools', () => {
+    const inModule = (id: string, topic: string): Question => ({ ...approvedQuestion, id, topic });
+
+    it('counts the approved questions in each module and saves the rules', async () => {
+      mockQuestions([
+        inModule('a1', 'Module 1'),
+        inModule('a2', 'Module 1'),
+        inModule('a3', 'Module 1'),
+        inModule('b1', 'Module 2'),
+      ]);
+      renderEditor();
+      await screen.findByLabelText('Shuffle question order');
+      const add = await screen.findByRole('button', { name: 'Add a pool rule' });
+      await waitFor(() => expect((add as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(add);
+      expect(await screen.findByText('of 3 approved questions')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Questions to draw from Module 1'), {
+        target: { value: '2' },
+      });
+      expect(screen.getByText('Each student gets 3 of 4 questions.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(api.updateQuiz).mock.calls[0]?.[1]?.settings).toMatchObject({
+        pools: [{ module: 'Module 1', count: 2 }],
+      });
+    });
+
+    it('shows a saved rule when the quiz is opened', async () => {
+      vi.mocked(api.getQuiz).mockResolvedValue({
+        ...quiz,
+        settings: { pools: [{ module: 'Fractions', count: 1 }] },
+      });
+      mockQuestions([approvedQuestion]);
+      renderEditor();
+      expect(await screen.findByRole('group', { name: 'Pool rule for Fractions' })).toBeTruthy();
+    });
+
+    it('is not offered for an adaptive quiz and saves no rules for it', async () => {
+      vi.mocked(api.getQuiz).mockResolvedValue({
+        ...quiz,
+        settings: { pools: [{ module: 'Fractions', count: 1 }] },
+      });
+      mockQuestions([approvedQuestion]);
+      renderEditor();
+      await screen.findByRole('group', { name: 'Pool rule for Fractions' });
+      fireEvent.click(screen.getByRole('radio', { name: /Adaptive/ }));
+      expect(screen.queryByText('Question pools')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(api.updateQuiz).mock.calls[0]?.[1]?.settings).toMatchObject({ pools: [] });
     });
   });
 });
