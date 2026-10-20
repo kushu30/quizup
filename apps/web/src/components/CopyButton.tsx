@@ -6,6 +6,7 @@ const RESET_AFTER_MS = 2000;
 interface CopyButtonProps {
   text: string;
   label: string;
+  ariaLabel?: string;
   copiedMessage?: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -16,6 +17,7 @@ interface CopyButtonProps {
 export function CopyButton({
   text,
   label,
+  ariaLabel,
   copiedMessage = 'Link copied',
   variant = 'secondary',
   size = 'md',
@@ -49,7 +51,13 @@ export function CopyButton({
 
   return (
     <span className="inline-flex flex-col items-center gap-1">
-      <Button variant={variant} size={size} className={className} onClick={() => void copy()}>
+      <Button
+        variant={variant}
+        size={size}
+        className={className}
+        aria-label={ariaLabel}
+        onClick={() => void copy()}
+      >
         {label}
       </Button>
       <span role="status" className={statusClassName}>

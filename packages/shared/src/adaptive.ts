@@ -9,6 +9,9 @@ export const EXAM_MIN_DURATION_MINUTES = 1;
 export const EXAM_MAX_DURATION_MINUTES = 300;
 export const DEFAULT_EXAM_DURATION_MINUTES = 30;
 
+export const accessModeSchema = z.enum(['open', 'token']);
+export type AccessMode = z.infer<typeof accessModeSchema>;
+
 export const quizModeSettingSchema = z.enum(['live', 'exam']);
 export type QuizModeSetting = z.infer<typeof quizModeSettingSchema>;
 
@@ -21,6 +24,7 @@ const quizSettingsBaseSchema = z.object({
     .max(EXAM_MAX_DURATION_MINUTES)
     .optional(),
   adaptive: z.boolean().default(false),
+  accessMode: accessModeSchema.default('open'),
   adaptiveRounds: z.number().int().min(MIN_ADAPTIVE_ROUNDS).max(MAX_ADAPTIVE_ROUNDS).optional(),
   branding: brandingSchema.optional(),
 });

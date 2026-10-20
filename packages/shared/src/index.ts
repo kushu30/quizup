@@ -24,3 +24,5 @@ export * from './assessmentType.js';
 export * from './branding.js';
 export * from './feedback.js';
 export * from './history.js';
+export * from './joinInfo.js';
+export * from './roster.js';

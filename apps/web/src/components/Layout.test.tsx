@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
+import { usePageBrand, usePageFocus } from '../lib/brandContext';
 import { Layout } from './Layout';
 
 const authState = vi.hoisted(() => ({
@@ -16,12 +18,23 @@ vi.mock('../lib/AuthContext', () => ({
   useAuth: () => authState.value,
 }));
 
-function renderAt(path: string) {
+function BrandedBody({
+  branding,
+  hero,
+}: {
+  branding: Parameters<typeof usePageBrand>[0];
+  hero: boolean;
+}) {
+  usePageBrand(branding, hero);
+  return <p>Page body</p>;
+}
+
+function renderAt(path: string, branding: Parameters<typeof usePageBrand>[0] = null, hero = false) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="*" element={<p>Page body</p>} />
+          <Route path="*" element={<BrandedBody branding={branding} hero={hero} />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -120,5 +133,110 @@ describe('Layout', () => {
     const skip = screen.getByRole('link', { name: 'Skip to content' });
     expect(skip.getAttribute('href')).toBe('#main-content');
     expect(screen.getByRole('main').id).toBe('main-content');
+  });
+
+  it('keeps the QuizUp wordmark and plain page when the page has no brand', () => {
+    renderAt('/');
+    expect(screen.getByRole('link', { name: /QuizUp/ })).toBeTruthy();
+    expect(screen.queryByTestId('brand-stripe')).toBeNull();
+  });
+
+  it('puts the institution in the header with a brand stripe and a light tint', () => {
+    renderAt('/join/K7M2QX', { institutionName: 'St. Xavier College', brandColor: '#7A1F2B' });
+    const home = screen.getByRole('link', { name: /St\. Xavier College/ });
+    expect(home.textContent).toContain('Powered by');
+    expect(screen.getByTestId('brand-stripe').getAttribute('style')).toContain(
+      'background-color: rgb(122, 31, 43)',
+    );
+    const root = screen.getByRole('main').closest('div[data-brand]');
+    expect(root?.getAttribute('style')).toContain('color-mix');
+  });
+
+  it('stays plain when the brand only carries text for the student intro', () => {
+    renderAt('/join/K7M2QX', { welcomeMessage: 'Good luck.' });
+    expect(screen.queryByTestId('brand-stripe')).toBeNull();
+    expect(screen.getByRole('link', { name: /QuizUp/ })).toBeTruthy();
+  });
+
+  it('clears the brand when the page goes away', () => {
+    const { unmount } = renderAt('/join/K7M2QX', { institutionName: 'St. Xavier College' });
+    unmount();
+    renderAt('/');
+    expect(screen.queryByText('St. Xavier College')).toBeNull();
+  });
+
+  it('keeps the plain wordmark in the header when the page already shows a big brand card', () => {
+    renderAt(
+      '/join/K7M2QX',
+      { institutionName: 'St. Xavier College', brandColor: '#7A1F2B' },
+      true,
+    );
+    expect(screen.getByRole('link', { name: /QuizUp/ })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /St\. Xavier College/ })).toBeNull();
+    expect(screen.getByTestId('brand-stripe')).toBeTruthy();
+    expect(screen.getByRole('main').closest('div[data-brand]')?.getAttribute('style')).toContain(
+      'color-mix',
+    );
+  });
+});
+
+function FocusBody({ branding }: { branding: Parameters<typeof usePageBrand>[0] }) {
+  const [focused, setFocused] = useState(true);
+  usePageFocus(focused);
+  usePageBrand(branding);
+  return (
+    <button type="button" onClick={() => setFocused(false)}>
+      Finish
+    </button>
+  );
+}
+
+function renderFocused(branding: Parameters<typeof usePageBrand>[0] = null) {
+  return render(
+    <MemoryRouter initialEntries={['/play/ABC234']}>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="*" element={<FocusBody branding={branding} />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe('Layout focus mode', () => {
+  it('removes every way to leave the page while an assessment is in focus', () => {
+    setAuth({ session: {}, canHost: true, isAdmin: true });
+    renderFocused();
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Host' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /QuizUp/ })).toBeNull();
+  });
+
+  it('keeps the institution and QuizUp co-branding in a slim, non-clickable bar', () => {
+    renderFocused({
+      institutionName: 'Dayananda Sagar College of Engineering',
+      brandColor: '#7A1F2B',
+    });
+    expect(screen.getByText('Dayananda Sagar College of Engineering')).toBeTruthy();
+    expect(screen.getByTestId('brand-stripe')).toBeTruthy();
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Skip to content',
+    ]);
+  });
+
+  it('shows the plain QuizUp wordmark in the slim bar when there is no brand', () => {
+    renderFocused();
+    expect(screen.getByText('QuizUp')).toBeTruthy();
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Skip to content',
+    ]);
+  });
+
+  it('brings the navigation back when focus ends', () => {
+    renderFocused();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeTruthy();
   });
 });

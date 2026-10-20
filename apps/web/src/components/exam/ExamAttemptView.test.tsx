@@ -43,19 +43,29 @@ const view: ExamStudentView = {
   resultsReleased: false,
 };
 
-function renderAttempt() {
+function renderAttempt(initiallyConnected = true) {
   const { socket, emit } = makeSocket();
   const onViewChange = vi.fn();
-  render(
+  const attempt = (connected: boolean, currentView: ExamStudentView = view) => (
     <ExamAttemptView
       socket={socket}
-      view={view}
+      view={currentView}
       offsetMs={0}
-      connected
+      connected={connected}
       onViewChange={onViewChange}
-    />,
+    />
   );
-  return { emit, onViewChange };
+  const { rerender } = render(attempt(initiallyConnected));
+  return {
+    emit,
+    onViewChange,
+    setConnected: (connected: boolean, currentView?: ExamStudentView) =>
+      rerender(attempt(connected, currentView)),
+  };
+}
+
+function pickOption(letter: string) {
+  fireEvent.click(screen.getByRole('radio', { name: letter.toLowerCase() }));
 }
 
 function openConfirm() {
@@ -148,5 +158,123 @@ describe('ExamAttemptView submit', () => {
     openConfirm();
     fireEvent.click(screen.getByRole('button', { name: 'Submit now' }));
     expect(emitted(emit, 'exam:submit')).toHaveLength(2);
+  });
+});
+
+describe('ExamAttemptView answers while offline', () => {
+  const FIRST = '22222222-2222-4222-8222-222222222222';
+
+  it('keeps an answer picked offline and sends it once the seat is back', () => {
+    const { emit, setConnected } = renderAttempt(false);
+    expect(screen.getByRole('status', { name: /reconnecting/i })).toBeTruthy();
+    pickOption('B');
+    expect(emitted(emit, 'exam:answer')).toHaveLength(0);
+    expect(screen.getByRole('radio', { name: 'b' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('1 answer waiting to send')).toBeTruthy();
+
+    setConnected(true);
+    const sent = emitted(emit, 'exam:answer');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.[1]).toEqual({ questionId: FIRST, displayedIndex: 1 });
+    act(() => sent[0]?.[2]?.({ ok: true, answeredCount: 1 }));
+    expect(screen.queryByText(/waiting to send/)).toBeNull();
+  });
+
+  it('does not lose an offline answer when the server sends a fresh copy of the exam', () => {
+    const { setConnected } = renderAttempt(false);
+    pickOption('C');
+    setConnected(true, { ...view, answers: {} });
+    expect(screen.getByRole('radio', { name: 'c' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('keeps the answer and tries again when the server could not save it yet', () => {
+    const { emit } = renderAttempt();
+    pickOption('A');
+    const first = emitted(emit, 'exam:answer')[0]?.[2];
+    act(() => first?.({ ok: false, error: 'not_in_room' }));
+    expect(screen.getByRole('radio', { name: 'a' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('1 answer waiting to send')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(3500);
+    });
+    expect(emitted(emit, 'exam:answer')).toHaveLength(2);
+  });
+
+  it('takes the answer back and says time is up when the attempt has expired', () => {
+    const { emit } = renderAttempt();
+    pickOption('D');
+    act(() => emitted(emit, 'exam:answer')[0]?.[2]?.({ ok: false, error: 'attempt_expired' }));
+    expect(screen.getByRole('radio', { name: 'd' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('alert').textContent).toMatch(/time is up/i);
+    expect(screen.queryByText(/waiting to send/)).toBeNull();
+  });
+
+  it('holds the submit button until the connection is back', () => {
+    const { setConnected } = renderAttempt(false);
+    expect(
+      (screen.getByRole('button', { name: 'Submit exam' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByText(/submit once you are back online/i)).toBeTruthy();
+    setConnected(true);
+    expect(
+      (screen.getByRole('button', { name: 'Submit exam' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+});
+
+describe('ExamAttemptView timer', () => {
+  it('shows the time left as a large clock', () => {
+    renderAttempt();
+    const timer = screen.getByRole('timer');
+    expect(timer.textContent).toContain('20:00');
+    expect(timer.textContent).toContain('Time left');
+    expect(timer.getAttribute('data-urgency')).toBe('calm');
+  });
+
+  it('counts down every second', () => {
+    renderAttempt();
+    act(() => {
+      vi.advanceTimersByTime(65_000);
+    });
+    expect(screen.getByRole('timer').textContent).toContain('18:55');
+  });
+
+  it('warns at ten minutes, five minutes and the last minute', () => {
+    renderAttempt();
+    act(() => {
+      vi.advanceTimersByTime(10 * 60_000 + 2000);
+    });
+    let timer = screen.getByRole('timer');
+    expect(timer.getAttribute('data-urgency')).toBe('soon');
+    expect(timer.textContent).toContain('10 minutes left');
+    act(() => {
+      vi.advanceTimersByTime(5 * 60_000);
+    });
+    timer = screen.getByRole('timer');
+    expect(timer.textContent).toContain('5 minutes left');
+    act(() => {
+      vi.advanceTimersByTime(4 * 60_000 + 30_000);
+    });
+    timer = screen.getByRole('timer');
+    expect(timer.getAttribute('data-urgency')).toBe('urgent');
+    expect(timer.textContent).toContain('Last minute');
+  });
+
+  it('announces each milestone to screen readers once', () => {
+    renderAttempt();
+    expect(screen.queryByRole('status', { name: 'Time warning' })).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(10 * 60_000 + 2000);
+    });
+    expect(screen.getByRole('status', { name: 'Time warning' }).textContent).toBe(
+      '10 minutes left',
+    );
+  });
+
+  it('shows how many questions are answered', () => {
+    renderAttempt();
+    expect(screen.getByText('0 of 2 answered')).toBeTruthy();
+    pickOption('A');
+    expect(screen.getByText('1 of 2 answered')).toBeTruthy();
   });
 });

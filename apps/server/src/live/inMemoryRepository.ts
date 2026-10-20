@@ -12,6 +12,8 @@ import type {
   LiveRepository,
   NewParticipantInput,
   NewResponseInput,
+  NewRosterInput,
+  RosterRecord,
   ExamAnswerRecord,
   ExamAttemptRecord,
   OpenExamSession,
@@ -53,6 +55,7 @@ export class InMemoryLiveRepository implements LiveRepository {
     comment: string | null;
     createdAt: string;
   }[] = [];
+  readonly roster: RosterRecord[] = [];
   readonly sessions = new Map<string, { session: Session; hostId: string }>();
   readonly participants: Participant[] = [];
   readonly responses: StoredResponse[] = [];
@@ -190,6 +193,58 @@ export class InMemoryLiveRepository implements LiveRepository {
     };
     this.participants.push(participant);
     return participant;
+  }
+
+  async listRoster(sessionId: string): Promise<RosterRecord[]> {
+    return this.roster
+      .filter((entry) => entry.sessionId === sessionId)
+      .map((entry) => ({ ...entry }));
+  }
+
+  async insertRoster(entries: NewRosterInput[]): Promise<RosterRecord[] | 'name_taken'> {
+    const taken = new Set(
+      this.roster.map((entry) => `${entry.sessionId}:${entry.displayName.toLowerCase()}`),
+    );
+    for (const entry of entries) {
+      const key = `${entry.sessionId}:${entry.displayName.toLowerCase()}`;
+      if (taken.has(key)) {
+        return 'name_taken';
+      }
+      taken.add(key);
+    }
+    const created = entries.map((entry) => ({ ...entry, id: randomUUID(), participantId: null }));
+    this.roster.push(...created);
+    return created.map((entry) => ({ ...entry }));
+  }
+
+  async updateRosterEntry(
+    rosterId: string,
+    patch: { tokenHash?: string; participantId?: string | null },
+  ) {
+    const entry = this.roster.find((candidate) => candidate.id === rosterId);
+    if (!entry) {
+      return;
+    }
+    if (patch.tokenHash !== undefined) {
+      entry.tokenHash = patch.tokenHash;
+    }
+    if (patch.participantId !== undefined) {
+      entry.participantId = patch.participantId;
+    }
+  }
+
+  async deleteRosterEntry(rosterId: string) {
+    const index = this.roster.findIndex((candidate) => candidate.id === rosterId);
+    if (index !== -1) {
+      this.roster.splice(index, 1);
+    }
+  }
+
+  async updateParticipantTokenHash(participantId: string, tokenHash: string) {
+    const participant = this.participants.find((candidate) => candidate.id === participantId);
+    if (participant) {
+      participant.rejoin_token_hash = tokenHash;
+    }
   }
 
   async insertResponse(input: NewResponseInput): Promise<'inserted' | 'duplicate'> {

@@ -37,6 +37,15 @@ import {
   quizSessionHistorySchema,
   type MyResultRow,
   type QuizSessionHistoryRow,
+  allowRejoinResponseSchema,
+  rosterAddResponseSchema,
+  rosterReissueResponseSchema,
+  rosterResponseSchema,
+  type AllowRejoinResponse,
+  type RosterAddResponse,
+  type RosterReissueResponse,
+  type RosterResponse,
+  type RosterStudentInput,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -165,6 +174,24 @@ export const api = {
     requestJson('/me/quiz-activity', 'GET', quizActivityListSchema),
   getSessionFeedback: (sessionId: string): Promise<SessionFeedbackResponse> =>
     requestJson(`/sessions/${sessionId}/feedback`, 'GET', sessionFeedbackResponseSchema),
+  getRoster: (sessionId: string): Promise<RosterResponse> =>
+    requestJson(`/sessions/${sessionId}/roster`, 'GET', rosterResponseSchema),
+  addRoster: (sessionId: string, students: RosterStudentInput[]): Promise<RosterAddResponse> =>
+    requestJson(`/sessions/${sessionId}/roster`, 'POST', rosterAddResponseSchema, { students }),
+  reissueRosterToken: (sessionId: string, rosterId: string): Promise<RosterReissueResponse> =>
+    requestJson(
+      `/sessions/${sessionId}/roster/${rosterId}/reissue`,
+      'POST',
+      rosterReissueResponseSchema,
+    ),
+  removeRosterEntry: (sessionId: string, rosterId: string): Promise<void> =>
+    requestNoContent(`/sessions/${sessionId}/roster/${rosterId}`, 'DELETE'),
+  allowRejoin: (sessionId: string, participantId: string): Promise<AllowRejoinResponse> =>
+    requestJson(
+      `/sessions/${sessionId}/participants/${participantId}/allow-rejoin`,
+      'POST',
+      allowRejoinResponseSchema,
+    ),
   getSession: (sessionId: string): Promise<SessionSummary> =>
     requestJson(`/sessions/${sessionId}`, 'GET', sessionSummarySchema),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>

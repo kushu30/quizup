@@ -19,6 +19,8 @@ import type {
   SessionAnalyticsSource,
   SessionUpdate,
   SummaryRecord,
+  NewRosterInput,
+  RosterRecord,
 } from './types.js';
 
 const UNIQUE_VIOLATION_CODE = '23505';
@@ -45,6 +47,24 @@ interface QuestionRow {
   difficulty: Difficulty;
   elo_rating: number;
   answers_count?: number;
+}
+
+function toRosterRecord(row: {
+  id: string;
+  session_id: string;
+  display_name: string;
+  email: string | null;
+  token_hash: string;
+  participant_id: string | null;
+}): RosterRecord {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    displayName: row.display_name,
+    email: row.email,
+    tokenHash: row.token_hash,
+    participantId: row.participant_id,
+  };
 }
 
 function toLiveQuestion(row: QuestionRow): LiveQuestion {
@@ -208,6 +228,63 @@ export class SupabaseLiveRepository implements LiveRepository {
     }
     throwUnexpected(error);
     return participantSchema.parse(data);
+  }
+
+  async listRoster(sessionId: string): Promise<RosterRecord[]> {
+    const { data, error } = await supabaseAdmin
+      .from('session_roster')
+      .select('id, session_id, display_name, email, token_hash, participant_id')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    throwUnexpected(error);
+    return (data ?? []).map(toRosterRecord);
+  }
+
+  async insertRoster(entries: NewRosterInput[]): Promise<RosterRecord[] | 'name_taken'> {
+    const { data, error } = await supabaseAdmin
+      .from('session_roster')
+      .insert(
+        entries.map((entry) => ({
+          session_id: entry.sessionId,
+          display_name: entry.displayName,
+          email: entry.email,
+          token_hash: entry.tokenHash,
+        })),
+      )
+      .select('id, session_id, display_name, email, token_hash, participant_id');
+    if (error?.code === UNIQUE_VIOLATION_CODE) {
+      return 'name_taken';
+    }
+    throwUnexpected(error);
+    return (data ?? []).map(toRosterRecord);
+  }
+
+  async updateRosterEntry(
+    rosterId: string,
+    patch: { tokenHash?: string; participantId?: string | null },
+  ) {
+    const row: Record<string, string | null> = {};
+    if (patch.tokenHash !== undefined) {
+      row.token_hash = patch.tokenHash;
+    }
+    if (patch.participantId !== undefined) {
+      row.participant_id = patch.participantId;
+    }
+    const { error } = await supabaseAdmin.from('session_roster').update(row).eq('id', rosterId);
+    throwUnexpected(error);
+  }
+
+  async deleteRosterEntry(rosterId: string) {
+    const { error } = await supabaseAdmin.from('session_roster').delete().eq('id', rosterId);
+    throwUnexpected(error);
+  }
+
+  async updateParticipantTokenHash(participantId: string, tokenHash: string) {
+    const { error } = await supabaseAdmin
+      .from('participants')
+      .update({ rejoin_token_hash: tokenHash })
+      .eq('id', participantId);
+    throwUnexpected(error);
   }
 
   async insertResponse(input: NewResponseInput): Promise<'inserted' | 'duplicate'> {

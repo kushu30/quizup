@@ -1,15 +1,47 @@
 import type { ParticipantPresence } from '@quizup/shared';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 
 interface StudentRosterProps {
   participants: ParticipantPresence[];
   size?: 'compact' | 'large';
+  onLetBackIn?: (participantId: string) => Promise<void>;
 }
 
-export function StudentRoster({ participants, size = 'compact' }: StudentRosterProps) {
+export function StudentRoster({ participants, size = 'compact', onLetBackIn }: StudentRosterProps) {
   const headingId = useId();
   const connectedCount = participants.filter((participant) => participant.connected).length;
   const large = size === 'large';
+  const [reopened, setReopened] = useState<Set<string>>(new Set());
+  const [failed, setFailed] = useState(false);
+
+  async function letBackIn(participantId: string) {
+    setFailed(false);
+    try {
+      await onLetBackIn?.(participantId);
+      setReopened((current) => new Set(current).add(participantId));
+    } catch {
+      setFailed(true);
+    }
+  }
+
+  function reopenControl(participant: ParticipantPresence) {
+    if (!onLetBackIn || participant.connected) {
+      return null;
+    }
+    if (reopened.has(participant.participantId)) {
+      return <span className="text-xs text-muted">Open for 5 minutes</span>;
+    }
+    return (
+      <button
+        type="button"
+        aria-label={`Let ${participant.displayName} back in`}
+        onClick={() => void letBackIn(participant.participantId)}
+        className="shrink-0 rounded border border-rule-strong bg-surface px-2 py-0.5 text-xs font-medium text-ink hover:bg-paper"
+      >
+        Let back in
+      </button>
+    );
+  }
 
   return (
     <section
@@ -54,6 +86,7 @@ export function StudentRoster({ participants, size = 'compact' }: StudentRosterP
               />
               <span className="min-w-0 truncate font-medium">{participant.displayName}</span>
               {!participant.connected && <span className="sr-only"> (disconnected)</span>}
+              {reopenControl(participant)}
             </li>
           ))}
         </ul>
@@ -71,9 +104,16 @@ export function StudentRoster({ participants, size = 'compact' }: StudentRosterP
             >
               {participant.displayName}
               {!participant.connected && <span className="sr-only"> (disconnected)</span>}
+              {onLetBackIn && !participant.connected && ' '}
+              {reopenControl(participant)}
             </li>
           ))}
         </ul>
+      )}
+      {failed && (
+        <p role="alert" className="text-sm font-medium text-alert">
+          Could not reopen that seat. Try again.
+        </p>
       )}
     </section>
   );

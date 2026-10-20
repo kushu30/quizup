@@ -1,8 +1,10 @@
 import type { ExamStudentView } from '@quizup/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { clockLabelFor, formatClock, urgencyOf } from '../../lib/examClock';
 import { useProctor } from '../../hooks/useProctor';
 import { useServerNow } from '../../hooks/useServerNow';
 import type { QuizSocket } from '../../lib/socket';
+import { ConnectionBanner } from '../ConnectionBanner';
 import { Button, Notice, buttonClasses } from '../ui';
 
 interface ExamAttemptViewProps {
@@ -16,13 +18,15 @@ interface ExamAttemptViewProps {
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 const SUBMIT_FALLBACK_AFTER_MS = 2000;
 const SUBMIT_ACK_TIMEOUT_MS = 10_000;
+const ANSWER_RETRY_MS = 3000;
 
-function formatClock(milliseconds: number): string {
-  const totalSeconds = Math.max(Math.ceil(milliseconds / 1000), 0);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
+const CLOCK_STYLES = {
+  calm: 'bg-board text-white',
+  soon: 'bg-marker text-ink',
+  urgent: 'bg-alert text-white',
+} as const;
+
+const BAR_STYLES = { calm: 'bg-board', soon: 'bg-marker', urgent: 'bg-alert' } as const;
 
 export function ExamAttemptView({
   socket,
@@ -37,6 +41,10 @@ export function ExamAttemptView({
   const [answers, setAnswers] = useState<Record<string, number>>(view.answers);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const pendingRef = useRef<Record<string, number>>({});
+  const [pendingCount, setPendingCount] = useState(0);
+  const viewAnswersRef = useRef(view.answers);
+  viewAnswersRef.current = view.answers;
   const offsetRef = useRef(offsetMs);
   offsetRef.current = offsetMs;
   const fallbackSent = useRef(false);
@@ -55,11 +63,58 @@ export function ExamAttemptView({
   });
 
   useEffect(() => {
-    setAnswers(view.answers);
+    setAnswers({ ...view.answers, ...pendingRef.current });
   }, [view.answers]);
+
+  const sendAnswer = useCallback(
+    (questionId: string, displayedIndex: number) => {
+      socket.emit('exam:answer', { questionId, displayedIndex }, (ack) => {
+        if (ack.ok) {
+          if (pendingRef.current[questionId] === displayedIndex) {
+            delete pendingRef.current[questionId];
+            setPendingCount(Object.keys(pendingRef.current).length);
+          }
+          return;
+        }
+        if (ack.error === 'attempt_expired') {
+          pendingRef.current = {};
+          setPendingCount(0);
+          setAnswers(viewAnswersRef.current);
+          setMessage('Your time is up.');
+        }
+      });
+    },
+    [socket],
+  );
+
+  const flushPending = useCallback(() => {
+    for (const [questionId, displayedIndex] of Object.entries(pendingRef.current)) {
+      sendAnswer(questionId, displayedIndex);
+    }
+  }, [sendAnswer]);
+
+  const hasPending = pendingCount > 0;
+
+  useEffect(() => {
+    if (connected) {
+      flushPending();
+    }
+  }, [connected, flushPending]);
+
+  useEffect(() => {
+    if (!connected || !hasPending) {
+      return;
+    }
+    const timer = setInterval(flushPending, ANSWER_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [connected, hasPending, flushPending]);
 
   const remainingMs = attempt ? attempt.deadlineAtServerMs - serverNowMs : 0;
   const timeIsUp = remainingMs <= 0;
+  const urgency = urgencyOf(remainingMs);
+  const clockLabel = clockLabelFor(remainingMs);
+  const totalMs = attempt ? attempt.deadlineAtServerMs - attempt.startedAtServerMs : 0;
+  const remainingShare = totalMs > 0 ? Math.min(Math.max(remainingMs / totalMs, 0), 1) : 0;
 
   const submit = useCallback(() => {
     if (submitInFlight.current) {
@@ -121,27 +176,13 @@ export function ExamAttemptView({
     if (timeIsUp || submitting) {
       return;
     }
-    const previous = answers[questionId];
     setAnswers((current) => ({ ...current, [questionId]: displayedIndex }));
     setMessage(null);
-    socket.emit('exam:answer', { questionId, displayedIndex }, (ack) => {
-      if (!ack.ok) {
-        setAnswers((current) => {
-          const next = { ...current };
-          if (previous === undefined) {
-            delete next[questionId];
-          } else {
-            next[questionId] = previous;
-          }
-          return next;
-        });
-        setMessage(
-          ack.error === 'attempt_expired'
-            ? 'Your time is up.'
-            : 'Your answer was not saved. Try again.',
-        );
-      }
-    });
+    pendingRef.current[questionId] = displayedIndex;
+    setPendingCount(Object.keys(pendingRef.current).length);
+    if (connected) {
+      sendAnswer(questionId, displayedIndex);
+    }
   }
 
   return (
@@ -173,22 +214,46 @@ export function ExamAttemptView({
         </div>
       )}
 
-      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between border-b border-rule bg-paper/95 px-4 py-3 backdrop-blur">
-        <span className="text-sm font-medium text-muted tabular-nums">
-          {answeredCount} of {view.questions.length} answered
-        </span>
-        <span
-          className={`text-title font-bold tabular-nums ${remainingMs < 60_000 ? 'text-alert' : ''}`}
-          aria-label="Time left"
-        >
-          {formatClock(remainingMs)}
-        </span>
+      <div className="sticky top-0 z-10 -mx-4 border-b border-rule bg-paper/95 px-4 pt-3 backdrop-blur">
+        <div className="flex items-center justify-between gap-4 pb-3">
+          <div
+            role="timer"
+            aria-label="Time left"
+            data-urgency={urgency}
+            className={`flex min-w-0 flex-col rounded-lg px-4 py-2 sm:flex-row sm:items-baseline sm:gap-3 ${CLOCK_STYLES[urgency]}`}
+          >
+            <span className="text-hero leading-none font-bold tabular-nums">
+              {formatClock(remainingMs)}
+            </span>
+            <span className="text-sm font-medium">{clockLabel}</span>
+          </div>
+          <p className="text-right text-sm font-medium text-muted tabular-nums">
+            {answeredCount} of {view.questions.length} answered
+          </p>
+        </div>
+        <div aria-hidden="true" className="-mx-4 h-1.5 bg-rule">
+          <div
+            className={`h-full ${BAR_STYLES[urgency]}`}
+            style={{ width: `${remainingShare * 100}%` }}
+          />
+        </div>
       </div>
+      {clockLabel !== 'Time left' && (
+        <p role="status" aria-label="Time warning" className="sr-only">
+          {clockLabel}
+        </p>
+      )}
 
       {!connected && (
-        <Notice tone="warning">
-          Reconnecting. Your timer keeps running and your answers are saved when you are back.
-        </Notice>
+        <ConnectionBanner>
+          Connection lost. Reconnecting now. Your timer keeps running. Answers you pick are kept and
+          sent when you are back.
+        </ConnectionBanner>
+      )}
+      {pendingCount > 0 && (
+        <p role="status" className="text-sm font-medium text-muted">
+          {pendingCount} {pendingCount === 1 ? 'answer' : 'answers'} waiting to send
+        </p>
       )}
       {timeIsUp && <Notice tone="warning">Time is up. Submitting your exam...</Notice>}
 
@@ -278,12 +343,17 @@ export function ExamAttemptView({
       <button
         ref={submitButtonRef}
         type="button"
-        disabled={submitting || timeIsUp}
+        disabled={submitting || timeIsUp || !connected}
         onClick={() => setConfirmOpen(true)}
         className={`${buttonClasses('brand', 'lg')} w-full`}
       >
         {submitting ? 'Submitting...' : 'Submit exam'}
       </button>
+      {!connected && (
+        <p className="text-center text-sm text-muted">
+          You can submit once you are back online. Your answers are kept.
+        </p>
+      )}
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">

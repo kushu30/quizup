@@ -141,6 +141,34 @@ describe('QuizEditor', () => {
     expect(changes?.settings).toMatchObject({ mode: 'live', adaptive: true });
   });
 
+  it('offers who can join and saves invited-only as token access', async () => {
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect(screen.getByRole('radiogroup', { name: 'Who can join' })).toBeTruthy();
+    expect(
+      (screen.getByRole('radio', { name: /Anyone with the code/ }) as HTMLInputElement).checked,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Invited students only/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    const [, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
+    expect(changes?.settings).toMatchObject({ accessMode: 'token' });
+  });
+
+  it('shows the saved access setting when the quiz loads', async () => {
+    vi.mocked(api.getQuiz).mockResolvedValue({
+      ...quiz,
+      settings: { mode: 'live', adaptive: false, accessMode: 'token' },
+    });
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('radio', { name: /Invited students only/ }) as HTMLInputElement).checked,
+      ).toBe(true),
+    );
+  });
+
   it('shows the saved assessment type when the quiz loads', async () => {
     vi.mocked(api.getQuiz).mockResolvedValue({
       ...quiz,

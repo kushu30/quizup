@@ -17,6 +17,7 @@ import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
+import { RosterPanel } from '../components/RosterPanel';
 import { StudentRoster } from '../components/StudentRoster';
 import { Button, Notice, Panel, buttonClasses } from '../components/ui';
 import { QuestionTimer } from '../components/QuestionTimer';
@@ -164,6 +165,14 @@ export function HostConsole() {
         liveProctor[selectedStudentId] ?? [],
       )
     : [];
+  const rosterRefreshKey =
+    room.participants.length * 1000 + room.participants.filter((entry) => entry.connected).length;
+  const letBackIn =
+    room.accessMode === 'open' && room.status !== 'ended'
+      ? async (participantId: string) => {
+          await api.allowRejoin(sessionId, participantId);
+        }
+      : undefined;
   const question = room.currentQuestion;
   const round = room.round;
   const isLastQuestion = question ? question.questionNumber === question.totalQuestions : false;
@@ -176,7 +185,7 @@ export function HostConsole() {
 
   return (
     <div className="space-y-8">
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <aside
           aria-label="Join details"
           className="space-y-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6"
@@ -218,7 +227,9 @@ export function HostConsole() {
               />
             </div>
           </div>
-          {room.status !== 'lobby' && <StudentRoster participants={room.participants} />}
+          {room.status !== 'lobby' && (
+            <StudentRoster participants={room.participants} onLetBackIn={letBackIn} />
+          )}
         </aside>
 
         <div className="min-w-0 space-y-6 lg:col-start-1 lg:row-start-1">
@@ -247,7 +258,11 @@ export function HostConsole() {
                   {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
                 </Button>
               </div>
-              <StudentRoster participants={room.participants} size="large" />
+              <StudentRoster
+                participants={room.participants}
+                size="large"
+                onLetBackIn={letBackIn}
+              />
             </section>
           )}
 
@@ -463,6 +478,14 @@ export function HostConsole() {
                 </Link>
               </div>
             </section>
+          )}
+
+          {room.accessMode === 'token' && room.status !== 'ended' && (
+            <RosterPanel
+              sessionId={sessionId}
+              joinCode={room.joinCode}
+              refreshKey={rosterRefreshKey}
+            />
           )}
         </div>
       </div>

@@ -7,6 +7,10 @@ import {
   LEADERBOARD_SIZE,
   QUESTION_OPTION_COUNT,
   QUESTION_START_DELAY_MS,
+  REJOIN_WINDOW_MS,
+  formatAccessToken,
+  generateAccessToken,
+  normalizeAccessToken,
   bktUpdate,
   clampRating,
   clampResponseMs,
@@ -18,7 +22,9 @@ import {
   quizSettingsSchema,
   resolveAdaptiveRounds,
   updateRatings,
+  type AccessMode,
   type Ack,
+  type AllowRejoinResponse,
   type AdaptiveRow,
   type AnalyticsSnapshot,
   type AnswerSubmitPayload,
@@ -27,8 +33,13 @@ import {
   type RandomSource,
   type QuestionResultPayload,
   type RoomJoinAck,
+  type RosterAddResponse,
+  type RosterEntry,
+  type RosterReissueResponse,
+  type RosterStudentInput,
   splitStoredBranding,
   type Branding,
+  type JoinInfo,
   type RoomStatePayload,
   type Session,
   type SessionStatus,
@@ -39,6 +50,7 @@ import {
 } from '@quizup/shared';
 import { SessionAnalytics } from '../analytics/sessionAnalytics.js';
 import { createCryptoRandomSource } from './randomSource.js';
+import { SessionRoster, type RosterItem } from './sessionRoster.js';
 import {
   EngineError,
   type ExamContext,
@@ -87,6 +99,7 @@ interface ParticipantState {
   tokenHash: string;
   userId: string | null;
   connected: boolean;
+  rejoinOpenUntilMs: number | null;
   score: number;
   totalResponseMs: number;
   elo: number;
@@ -136,6 +149,8 @@ interface SessionState {
   exam: { durationMs: number } | null;
   quizTitle: string;
   branding: Branding | null;
+  accessMode: AccessMode;
+  roster: SessionRoster;
   resultsReleasedAtMs: number | null;
   finishing: boolean;
   participants: Map<string, ParticipantState>;
@@ -148,6 +163,11 @@ interface SessionState {
 }
 
 export type RoomViewer = { role: 'host' } | { role: 'student'; participantId: string };
+
+function accessModeOf(storedSettings: unknown): AccessMode {
+  const parsed = quizSettingsSchema.safeParse(splitStoredBranding(storedSettings).settings);
+  return parsed.success ? parsed.data.accessMode : 'open';
+}
 
 function hashRejoinToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -220,6 +240,7 @@ export class LiveEngine {
       : {
           mode: 'live',
           adaptive: false,
+          accessMode: 'open',
           adaptiveRounds: undefined,
           durationMinutes: undefined,
         };
@@ -265,6 +286,8 @@ export class LiveEngine {
         exam: examDurationMinutes === null ? null : { durationMs: examDurationMinutes * 60_000 },
         quizTitle: quiz.title,
         branding: stored.branding,
+        accessMode: settings.accessMode,
+        roster: new SessionRoster(),
         resultsReleasedAtMs: null,
         finishing: false,
         participants: new Map(),
@@ -372,7 +395,7 @@ export class LiveEngine {
 
   async joinStudent(
     payload: StudentJoinPayload,
-    options: { userId?: string | null } = {},
+    options: { userId?: string | null; source?: string } = {},
   ): Promise<RoomJoinAck> {
     const sessionId = this.sessionIdByJoinCode.get(payload.joinCode);
     const state = sessionId ? this.sessionsById.get(sessionId) : undefined;
@@ -380,24 +403,39 @@ export class LiveEngine {
       return { ok: false, error: 'session_not_found' };
     }
 
-    const nameKey = payload.displayName.toLowerCase();
-    const existingId = state.participantIdByName.get(nameKey);
-
-    if (payload.rejoinToken !== undefined) {
-      const existing = existingId ? state.participants.get(existingId) : undefined;
-      const candidateHash = hashRejoinToken(payload.rejoinToken);
-      if (!existing || !tokenHashesMatch(candidateHash, existing.tokenHash)) {
-        return { ok: false, error: 'invalid_rejoin_token' };
-      }
-      return {
-        ok: true,
-        role: 'student',
-        sessionId: state.record.id,
-        participantId: existing.id,
-        rejoinToken: payload.rejoinToken,
-      };
+    if (state.accessMode === 'token') {
+      return this.joinWithAccessToken(state, payload, options);
+    }
+    if (payload.accessToken !== undefined || payload.displayName === undefined) {
+      return { ok: false, error: 'invalid_access_token' };
     }
 
+    const displayName = payload.displayName;
+    const nameKey = displayName.toLowerCase();
+    const existingId = state.participantIdByName.get(nameKey);
+    const existing = existingId ? state.participants.get(existingId) : undefined;
+
+    if (payload.rejoinToken !== undefined) {
+      const candidateHash = hashRejoinToken(payload.rejoinToken);
+      if (existing && tokenHashesMatch(candidateHash, existing.tokenHash)) {
+        return {
+          ok: true,
+          role: 'student',
+          sessionId: state.record.id,
+          participantId: existing.id,
+          displayName: existing.displayName,
+          rejoinToken: payload.rejoinToken,
+        };
+      }
+      if (!existing || !this.isRejoinOpen(existing)) {
+        return { ok: false, error: 'invalid_rejoin_token' };
+      }
+      return this.claimSeat(state, existing);
+    }
+
+    if (existing && this.isRejoinOpen(existing)) {
+      return this.claimSeat(state, existing);
+    }
     if (existingId || state.reservedNames.has(nameKey)) {
       return { ok: false, error: 'name_taken' };
     }
@@ -409,48 +447,265 @@ export class LiveEngine {
     }
 
     state.reservedNames.add(nameKey);
-    const rejoinToken = randomBytes(32).toString('hex');
     try {
-      const inserted = await this.repository.insertParticipant({
-        sessionId: state.record.id,
-        displayName: payload.displayName,
-        rejoinTokenHash: hashRejoinToken(rejoinToken),
-        userId: options.userId ?? null,
-      });
-      if (inserted === 'name_taken') {
-        return { ok: false, error: 'name_taken' };
-      }
-      const participant: ParticipantState = {
-        id: inserted.id,
-        displayName: inserted.display_name,
-        joinedAtMs: Date.parse(inserted.joined_at),
-        tokenHash: hashRejoinToken(rejoinToken),
-        userId: options.userId ?? null,
-        connected: false,
-        score: 0,
-        totalResponseMs: 0,
-        elo: Number.isFinite(inserted.elo) ? inserted.elo : INITIAL_PLAYER_RATING,
-        answers: new Map(),
-        servedQuestionIds: new Set(),
-        mastery: new Map(),
-        lastOutcome: null,
-      };
-      state.participants.set(participant.id, participant);
-      state.analytics.registerParticipant(participant.id, participant.displayName);
-      state.analytics.setRating(participant.id, participant.elo);
-      state.participantIdByName.set(nameKey, participant.id);
-      this.sessionIdByParticipantId.set(participant.id, state.record.id);
-      this.requestHostRefresh(state);
-      return {
-        ok: true,
-        role: 'student',
-        sessionId: state.record.id,
-        participantId: participant.id,
-        rejoinToken,
-      };
+      return await this.seatNewParticipant(state, displayName, options.userId ?? null);
     } finally {
       state.reservedNames.delete(nameKey);
     }
+  }
+
+  private isRejoinOpen(participant: ParticipantState): boolean {
+    return participant.rejoinOpenUntilMs !== null && participant.rejoinOpenUntilMs > this.now();
+  }
+
+  private async seatNewParticipant(
+    state: SessionState,
+    displayName: string,
+    userId: string | null,
+  ): Promise<RoomJoinAck> {
+    const rejoinToken = randomBytes(32).toString('hex');
+    const inserted = await this.repository.insertParticipant({
+      sessionId: state.record.id,
+      displayName,
+      rejoinTokenHash: hashRejoinToken(rejoinToken),
+      userId,
+    });
+    if (inserted === 'name_taken') {
+      return { ok: false, error: 'name_taken' };
+    }
+    const participant: ParticipantState = {
+      id: inserted.id,
+      displayName: inserted.display_name,
+      joinedAtMs: Date.parse(inserted.joined_at),
+      tokenHash: hashRejoinToken(rejoinToken),
+      userId,
+      connected: false,
+      rejoinOpenUntilMs: null,
+      score: 0,
+      totalResponseMs: 0,
+      elo: Number.isFinite(inserted.elo) ? inserted.elo : INITIAL_PLAYER_RATING,
+      answers: new Map(),
+      servedQuestionIds: new Set(),
+      mastery: new Map(),
+      lastOutcome: null,
+    };
+    state.participants.set(participant.id, participant);
+    state.analytics.registerParticipant(participant.id, participant.displayName);
+    state.analytics.setRating(participant.id, participant.elo);
+    state.participantIdByName.set(displayName.toLowerCase(), participant.id);
+    this.sessionIdByParticipantId.set(participant.id, state.record.id);
+    this.requestHostRefresh(state);
+    return {
+      ok: true,
+      role: 'student',
+      sessionId: state.record.id,
+      participantId: participant.id,
+      displayName: participant.displayName,
+      rejoinToken,
+    };
+  }
+
+  private async claimSeat(
+    state: SessionState,
+    participant: ParticipantState,
+  ): Promise<RoomJoinAck> {
+    const rejoinToken = randomBytes(32).toString('hex');
+    const tokenHash = hashRejoinToken(rejoinToken);
+    await this.repository.updateParticipantTokenHash(participant.id, tokenHash);
+    participant.tokenHash = tokenHash;
+    participant.rejoinOpenUntilMs = null;
+    return {
+      ok: true,
+      role: 'student',
+      sessionId: state.record.id,
+      participantId: participant.id,
+      displayName: participant.displayName,
+      rejoinToken,
+    };
+  }
+
+  private async joinWithAccessToken(
+    state: SessionState,
+    payload: StudentJoinPayload,
+    options: { userId?: string | null; source?: string },
+  ): Promise<RoomJoinAck> {
+    if (payload.accessToken === undefined) {
+      return { ok: false, error: 'access_token_required' };
+    }
+    const nowMs = this.now();
+    const source = options.source ?? 'unknown';
+    if (state.roster.isThrottled(source, nowMs)) {
+      return { ok: false, error: 'rate_limited' };
+    }
+    const item = state.roster.findByTokenHash(
+      hashRejoinToken(normalizeAccessToken(payload.accessToken)),
+    );
+    if (!item) {
+      state.roster.noteFailure(source, nowMs);
+      return { ok: false, error: 'invalid_access_token' };
+    }
+    while (item.seating) {
+      await item.seating.catch(() => undefined);
+    }
+    if (item.participantId) {
+      return this.resumeRosterSeat(state, item);
+    }
+    if (state.record.status === 'ended') {
+      return { ok: false, error: 'session_ended' };
+    }
+    if (state.record.status !== 'lobby' && !state.exam) {
+      return { ok: false, error: 'session_started' };
+    }
+    let result: RoomJoinAck = { ok: false, error: 'server_error' };
+    item.seating = (async () => {
+      result = await this.seatNewParticipant(state, item.displayName, options.userId ?? null);
+      if (result.ok && result.role === 'student') {
+        item.participantId = result.participantId;
+        await this.repository.updateRosterEntry(item.id, { participantId: result.participantId });
+      }
+    })();
+    try {
+      await item.seating;
+    } finally {
+      item.seating = null;
+    }
+    return result;
+  }
+
+  private async resumeRosterSeat(state: SessionState, item: RosterItem): Promise<RoomJoinAck> {
+    const participant = item.participantId ? state.participants.get(item.participantId) : undefined;
+    if (!participant) {
+      return { ok: false, error: 'invalid_access_token' };
+    }
+    if (participant.connected) {
+      item.openedElsewhere += 1;
+      this.requestHostRefresh(state);
+    }
+    return this.claimSeat(state, participant);
+  }
+
+  async addRoster(
+    sessionId: string,
+    hostId: string,
+    students: RosterStudentInput[],
+  ): Promise<RosterAddResponse> {
+    const state = this.requireTokenSession(sessionId, hostId);
+    const seen = new Set<string>();
+    for (const student of students) {
+      const key = student.displayName.toLowerCase();
+      if (seen.has(key) || state.roster.hasName(student.displayName)) {
+        throw new EngineError('roster_name_taken', `${student.displayName} is already on the list`);
+      }
+      seen.add(key);
+    }
+    const tokens = students.map(() => generateAccessToken((max) => randomInt(max)));
+    const created = await this.repository.insertRoster(
+      students.map((student, index) => ({
+        sessionId: state.record.id,
+        displayName: student.displayName,
+        email: student.email ?? null,
+        tokenHash: hashRejoinToken(tokens[index] ?? ''),
+      })),
+    );
+    if (created === 'name_taken') {
+      throw new EngineError('roster_name_taken', 'A name on the list is already used');
+    }
+    const issued = created.map((record, index) => {
+      state.roster.add(record);
+      return {
+        rosterId: record.id,
+        displayName: record.displayName,
+        email: record.email,
+        token: formatAccessToken(tokens[index] ?? ''),
+      };
+    });
+    return { entries: this.rosterEntries(state), issued };
+  }
+
+  listRoster(sessionId: string, hostId: string): RosterEntry[] {
+    const state = this.sessionsById.get(sessionId);
+    if (!state) {
+      throw new EngineError('session_not_found', 'Session not found');
+    }
+    this.assertHost(state, hostId);
+    return this.rosterEntries(state);
+  }
+
+  async reissueRosterToken(
+    sessionId: string,
+    hostId: string,
+    rosterId: string,
+  ): Promise<RosterReissueResponse> {
+    const state = this.requireTokenSession(sessionId, hostId);
+    const item = state.roster.get(rosterId);
+    if (!item) {
+      throw new EngineError('roster_entry_not_found', 'Student not found on the list');
+    }
+    const token = generateAccessToken((max) => randomInt(max));
+    const tokenHash = hashRejoinToken(token);
+    await this.repository.updateRosterEntry(item.id, { tokenHash });
+    state.roster.replaceTokenHash(item.id, tokenHash);
+    return {
+      issued: {
+        rosterId: item.id,
+        displayName: item.displayName,
+        email: item.email,
+        token: formatAccessToken(token),
+      },
+    };
+  }
+
+  async removeRosterEntry(sessionId: string, hostId: string, rosterId: string): Promise<void> {
+    const state = this.requireTokenSession(sessionId, hostId);
+    const item = state.roster.get(rosterId);
+    if (!item) {
+      throw new EngineError('roster_entry_not_found', 'Student not found on the list');
+    }
+    if (item.participantId) {
+      throw new EngineError('roster_entry_in_use', 'This student has already joined');
+    }
+    await this.repository.deleteRosterEntry(item.id);
+    state.roster.remove(item.id);
+  }
+
+  allowRejoin(sessionId: string, hostId: string, participantId: string): AllowRejoinResponse {
+    const state = this.requireHostedSession(sessionId, hostId);
+    const participant = state.participants.get(participantId);
+    if (!participant) {
+      throw new EngineError('participant_not_found', 'Student not found');
+    }
+    if (state.record.status === 'ended') {
+      throw new EngineError('invalid_session_state', 'The session has ended');
+    }
+    participant.rejoinOpenUntilMs = this.now() + REJOIN_WINDOW_MS;
+    return { expiresAtMs: participant.rejoinOpenUntilMs };
+  }
+
+  private requireTokenSession(sessionId: string, hostId: string): SessionState {
+    const state = this.requireHostedSession(sessionId, hostId);
+    if (state.accessMode !== 'token') {
+      throw new EngineError(
+        'roster_not_enabled',
+        'This session is not restricted to invited students',
+      );
+    }
+    if (state.record.status === 'ended') {
+      throw new EngineError('invalid_session_state', 'The session has ended');
+    }
+    return state;
+  }
+
+  private rosterEntries(state: SessionState): RosterEntry[] {
+    return state.roster.list().map((item) => ({
+      id: item.id,
+      displayName: item.displayName,
+      email: item.email,
+      participantId: item.participantId,
+      connected: item.participantId
+        ? (state.participants.get(item.participantId)?.connected ?? false)
+        : false,
+      openedElsewhere: item.openedElsewhere,
+    }));
   }
 
   setParticipantConnected(participantId: string, connected: boolean): void {
@@ -1126,6 +1381,22 @@ export class LiveEngine {
     };
   }
 
+  getJoinInfo(joinCode: string): JoinInfo | null {
+    const sessionId = this.sessionIdByJoinCode.get(joinCode.toUpperCase());
+    const state = sessionId ? this.sessionsById.get(sessionId) : undefined;
+    if (!state) {
+      return null;
+    }
+    return {
+      quizTitle: state.quizTitle,
+      branding: state.branding,
+      assessmentType: state.exam ? 'exam' : state.adaptiveRounds !== null ? 'adaptive' : 'live',
+      accessMode: state.accessMode,
+      durationMinutes: state.exam ? Math.round(state.exam.durationMs / 60_000) : null,
+      status: state.record.status,
+    };
+  }
+
   getSessionStatus(sessionId: string): SessionStatus | null {
     return this.sessionsById.get(sessionId)?.record.status ?? null;
   }
@@ -1237,6 +1508,8 @@ export class LiveEngine {
         exam: { durationMs: minutes * 60_000 },
         quizTitle: entry.quizTitle,
         branding: splitStoredBranding(entry.quizSettings).branding,
+        accessMode: accessModeOf(entry.quizSettings),
+        roster: SessionRoster.from(await this.repository.listRoster(session.id)),
         resultsReleasedAtMs: session.results_released_at
           ? Date.parse(session.results_released_at)
           : null,
@@ -1257,6 +1530,7 @@ export class LiveEngine {
           tokenHash: participant.tokenHash,
           userId: null,
           connected: false,
+          rejoinOpenUntilMs: null,
           score: 0,
           totalResponseMs: 0,
           elo: participant.elo,
@@ -1362,6 +1636,7 @@ export class LiveEngine {
       joinCode: state.record.join_code,
       quizTitle: state.quizTitle,
       branding: state.branding,
+      accessMode: state.accessMode,
       status,
       role: viewer.role,
       serverNowMs: this.now(),

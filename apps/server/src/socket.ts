@@ -44,6 +44,17 @@ function resolveAck(candidate: unknown): AckCallback {
   return typeof candidate === 'function' ? (candidate as AckCallback) : () => undefined;
 }
 
+function clientSource(socket: {
+  handshake: { address: string; headers: Record<string, string | string[] | undefined> };
+}): string {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  const chain = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
+    .split(',')
+    .map((hop) => hop.trim())
+    .filter(Boolean);
+  return chain.at(-1) ?? socket.handshake.address;
+}
+
 function failure(error: SocketErrorCode): { ok: false; error: SocketErrorCode } {
   return { ok: false, error };
 }
@@ -177,6 +188,7 @@ export function attachSocketServer(
 
           const joined = await engine.joinStudent(payload, {
             userId: socket.data.authUser?.id ?? null,
+            source: clientSource(socket),
           });
           if (!joined.ok || joined.role !== 'student') {
             respond(joined);

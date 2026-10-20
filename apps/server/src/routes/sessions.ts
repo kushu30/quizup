@@ -1,4 +1,11 @@
-import { exportQuerySchema, sessionCreateSchema, sessionIdParamsSchema } from '@quizup/shared';
+import {
+  exportQuerySchema,
+  rosterAddPayloadSchema,
+  rosterEntryParamsSchema,
+  sessionCreateSchema,
+  sessionIdParamsSchema,
+  sessionParticipantParamsSchema,
+} from '@quizup/shared';
 import type { Response } from 'express';
 import { Router } from 'express';
 import { createRequireAuth, getAuthUser, requireRole, type AccessTokenVerifier } from '../auth.js';
@@ -119,6 +126,77 @@ export function createSessionsRouter(dependencies: {
         return;
       }
       response.json(feedback);
+    }),
+  );
+
+  router.get(
+    '/:sessionId/roster',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      response
+        .set('Cache-Control', 'no-store')
+        .json({ entries: engine.listRoster(params.sessionId, getAuthUser(request).id) });
+    }),
+  );
+
+  router.post(
+    '/:sessionId/roster',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      const body = params ? parseOrReject(rosterAddPayloadSchema, request.body, response) : null;
+      if (!params || !body) {
+        return;
+      }
+      const added = await engine.addRoster(
+        params.sessionId,
+        getAuthUser(request).id,
+        body.students,
+      );
+      response.status(201).set('Cache-Control', 'no-store').json(added);
+    }),
+  );
+
+  router.post(
+    '/:sessionId/roster/:rosterId/reissue',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(rosterEntryParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const reissued = await engine.reissueRosterToken(
+        params.sessionId,
+        getAuthUser(request).id,
+        params.rosterId,
+      );
+      response.set('Cache-Control', 'no-store').json(reissued);
+    }),
+  );
+
+  router.delete(
+    '/:sessionId/roster/:rosterId',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(rosterEntryParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      await engine.removeRosterEntry(params.sessionId, getAuthUser(request).id, params.rosterId);
+      response.status(204).end();
+    }),
+  );
+
+  router.post(
+    '/:sessionId/participants/:participantId/allow-rejoin',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionParticipantParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      response.json(
+        engine.allowRejoin(params.sessionId, getAuthUser(request).id, params.participantId),
+      );
     }),
   );
 

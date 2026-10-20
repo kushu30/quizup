@@ -10,6 +10,7 @@ import {
   settingsForAssessmentType,
   splitStoredBranding,
   type Branding,
+  type AccessMode,
   type AssessmentType,
   type Quiz,
 } from '@quizup/shared';
@@ -17,6 +18,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
+import { AccessModePicker } from '../components/AccessModePicker';
 import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
@@ -32,6 +34,7 @@ export function QuizEditor() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [title, setTitle] = useState('');
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('live');
+  const [accessMode, setAccessMode] = useState<AccessMode>('open');
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const examMode = assessmentType === 'exam';
   const [message, setMessage] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export function QuizEditor() {
       setTitle(loaded.title);
       const settings = quizSettingsSchema.safeParse(loaded.settings);
       setAssessmentType(settings.success ? assessmentTypeOf(settings.data) : 'live');
+      setAccessMode(settings.success ? settings.data.accessMode : 'open');
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
@@ -106,6 +110,7 @@ export function QuizEditor() {
         adaptiveRounds: undefined,
         durationMinutes: undefined,
         ...settingsForAssessmentType(assessmentType, Number(durationMinutes)),
+        accessMode,
       },
     });
     if (!parsed.success) {
@@ -219,6 +224,7 @@ export function QuizEditor() {
                 durationMinutes={durationMinutes}
                 onDurationChange={setDurationMinutes}
               />
+              <AccessModePicker value={accessMode} onChange={setAccessMode} />
               <Button type="submit" className="w-full">
                 Save details
               </Button>

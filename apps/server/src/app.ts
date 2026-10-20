@@ -21,6 +21,7 @@ import { questionsRouter } from './routes/questions.js';
 import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
 import { createHistoryRouter } from './history/historyRouter.js';
+import { createJoinInfoRouter } from './joinInfo/joinInfoRouter.js';
 
 export interface AppDependencies {
   engine: LiveEngine;
@@ -59,6 +60,7 @@ export function createApp(dependencies: AppDependencies) {
       repository: dependencies.generationRepository ?? supabaseGenerationRepository,
     }),
   );
+  app.use(createJoinInfoRouter({ engine: dependencies.engine }));
   app.use(createHistoryRouter({ engine: dependencies.engine, verifier: dependencies.verifier }));
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);

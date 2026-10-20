@@ -286,6 +286,8 @@ In the quiz editor, **Branding** sets how the assessment looks to students: a lo
 
 Students first see an intro (logo, institution, title, welcome) and then instructions (the host's text plus standard rules for the assessment type) before the lobby or the exam consent screen. Play screens show a compact "<institution>, powered by QuizUp" strip; the host console join panel and the session summary carry the same brand. Text on the brand colour switches between dark and light by contrast. Quizzes without branding look as before, with QuizUp branding only.
 
+The join link is branded too. Opening `/join/<CODE>` (or typing a full code on `/join`) looks the quiz up through the public, rate-limited `GET /join-info/:code`, which returns only the title, brand, assessment type and status (never questions, ids or the host). The join page then shows the institution card, welcome message and a brand-coloured Join button; a stripe and a light tint in the brand colour carry through the intro, the quiz and the results, and the institution sits in the header once the quiz starts. Ended quizzes say so and cannot be joined.
+
 Run `supabase db reset` to apply migration 0010, which creates the public `branding` bucket (1 MB limit, PNG, JPEG and WebP only) and lets hosts and admins write only inside a folder named after their own user id.
 
 ### Student feedback
@@ -297,6 +299,16 @@ When a live quiz ends, or once a student submits their exam, students see a shor
 Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:quizId/history`) listing every session: when it started, its type and status, how many students joined, the average score (from the stored session summary) and the average feedback rating. Ended sessions link to the full summary and CSV exports; sessions still open link back to the host console. Served by `GET /quizzes/:quizId/sessions` (quiz owner only).
 
 Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/results`): each assessment they joined while signed in, with the institution brand, score and rank. Exam scores stay hidden until the host releases results. Students who join without signing in have no history, because nothing links their answers to an account.
+
+### Reconnecting and invited-only quizzes
+
+A student who loses connection keeps their screen. A banner says the connection is being restored, the exam timer keeps running, and answers picked while offline are kept in the page and sent as soon as the seat is back (the submit button waits until then). If the server turns a reconnect away for a moment, the page tries again on its own.
+
+If a browser forgets its seat (cleared site data, another device), the student sees a clear message. The host presses **Let back in** next to the disconnected student in the console; for five minutes the student can join again with the same name and gets the same seat, answers and timer, with a fresh private credential. Opening a seat on a second device closes the first, which offers a "Use this device" button.
+
+**Who can join** is a setting next to the assessment type. *Invited students only* turns the console's **Invited students** panel on: paste one student per line (a name, or a name and an email), and each student gets a personal access token (ten characters, shown once). Download the CSV for names, tokens and personal links (`/join/<CODE>#token=...`; the token sits in the URL fragment so it never reaches a server log). The join page then asks for the token instead of a name, and the name comes from your list. A token maps to one seat: using it again resumes that seat, **New token** replaces a lost or leaked one, and the panel shows when a token was opened on another device. Wrong tokens are throttled per visitor (20 a minute), so one person guessing cannot lock the others out. Invited students may arrive after an exam has opened; live and adaptive quizzes still close at the start. Run `supabase db reset` (or `supabase db push`) to apply migration 0012 (`session_roster`, server access only; it stores token hashes, never tokens).
+
+The exam screen hides the site navigation and shows a large timer that turns amber at ten minutes and red in the last minute, with a screen-reader announcement at each milestone.
 
 ### AI question generation
 

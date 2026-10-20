@@ -1,5 +1,6 @@
 import { EXAM_CONSENT_VERSION, type ExamResults, type ExamStudentView } from '@quizup/shared';
 import { useEffect, useState } from 'react';
+import { usePageFocus } from '../../lib/brandContext';
 import { exitFullscreenIfActive } from '../../lib/fullscreen';
 import type { QuizSocket } from '../../lib/socket';
 import { buttonClasses } from '../ui';
@@ -96,6 +97,7 @@ export function ExamPlay({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const examOver = view.phase === 'submitted' || view.phase === 'closed';
+  usePageFocus(view.phase === 'in_progress');
 
   useEffect(() => {
     if (examOver) {

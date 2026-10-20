@@ -2,6 +2,7 @@ export interface StoredJoin {
   participantId: string;
   rejoinToken: string;
   displayName: string;
+  accessToken?: string;
 }
 
 function storageKey(joinCode: string) {
@@ -29,6 +30,9 @@ export function readStoredJoin(joinCode: string): StoredJoin | null {
         participantId: parsed.participantId,
         rejoinToken: parsed.rejoinToken,
         displayName: parsed.displayName,
+        ...('accessToken' in parsed && typeof parsed.accessToken === 'string'
+          ? { accessToken: parsed.accessToken }
+          : {}),
       };
     }
     return null;

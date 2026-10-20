@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { accessModeSchema } from './adaptive.js';
 import { brandingSchema } from './branding.js';
 import type { FeedbackSubmitPayload } from './feedback.js';
 import type { AnalyticsSnapshot } from './analytics.js';
@@ -42,6 +43,8 @@ export const SOCKET_ERROR_CODES = [
   'attempt_expired',
   'not_submitted',
   'feedback_not_open',
+  'invalid_access_token',
+  'access_token_required',
 ] as const;
 export const socketErrorCodeSchema = z.enum(SOCKET_ERROR_CODES);
 export type SocketErrorCode = z.infer<typeof socketErrorCodeSchema>;
@@ -58,10 +61,12 @@ const optionIndexSchema = z
 export const studentJoinPayloadSchema = z
   .object({
     joinCode: z.string().trim().toUpperCase().length(JOIN_CODE_LENGTH),
-    displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH),
+    displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH).optional(),
+    accessToken: z.string().max(64).optional(),
     rejoinToken: z.string().max(128).optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.displayName !== undefined || payload.accessToken !== undefined);
 
 export const hostJoinPayloadSchema = z.object({ sessionId: z.string().uuid() }).strict();
 
@@ -71,7 +76,13 @@ export type StudentJoinPayload = z.output<typeof studentJoinPayloadSchema>;
 
 export type RoomJoinAck = Ack<
   | { role: 'host'; sessionId: string }
-  | { role: 'student'; sessionId: string; participantId: string; rejoinToken: string }
+  | {
+      role: 'student';
+      sessionId: string;
+      participantId: string;
+      displayName: string;
+      rejoinToken: string;
+    }
 >;
 
 export const answerSubmitPayloadSchema = z
@@ -170,6 +181,7 @@ export const roomStatePayloadSchema = z.object({
   joinCode: z.string(),
   quizTitle: z.string(),
   branding: brandingSchema.nullable(),
+  accessMode: accessModeSchema,
   status: sessionStatusSchema,
   role: z.enum(['host', 'student']),
   serverNowMs: z.number(),

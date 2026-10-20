@@ -27,6 +27,22 @@ export interface NewParticipantInput {
   userId?: string | null;
 }
 
+export interface RosterRecord {
+  id: string;
+  sessionId: string;
+  displayName: string;
+  email: string | null;
+  tokenHash: string;
+  participantId: string | null;
+}
+
+export interface NewRosterInput {
+  sessionId: string;
+  displayName: string;
+  email: string | null;
+  tokenHash: string;
+}
+
 export interface NewResponseInput {
   sessionId: string;
   participantId: string;
@@ -91,6 +107,14 @@ export interface LiveRepository extends ExamRepository {
   >;
   updateSession: (sessionId: string, update: SessionUpdate) => Promise<void>;
   insertParticipant: (input: NewParticipantInput) => Promise<Participant | 'name_taken'>;
+  listRoster: (sessionId: string) => Promise<RosterRecord[]>;
+  insertRoster: (entries: NewRosterInput[]) => Promise<RosterRecord[] | 'name_taken'>;
+  updateRosterEntry: (
+    rosterId: string,
+    patch: { tokenHash?: string; participantId?: string | null },
+  ) => Promise<void>;
+  deleteRosterEntry: (rosterId: string) => Promise<void>;
+  updateParticipantTokenHash: (participantId: string, tokenHash: string) => Promise<void>;
   insertResponse: (input: NewResponseInput) => Promise<'inserted' | 'duplicate'>;
   recordResponseRatings: (input: {
     participantId: string;
@@ -239,7 +263,12 @@ export type EngineErrorCode =
   | 'questions_not_approved'
   | 'invalid_session_state'
   | 'question_still_open'
-  | 'join_code_exhausted';
+  | 'join_code_exhausted'
+  | 'roster_not_enabled'
+  | 'roster_name_taken'
+  | 'roster_entry_not_found'
+  | 'roster_entry_in_use'
+  | 'participant_not_found';
 
 const ENGINE_ERROR_STATUS: Record<EngineErrorCode, number> = {
   session_not_found: 404,
@@ -249,6 +278,11 @@ const ENGINE_ERROR_STATUS: Record<EngineErrorCode, number> = {
   invalid_session_state: 409,
   question_still_open: 409,
   join_code_exhausted: 503,
+  roster_not_enabled: 409,
+  roster_name_taken: 409,
+  roster_entry_not_found: 404,
+  roster_entry_in_use: 409,
+  participant_not_found: 404,
 };
 
 export class EngineError extends Error {

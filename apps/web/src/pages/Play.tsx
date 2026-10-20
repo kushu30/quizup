@@ -1,6 +1,7 @@
 import type {
   Branding,
   ExamStudentView,
+  JoinInfo,
   LeaderboardEntry,
   QuestionResultPayload,
   QuestionShowPayload,
@@ -8,24 +9,27 @@ import type {
   SessionStatus,
   SocketErrorCode,
 } from '@quizup/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ExamPlay } from '../components/exam/ExamPlay';
+import { ConnectionBanner } from '../components/ConnectionBanner';
 import { Leaderboard } from '../components/Leaderboard';
 import { QuestionTimer } from '../components/QuestionTimer';
 import { FeedbackForm } from '../components/FeedbackForm';
 import { StudentIntro } from '../components/StudentIntro';
-import { BrandStrip } from '../components/branding/BrandStrip';
-import { Notice, buttonClasses } from '../components/ui';
+import { Button, Notice, buttonClasses } from '../components/ui';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
+import { usePageBrand } from '../lib/brandContext';
 import { markIntroDone, readIntroDone, shouldShowIntro } from '../lib/introGate';
 import { clearStoredJoin, readStoredJoin, writeStoredJoin } from '../lib/storedJoin';
 
 interface PlayState {
   connected: boolean;
+  replaced: boolean;
+  needsName: boolean;
   joinError: SocketErrorCode | null;
   participantId: string | null;
   displayName: string;
@@ -46,6 +50,8 @@ interface PlayState {
 
 const INITIAL_STATE: PlayState = {
   connected: false,
+  replaced: false,
+  needsName: false,
   joinError: null,
   participantId: null,
   displayName: '',
@@ -82,8 +88,10 @@ const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
   session_ended: 'This quiz has already ended.',
   session_started: 'This quiz has already started, so new players cannot join.',
   name_invalid: 'That name is not valid.',
-  name_taken: 'That name is already taken in this quiz. Pick another.',
-  invalid_rejoin_token: 'Your seat could not be restored. Join again with a new name.',
+  name_taken:
+    'That name is already in this quiz. If it is yours, ask your host to let you back in, then join again with the same name.',
+  invalid_rejoin_token:
+    'Your seat could not be restored on this device. Ask your host to let you back in, then join again with the same name.',
   not_in_room: 'You are not in this quiz.',
   no_active_question: 'No question is active.',
   wrong_question: 'That question is no longer active.',
@@ -98,19 +106,41 @@ const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
   attempt_expired: 'Your time is up.',
   not_submitted: 'Submit your exam first.',
   feedback_not_open: 'Feedback opens when the quiz ends.',
+  invalid_access_token:
+    'That access token is not valid. Check it with your host, who can issue a new one.',
+  access_token_required: 'This quiz is for invited students. Enter your access token.',
 };
+
+const RETRY_JOIN_AFTER_MS = 2000;
+const RETRYABLE_JOIN_ERRORS: SocketErrorCode[] = ['rate_limited', 'server_error'];
 
 export function Play() {
   const { code = '' } = useParams();
   const joinCode = code.toUpperCase();
   const location = useLocation();
-  const stateDisplayName = (location.state as { displayName?: string } | null)?.displayName;
+  const routeState = location.state as {
+    displayName?: string;
+    accessToken?: string;
+    joinInfo?: JoinInfo;
+  } | null;
+  const stateDisplayName = routeState?.displayName;
+  const stateAccessToken = routeState?.accessToken;
+  const joinedOnce = useRef(false);
 
   const [socket, setSocket] = useState<QuizSocket | null>(null);
   const [state, setState] = useState<PlayState>(INITIAL_STATE);
   const [answerError, setAnswerError] = useState<string | null>(null);
   const { offsetMs, synced } = useClockSync(socket);
   const [introDone, setIntroDone] = useState(() => readIntroDone(joinCode));
+  usePageBrand(
+    state.branding ?? routeState?.joinInfo?.branding ?? null,
+    shouldShowIntro({
+      introDone,
+      mode: state.mode,
+      status: state.status,
+      examPhase: state.exam?.phase ?? null,
+    }),
+  );
   const serverNowMs = useServerNow(offsetMs);
 
   useEffect(() => {
@@ -130,40 +160,58 @@ export function Play() {
       const quizSocket = createQuizSocket(accessToken);
       setSocket(quizSocket);
 
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
       function joinRoom() {
         const stored = readStoredJoin(joinCode);
+        const accessToken = stateAccessToken ?? stored?.accessToken;
         const displayName = stored?.displayName ?? stateDisplayName;
-        if (!displayName) {
-          setState((current) => ({ ...current, connected: true, joinError: 'invalid_payload' }));
+        if (!accessToken && !displayName) {
+          setState((current) => ({
+            ...current,
+            connected: true,
+            needsName: true,
+            joinError: 'invalid_payload',
+          }));
           return;
         }
-        quizSocket.emit(
-          'room:join',
-          { joinCode, displayName, rejoinToken: stored?.rejoinToken },
-          (ack) => {
-            if (!ack.ok) {
-              if (ack.error === 'invalid_rejoin_token' || ack.error === 'session_not_found') {
-                clearStoredJoin(joinCode);
-              }
-              setState((current) => ({ ...current, connected: true, joinError: ack.error }));
+        const payload = accessToken
+          ? { joinCode, accessToken }
+          : { joinCode, displayName, rejoinToken: stored?.rejoinToken };
+        quizSocket.emit('room:join', payload, (ack) => {
+          if (!ack.ok) {
+            if (joinedOnce.current && RETRYABLE_JOIN_ERRORS.includes(ack.error)) {
+              retryTimer = setTimeout(joinRoom, RETRY_JOIN_AFTER_MS);
               return;
             }
-            if (ack.role === 'student') {
-              writeStoredJoin(joinCode, {
-                participantId: ack.participantId,
-                rejoinToken: ack.rejoinToken,
-                displayName,
-              });
-              setState((current) => ({
-                ...current,
-                connected: true,
-                joinError: null,
-                participantId: ack.participantId,
-                displayName,
-              }));
+            if (
+              ack.error === 'invalid_rejoin_token' ||
+              ack.error === 'invalid_access_token' ||
+              ack.error === 'session_not_found'
+            ) {
+              clearStoredJoin(joinCode);
             }
-          },
-        );
+            setState((current) => ({ ...current, connected: true, joinError: ack.error }));
+            return;
+          }
+          if (ack.role === 'student') {
+            joinedOnce.current = true;
+            writeStoredJoin(joinCode, {
+              participantId: ack.participantId,
+              rejoinToken: ack.rejoinToken,
+              displayName: ack.displayName,
+              ...(accessToken ? { accessToken } : {}),
+            });
+            setState((current) => ({
+              ...current,
+              connected: true,
+              replaced: false,
+              joinError: null,
+              participantId: ack.participantId,
+              displayName: ack.displayName,
+            }));
+          }
+        });
       }
 
       function applyRoomState(room: RoomStatePayload) {
@@ -186,7 +234,13 @@ export function Play() {
       }
 
       quizSocket.on('connect', joinRoom);
-      quizSocket.on('disconnect', () => setState((current) => ({ ...current, connected: false })));
+      quizSocket.on('disconnect', (reason) =>
+        setState((current) => ({
+          ...current,
+          connected: false,
+          replaced: reason === 'io server disconnect',
+        })),
+      );
       quizSocket.on('room:state', applyRoomState);
       quizSocket.on('exam:released', () => {
         setState((current) =>
@@ -253,11 +307,12 @@ export function Play() {
       });
 
       return () => {
+        clearTimeout(retryTimer);
         quizSocket.disconnect();
         setSocket(null);
       };
     }
-  }, [joinCode, stateDisplayName]);
+  }, [joinCode, stateDisplayName, stateAccessToken]);
 
   function submitAnswer(chosenIndex: number) {
     if (!socket || !state.question || state.answered) {
@@ -275,22 +330,42 @@ export function Play() {
     });
   }
 
+  if (state.replaced) {
+    return (
+      <div className="mx-auto max-w-md space-y-5 text-center">
+        <Notice tone="warning">
+          This quiz is open on another device, so this one was disconnected. Only one device can use
+          your place at a time.
+        </Notice>
+        <Button
+          size="lg"
+          onClick={() => {
+            setState((current) => ({ ...current, replaced: false }));
+            socket?.connect();
+          }}
+        >
+          Use this device
+        </Button>
+      </div>
+    );
+  }
+
   if (state.joinError) {
     return (
       <div className="mx-auto max-w-md space-y-5 text-center">
         <Notice tone="danger">
-          {stateDisplayName || readStoredJoin(joinCode)
-            ? JOIN_ERROR_MESSAGES[state.joinError]
-            : 'Enter your name to join this quiz.'}
+          {state.needsName
+            ? 'Enter your name to join this quiz.'
+            : JOIN_ERROR_MESSAGES[state.joinError]}
         </Notice>
-        <Link to="/join" className={buttonClasses('primary', 'lg')}>
+        <Link to={`/join/${joinCode}`} className={buttonClasses('primary', 'lg')}>
           Back to join
         </Link>
       </div>
     );
   }
 
-  if (!state.connected || !state.participantId || !synced) {
+  if (!state.participantId || !synced) {
     return (
       <p role="status" className="py-16 text-center text-lg text-muted">
         Connecting...
@@ -321,27 +396,22 @@ export function Play() {
     );
   }
 
-  const brandStrip = <BrandStrip branding={state.branding} />;
-
   if (state.mode === 'exam' && state.exam && socket) {
     return (
-      <>
-        {brandStrip}
-        <ExamPlay
-          socket={socket}
-          view={state.exam}
-          displayName={state.displayName}
-          offsetMs={offsetMs}
-          connected={state.connected}
-          onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
-        />
-      </>
+      <ExamPlay
+        socket={socket}
+        view={state.exam}
+        displayName={state.displayName}
+        offsetMs={offsetMs}
+        connected={state.connected}
+        onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
+      />
     );
   }
 
   const header = (
     <>
-      {brandStrip}
+      {!state.connected && <ConnectionBanner />}
       <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
         <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
         {state.standing && (
