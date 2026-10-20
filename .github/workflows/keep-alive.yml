@@ -1,0 +1,27 @@
+name: Keep server awake
+
+# Render free services sleep after 15 idle minutes. This calls /health every
+# 10 minutes so the first student of a session is not waiting for a cold start.
+# GitHub can delay scheduled runs, and pauses them after 60 days without repo
+# activity, so the README also lists a second free pinger.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /health
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL || 'https://quizup-api.kushu30.me' }}
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 90 --retry 3 --retry-delay 15 --retry-all-errors \
+            "${SERVER_URL%/}/health"
+          echo
