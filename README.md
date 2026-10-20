@@ -218,6 +218,6 @@ Then open `/admin`, add a host's email to the allowlist after they have created 
 - [docs/features.md](docs/features.md): how each feature works (exam mode and proctoring signals, analytics, adaptive mode, branding, email, invited-only quizzes, AI generation, Google sign-in, modules, order, images and delivery)
 - [docs/adaptive-evaluation.md](docs/adaptive-evaluation.md): BKT fitting and the simulated adaptive evaluation
 - [docs/email-samples.md](docs/email-samples.md): every email the app sends
-- [docs/superpowers/plans/](docs/superpowers/plans/): the teacher-workflow roadmap
+- [docs/superpowers/plans/2026-10-20-teacher-workflow-roadmap.md](docs/superpowers/plans/2026-10-20-teacher-workflow-roadmap.md): the teacher-workflow roadmap (all five phases done)
 
 To ask for host access on the hosted app, write to kushagra.shukla2005@gmail.com.
