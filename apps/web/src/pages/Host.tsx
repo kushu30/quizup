@@ -34,8 +34,11 @@ export function Host() {
 
   const load = useCallback(async () => {
     try {
-      setQuizzes(await api.listQuizzes());
-      const loadedActivity = await api.getQuizActivity().catch(() => []);
+      const [loadedQuizzes, loadedActivity] = await Promise.all([
+        api.listQuizzes(),
+        api.getQuizActivity().catch(() => []),
+      ]);
+      setQuizzes(loadedQuizzes);
       setActivity(new Map(loadedActivity.map((entry) => [entry.quizId, entry])));
     } catch (error) {
       setMessage(describeError(error));
@@ -136,8 +139,8 @@ export function Host() {
           No quizzes yet. Give your first one a title above to start adding questions.
         </p>
       )}
-      {quizzes.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {!loading && quizzes.length > 0 && (
+        <div className="animate-fade-in grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {quizzes.map((quiz) => (
             <QuizCard
               key={quiz.id}

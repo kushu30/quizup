@@ -70,6 +70,19 @@ const verifier: AccessTokenVerifier = {
   verify: async (accessToken) => TOKEN_USERS[accessToken] ?? null,
 };
 
+export class FakeMailer {
+  enabled = true;
+  readonly sent: { to: string; subject: string; text: string; html: string }[] = [];
+  readonly failFor = new Set<string>();
+
+  send = async (message: { to: string; subject: string; text: string; html: string }) => {
+    if (this.failFor.has(message.to)) {
+      throw new Error('mail_send_failed');
+    }
+    this.sent.push(message);
+  };
+}
+
 export function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -77,9 +90,15 @@ export function sleep(milliseconds: number) {
 export async function startLiveHarness(
   engineOptions: Partial<LiveEngineOptions> = {},
   examOptions: Partial<ExamServiceOptions> = {},
-  harnessOptions: { repository?: InMemoryLiveRepository } = {},
+  harnessOptions: {
+    repository?: InMemoryLiveRepository;
+    mailer?: FakeMailer;
+    allowlist?: Set<string>;
+  } = {},
 ) {
   const repository = harnessOptions.repository ?? new InMemoryLiveRepository();
+  const mailer = harnessOptions.mailer ?? new FakeMailer();
+  const allowlist = harnessOptions.allowlist ?? new Set<string>();
   const publisher = new SocketPublisher();
   const engine = new LiveEngine({
     repository,
@@ -97,7 +116,16 @@ export async function startLiveHarness(
     ...examOptions,
   });
   engine.attachExam(exam);
-  const httpServer: HttpServer = createServer(createApp({ engine, exam, verifier }));
+  const httpServer: HttpServer = createServer(
+    createApp({
+      engine,
+      exam,
+      verifier,
+      mailer,
+      appUrl: 'https://quizup.test',
+      hostAllowlist: { has: async (email: string) => allowlist.has(email) },
+    }),
+  );
   const socketServer: QuizSocketServer = attachSocketServer(httpServer, {
     engine,
     publisher,
@@ -212,6 +240,8 @@ export async function startLiveHarness(
 
   return {
     repository,
+    mailer,
+    allowlist,
     engine,
     exam,
     baseUrl,

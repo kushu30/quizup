@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button, Notice, PageHeader, Panel, TextField } from '../components/ui';
 import { useAuth } from '../lib/AuthContext';
+import { HOST_ACCESS_CONTACT_EMAIL, HOST_ACCESS_MAILTO } from '../lib/contact';
 import { webEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
 
@@ -72,9 +73,20 @@ export function Login() {
       <PageHeader
         title={signingIn ? 'Sign in' : 'Create an account'}
         description={
-          signingIn
-            ? 'Hosts and students with an account sign in here. Joining a quiz never needs an account.'
-            : 'Every new account starts as a student account. An admin can make you a host.'
+          signingIn ? (
+            'Hosts and students with an account sign in here. Joining a quiz never needs an account.'
+          ) : (
+            <>
+              Every new account starts as a student account. To become a host, email{' '}
+              <a
+                href={HOST_ACCESS_MAILTO}
+                className="font-medium text-board underline underline-offset-4"
+              >
+                {HOST_ACCESS_CONTACT_EMAIL}
+              </a>
+              .
+            </>
+          )
         }
       />
       <Panel>

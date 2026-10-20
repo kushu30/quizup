@@ -661,7 +661,8 @@ export class LiveEngine {
       throw new EngineError('roster_name_taken', 'A name on the list is already used');
     }
     const issued = created.map((record, index) => {
-      state.roster.add(record);
+      const item = state.roster.add(record);
+      item.issuedToken = formatAccessToken(tokens[index] ?? '');
       return {
         rosterId: record.id,
         displayName: record.displayName,
@@ -681,6 +682,52 @@ export class LiveEngine {
     return this.rosterEntries(state);
   }
 
+  prepareTokenEmails(
+    sessionId: string,
+    hostId: string,
+    rosterIds?: string[],
+  ): {
+    quizTitle: string;
+    brand: { institutionName?: string; logoUrl?: string; brandColor?: string };
+    joinCode: string;
+    items: { rosterId: string; displayName: string; email: string; token: string }[];
+    skipped: { rosterId: string; reason: 'no_email' | 'no_token' }[];
+  } {
+    const state = this.requireTokenSession(sessionId, hostId);
+    const items: { rosterId: string; displayName: string; email: string; token: string }[] = [];
+    const skipped: { rosterId: string; reason: 'no_email' | 'no_token' }[] = [];
+    for (const rosterId of rosterIds ?? state.roster.list().map((entry) => entry.id)) {
+      const item = state.roster.get(rosterId);
+      if (!item) {
+        skipped.push({ rosterId, reason: 'no_token' });
+      } else if (!item.email) {
+        skipped.push({ rosterId, reason: 'no_email' });
+      } else if (!item.issuedToken) {
+        skipped.push({ rosterId, reason: 'no_token' });
+      } else {
+        items.push({
+          rosterId,
+          displayName: item.displayName,
+          email: item.email,
+          token: item.issuedToken,
+        });
+      }
+    }
+    return {
+      quizTitle: state.quizTitle,
+      brand: {
+        ...(state.branding?.institutionName
+          ? { institutionName: state.branding.institutionName }
+          : {}),
+        ...(state.branding?.logoUrl ? { logoUrl: state.branding.logoUrl } : {}),
+        ...(state.branding?.brandColor ? { brandColor: state.branding.brandColor } : {}),
+      },
+      joinCode: state.record.join_code,
+      items,
+      skipped,
+    };
+  }
+
   async reissueRosterToken(
     sessionId: string,
     hostId: string,
@@ -695,6 +742,7 @@ export class LiveEngine {
     const tokenHash = hashRejoinToken(token);
     await this.repository.updateRosterEntry(item.id, { tokenHash });
     state.roster.replaceTokenHash(item.id, tokenHash);
+    item.issuedToken = formatAccessToken(token);
     return {
       issued: {
         rosterId: item.id,
@@ -714,6 +762,7 @@ export class LiveEngine {
     if (item.participantId) {
       throw new EngineError('roster_entry_in_use', 'This student has already joined');
     }
+    item.issuedToken = null;
     await this.repository.deleteRosterEntry(item.id);
     state.roster.remove(item.id);
   }
@@ -748,6 +797,7 @@ export class LiveEngine {
   private rosterEntries(state: SessionState): RosterEntry[] {
     return state.roster.list().map((item) => ({
       id: item.id,
+      emailable: Boolean(item.email && item.issuedToken),
       displayName: item.displayName,
       email: item.email,
       participantId: item.participantId,

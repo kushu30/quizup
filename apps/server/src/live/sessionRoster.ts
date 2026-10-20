@@ -10,6 +10,7 @@ export interface RosterItem {
   email: string | null;
   tokenHash: string;
   participantId: string | null;
+  issuedToken: string | null;
   openedElsewhere: number;
   seating: Promise<void> | null;
 }
@@ -21,6 +22,7 @@ function toItem(record: RosterRecord): RosterItem {
     email: record.email,
     tokenHash: record.tokenHash,
     participantId: record.participantId,
+    issuedToken: null,
     openedElsewhere: 0,
     seating: null,
   };

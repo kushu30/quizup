@@ -1,7 +1,14 @@
-import { QUESTION_CSV_COLUMNS, type RowError } from '@quizup/shared';
+import {
+  QUESTION_CSV_COLUMNS,
+  SAMPLE_QUESTIONS_CSV,
+  SAMPLE_QUESTIONS_FILENAME,
+  type RowError,
+} from '@quizup/shared';
 import { useState, type ChangeEvent } from 'react';
 import { ApiError, api, describeError } from '../lib/api';
-import { Notice } from './ui';
+import { saveBlob } from '../lib/download';
+import { readFileText } from '../lib/readFile';
+import { Button, Notice } from './ui';
 
 interface CsvImportProps {
   quizId: string;
@@ -23,7 +30,7 @@ export function CsvImport({ quizId, onImported }: CsvImportProps) {
     setMessage(null);
     setRowErrors([]);
     try {
-      const result = await api.importQuestions(quizId, await file.text());
+      const result = await api.importQuestions(quizId, await readFileText(file));
       setMessage({ text: `Imported ${result.imported} questions`, ok: true });
       onImported();
     } catch (error) {
@@ -51,6 +58,18 @@ export function CsvImport({ quizId, onImported }: CsvImportProps) {
           nothing is imported.
         </p>
       </div>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() =>
+          saveBlob(
+            new Blob([SAMPLE_QUESTIONS_CSV], { type: 'text/csv;charset=utf-8' }),
+            SAMPLE_QUESTIONS_FILENAME,
+          )
+        }
+      >
+        Download a sample CSV
+      </Button>
       <label className="block text-sm font-medium">
         CSV file
         <input

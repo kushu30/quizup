@@ -22,6 +22,12 @@ import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
 import { createHistoryRouter } from './history/historyRouter.js';
 import { createJoinInfoRouter } from './joinInfo/joinInfoRouter.js';
+import { createMailer, type Mailer } from './mail/mailer.js';
+import {
+  createAdminRouter,
+  supabaseHostAllowlist,
+  type HostAllowlistLookup,
+} from './routes/admin.js';
 
 export interface AppDependencies {
   engine: LiveEngine;
@@ -30,10 +36,15 @@ export interface AppDependencies {
   llmProvider?: LlmProvider | null;
   generationLimiter?: HostGenerationLimiter;
   generationRepository?: GenerationRepository;
+  mailer?: Mailer;
+  appUrl?: string;
+  hostAllowlist?: HostAllowlistLookup;
 }
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
+  const mailer = dependencies.mailer ?? createMailer(serverEnv);
+  const appUrl = dependencies.appUrl ?? serverEnv.APP_URL ?? serverEnv.CORS_ORIGINS[0] ?? '';
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: serverEnv.CORS_ORIGINS }));
@@ -65,12 +76,23 @@ export function createApp(dependencies: AppDependencies) {
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);
   app.use(
+    '/admin',
+    createAdminRouter({
+      verifier: dependencies.verifier,
+      mailer,
+      appUrl,
+      allowlist: dependencies.hostAllowlist ?? supabaseHostAllowlist,
+    }),
+  );
+  app.use(
     '/sessions',
     createSessionsRouter({
       engine: dependencies.engine,
       verifier: dependencies.verifier,
       analytics: new AnalyticsService(dependencies.engine),
       exam: dependencies.exam,
+      mailer,
+      appUrl,
     }),
   );
   app.use(errorHandler);

@@ -1,6 +1,8 @@
 import {
   exportQuerySchema,
   rosterAddPayloadSchema,
+  rosterEmailPayloadSchema,
+  rosterEmailPreviewPayloadSchema,
   rosterEntryParamsSchema,
   sessionCreateSchema,
   sessionIdParamsSchema,
@@ -15,14 +17,19 @@ import type { ExamService } from '../exam/examService.js';
 import { asyncRoute, parseOrReject, sendNotFound } from '../http.js';
 import type { LiveEngine } from '../live/engine.js';
 import { getSessionFeedback } from '../feedback/feedback.js';
+import type { Mailer } from '../mail/mailer.js';
+import { SAMPLE_STUDENT, renderMailFor, sendTokenEmails } from '../mail/rosterEmail.js';
+import { EngineError } from '../live/types.js';
 
 export function createSessionsRouter(dependencies: {
   engine: LiveEngine;
   verifier: AccessTokenVerifier;
   analytics: AnalyticsService;
   exam: ExamService;
+  mailer: Mailer;
+  appUrl: string;
 }): Router {
-  const { engine, verifier, analytics, exam } = dependencies;
+  const { engine, verifier, analytics, exam, mailer, appUrl } = dependencies;
   const router = Router();
 
   router.use(createRequireAuth(verifier), requireRole('host', 'admin'));
@@ -145,9 +152,10 @@ export function createSessionsRouter(dependencies: {
       if (!params) {
         return;
       }
-      response
-        .set('Cache-Control', 'no-store')
-        .json({ entries: engine.listRoster(params.sessionId, getAuthUser(request).id) });
+      response.set('Cache-Control', 'no-store').json({
+        entries: engine.listRoster(params.sessionId, getAuthUser(request).id),
+        emailEnabled: mailer.enabled,
+      });
     }),
   );
 
@@ -165,6 +173,90 @@ export function createSessionsRouter(dependencies: {
         body.students,
       );
       response.status(201).set('Cache-Control', 'no-store').json(added);
+    }),
+  );
+
+  router.post(
+    '/:sessionId/roster/email',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      const body = params
+        ? parseOrReject(rosterEmailPayloadSchema, request.body ?? {}, response)
+        : null;
+      if (!params || !body) {
+        return;
+      }
+      const prepared = engine.prepareTokenEmails(
+        params.sessionId,
+        getAuthUser(request).id,
+        body.rosterIds,
+      );
+      if (!mailer.enabled) {
+        throw new EngineError('mail_not_configured', 'Email is not set up on this server');
+      }
+      response.set('Cache-Control', 'no-store').json(
+        await sendTokenEmails(mailer, appUrl, prepared, {
+          subject: body.subject,
+          message: body.message,
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/:sessionId/roster/email/preview',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      const body = params
+        ? parseOrReject(rosterEmailPreviewPayloadSchema, request.body ?? {}, response)
+        : null;
+      if (!params || !body) {
+        return;
+      }
+      const prepared = engine.prepareTokenEmails(
+        params.sessionId,
+        getAuthUser(request).id,
+        body.rosterId ? [body.rosterId] : undefined,
+      );
+      const item = prepared.items[0];
+      const mail = renderMailFor(prepared, item ?? SAMPLE_STUDENT, appUrl, body);
+      response.set('Cache-Control', 'no-store').json({
+        to: item?.email ?? null,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        sample: !item,
+      });
+    }),
+  );
+
+  router.post(
+    '/:sessionId/roster/email/test',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(sessionIdParamsSchema, request.params, response);
+      const body = params
+        ? parseOrReject(rosterEmailPreviewPayloadSchema, request.body ?? {}, response)
+        : null;
+      if (!params || !body) {
+        return;
+      }
+      const user = getAuthUser(request);
+      const prepared = engine.prepareTokenEmails(params.sessionId, user.id, []);
+      if (!mailer.enabled) {
+        throw new EngineError('mail_not_configured', 'Email is not set up on this server');
+      }
+      if (!user.email) {
+        response.status(409).json({ error: 'Your account has no email address to send a test to' });
+        return;
+      }
+      const mail = renderMailFor(prepared, SAMPLE_STUDENT, appUrl, body);
+      try {
+        await mailer.send({ to: user.email, ...mail, subject: `[Test] ${mail.subject}` });
+      } catch {
+        response.status(502).json({ error: 'The test email could not be sent. Try again later.' });
+        return;
+      }
+      response.set('Cache-Control', 'no-store').json({ sentTo: user.email });
     }),
   );
 

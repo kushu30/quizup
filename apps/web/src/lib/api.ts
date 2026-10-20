@@ -38,6 +38,14 @@ import {
   type MyResultRow,
   type QuizSessionHistoryRow,
   allowRejoinResponseSchema,
+  hostAccessSentSchema,
+  rosterEmailPreviewSchema,
+  rosterEmailResultSchema,
+  rosterEmailTestResultSchema,
+  type RosterEmailPreview,
+  type RosterEmailPreviewPayload,
+  type RosterEmailResult,
+  type RosterEmailTestResult,
   rosterAddResponseSchema,
   rosterReissueResponseSchema,
   rosterResponseSchema,
@@ -187,6 +195,38 @@ export const api = {
     ),
   removeRosterEntry: (sessionId: string, rosterId: string): Promise<void> =>
     requestNoContent(`/sessions/${sessionId}/roster/${rosterId}`, 'DELETE'),
+  emailRosterTokens: (
+    sessionId: string,
+    rosterIds?: string[],
+    custom: { subject?: string; message?: string } = {},
+  ): Promise<RosterEmailResult> =>
+    requestJson(`/sessions/${sessionId}/roster/email`, 'POST', rosterEmailResultSchema, {
+      ...(rosterIds ? { rosterIds } : {}),
+      ...custom,
+    }),
+  previewRosterEmail: (
+    sessionId: string,
+    payload: RosterEmailPreviewPayload,
+  ): Promise<RosterEmailPreview> =>
+    requestJson(
+      `/sessions/${sessionId}/roster/email/preview`,
+      'POST',
+      rosterEmailPreviewSchema,
+      payload,
+    ),
+  testRosterEmail: (
+    sessionId: string,
+    payload: RosterEmailPreviewPayload,
+  ): Promise<RosterEmailTestResult> =>
+    requestJson(
+      `/sessions/${sessionId}/roster/email/test`,
+      'POST',
+      rosterEmailTestResultSchema,
+      payload,
+    ),
+  notifyHostAccess: async (email: string): Promise<void> => {
+    await requestJson('/admin/host-access/notify', 'POST', hostAccessSentSchema, { email });
+  },
   allowRejoin: (sessionId: string, participantId: string): Promise<AllowRejoinResponse> =>
     requestJson(
       `/sessions/${sessionId}/participants/${participantId}/allow-rejoin`,

@@ -270,7 +270,8 @@ export type EngineErrorCode =
   | 'roster_name_taken'
   | 'roster_entry_not_found'
   | 'roster_entry_in_use'
-  | 'participant_not_found';
+  | 'participant_not_found'
+  | 'mail_not_configured';
 
 const ENGINE_ERROR_STATUS: Record<EngineErrorCode, number> = {
   session_not_found: 404,
@@ -285,6 +286,7 @@ const ENGINE_ERROR_STATUS: Record<EngineErrorCode, number> = {
   roster_entry_not_found: 404,
   roster_entry_in_use: 409,
   participant_not_found: 404,
+  mail_not_configured: 409,
 };
 
 export class EngineError extends Error {

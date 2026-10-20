@@ -2,6 +2,7 @@ import { emailSchema, hostAllowlistSchema, type HostAllowlistEntry } from '@quiz
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { RequireRole } from '../components/RequireRole';
 import { Button, Notice, PageHeader, TextField } from '../components/ui';
+import { api, describeError } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
 function HostAllowlistManager() {
@@ -9,6 +10,9 @@ function HostAllowlistManager() {
   const [newEmail, setNewEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [mailNotice, setMailNotice] = useState<{ tone: 'info' | 'warning'; text: string } | null>(
+    null,
+  );
 
   const loadEntries = useCallback(async () => {
     const { data, error } = await supabase
@@ -43,6 +47,20 @@ function HostAllowlistManager() {
     setNewEmail('');
     setMessage(null);
     await loadEntries();
+    await sendHostEmail(parsedEmail.data, true);
+  }
+
+  async function sendHostEmail(email: string, justAdded: boolean) {
+    setMailNotice(null);
+    try {
+      await api.notifyHostAccess(email);
+      setMailNotice({ tone: 'info', text: `We emailed ${email} to let them know.` });
+    } catch (error) {
+      setMailNotice({
+        tone: 'warning',
+        text: `${justAdded ? `${email} was added, but the` : 'The'} email was not sent: ${describeError(error)}`,
+      });
+    }
   }
 
   async function handleRemove(email: string) {
@@ -85,6 +103,11 @@ function HostAllowlistManager() {
           {message}
         </Notice>
       )}
+      {mailNotice && (
+        <Notice tone={mailNotice.tone} className="mb-6">
+          {mailNotice.text}
+        </Notice>
+      )}
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed border-rule-strong px-5 py-8 text-center text-muted">
           No hosts yet. Add an email address above.
@@ -94,14 +117,24 @@ function HostAllowlistManager() {
           {entries.map((entry) => (
             <li key={entry.email} className="flex items-center justify-between gap-3 px-5 py-3">
               <span className="min-w-0 break-all">{entry.email}</span>
-              <Button
-                variant="danger"
-                size="sm"
-                aria-label={`Remove ${entry.email}`}
-                onClick={() => void handleRemove(entry.email)}
-              >
-                Remove
-              </Button>
+              <span className="flex shrink-0 gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-label={`Email ${entry.email} again`}
+                  onClick={() => void sendHostEmail(entry.email, false)}
+                >
+                  Email again
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  aria-label={`Remove ${entry.email}`}
+                  onClick={() => void handleRemove(entry.email)}
+                >
+                  Remove
+                </Button>
+              </span>
             </li>
           ))}
         </ul>

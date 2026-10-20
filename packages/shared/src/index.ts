@@ -27,3 +27,7 @@ export * from './feedback.js';
 export * from './history.js';
 export * from './joinInfo.js';
 export * from './roster.js';
+export * from './contact.js';
+export * from './emailTemplate.js';
+export * from './brandColor.js';
+export * from './samples.js';

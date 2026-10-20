@@ -3,7 +3,13 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Landing } from './Landing';
 
-const authState = vi.hoisted(() => ({ value: { canHost: false, session: null as unknown } }));
+const authState = vi.hoisted(() => ({
+  value: { canHost: false, session: null as unknown, profile: null as { name: string } | null },
+}));
+
+vi.mock('../lib/useServerPulse', () => ({
+  useServerPulse: () => ({ state: 'online', latencyMs: 30 }),
+}));
 
 vi.mock('../lib/AuthContext', () => ({
   useAuth: () => authState.value,
@@ -30,7 +36,7 @@ function renderLanding(state?: unknown) {
 
 afterEach(() => {
   cleanup();
-  authState.value = { canHost: false, session: null };
+  authState.value = { canHost: false, session: null, profile: null };
 });
 
 describe('Landing', () => {
@@ -98,9 +104,36 @@ describe('Landing', () => {
     fireEvent.click(screen.getAllByRole('link', { name: 'Log in to host' })[0]!);
     expect(screen.getByText('Join page /login')).toBeTruthy();
     unmount();
-    authState.value = { canHost: true, session: {} };
+    authState.value = { canHost: true, session: {}, profile: null };
     renderLanding();
     expect(screen.queryByRole('link', { name: 'Log in to host' })).toBeNull();
     expect(screen.getAllByRole('link', { name: 'Open your dashboard' }).length).toBeGreaterThan(0);
+  });
+
+  it('shows a live walkthrough with a generic question to a visitor', () => {
+    renderLanding();
+    fireEvent.click(screen.getByRole('button', { name: /step 3/i }));
+    expect(screen.getByText(/^Which isolation level prevents dirty reads/)).toBeTruthy();
+    expect(screen.getByText(/simulated walkthrough/i)).toBeTruthy();
+  });
+
+  it("puts a signed-in visitor's name in the walkthrough question", () => {
+    authState.value = { canHost: false, session: {}, profile: { name: 'Priya Nair' } };
+    renderLanding();
+    fireEvent.click(screen.getByRole('button', { name: /step 3/i }));
+    expect(screen.getByText(/^Priya, which isolation level/)).toBeTruthy();
+  });
+
+  it('lets a signed-in student ask for host access by email', () => {
+    authState.value = { canHost: false, session: {}, profile: { name: 'Sam' } };
+    renderLanding();
+    const link = screen.getAllByRole('link', { name: 'Request host access' })[0]!;
+    expect(link.getAttribute('href')).toMatch(/^mailto:kushagra\.shukla2005@gmail\.com/);
+  });
+
+  it('does not offer to request access to someone who already hosts', () => {
+    authState.value = { canHost: true, session: {}, profile: null };
+    renderLanding();
+    expect(screen.queryByRole('link', { name: 'Request host access' })).toBeNull();
   });
 });

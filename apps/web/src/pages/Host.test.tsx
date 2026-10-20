@@ -194,4 +194,26 @@ describe('Host dashboard', () => {
     expect(api.deleteQuiz).toHaveBeenCalledWith(EXAM);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('shows either the skeleton or the quiz cards, never both', async () => {
+    let finishActivity: (value: QuizActivity[]) => void = () => undefined;
+    vi.mocked(api.getQuizActivity).mockReturnValue(
+      new Promise<QuizActivity[]>((resolve) => {
+        finishActivity = resolve;
+      }),
+    );
+    renderHost();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(document.querySelectorAll('[data-skeleton-row]').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('article', { name: 'Fractions' })).toBeNull();
+
+    await act(async () => {
+      finishActivity(activity);
+    });
+    expect(await screen.findByRole('article', { name: 'Fractions' })).toBeTruthy();
+    expect(document.querySelectorAll('[data-skeleton-row]')).toHaveLength(0);
+  });
 });

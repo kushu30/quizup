@@ -1,8 +1,9 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HeroIllustration } from '../components/landing/HeroIllustration';
+import { LiveDemo } from '../components/landing/LiveDemo';
 import { Notice, buttonClasses } from '../components/ui';
 import { useAuth } from '../lib/AuthContext';
+import { HOST_ACCESS_MAILTO } from '../lib/contact';
 
 const MODES = [
   {
@@ -62,7 +63,7 @@ const FEATURES = [
 ];
 
 export function Landing() {
-  const { canHost, session } = useAuth();
+  const { canHost, session, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const notice = (location.state as { notice?: string } | null)?.notice;
@@ -90,7 +91,11 @@ export function Landing() {
     <Link to="/login" className={buttonClasses('secondary', 'lg')}>
       Log in to host
     </Link>
-  ) : null;
+  ) : (
+    <a href={HOST_ACCESS_MAILTO} className={buttonClasses('secondary', 'lg')}>
+      Request host access
+    </a>
+  );
 
   return (
     <div>
@@ -160,7 +165,7 @@ export function Landing() {
           )}
         </div>
 
-        <HeroIllustration />
+        <LiveDemo name={profile?.name ?? null} />
       </section>
 
       <section aria-labelledby="modes-heading" className="border-y border-rule bg-surface">

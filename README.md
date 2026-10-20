@@ -297,6 +297,31 @@ Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:qui
 
 Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/results`): each assessment they joined while signed in, with the institution brand, score and rank. Exam scores stay hidden until the host releases results. Students who join without signing in have no history, because nothing links their answers to an account.
 
+### Email (tokens and host access)
+
+QuizUp can email invited students their access token and tell a new host they can start. It speaks plain SMTP, so any provider works; nothing is sent, and no email buttons appear, until all of `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` and `MAIL_FROM` are set. Settings live only in `.env` (or the host's environment variables on Render).
+
+Brevo (free tier, no domain needed; check Brevo's page for the current daily limit):
+
+1. Create a Brevo account, then open **SMTP & API** and the **SMTP** tab.
+2. Note the SMTP server (`smtp-relay.brevo.com`), the port (587) and the login Brevo shows you, and generate an **SMTP key** to use as the password.
+3. Under **Senders, domains and dedicated IPs** add and verify the address you want to send from; use it as `MAIL_FROM`.
+4. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, optionally `MAIL_FROM_NAME` and `MAIL_REPLY_TO`, and `APP_URL` (the public address of the web app, for example `https://quizup-khaki.vercel.app`). Restart the server.
+
+Gmail also works for small classes: `smtp.gmail.com`, port 465 or 587, your address as user and sender, and an app password (not your normal password).
+
+What it sends:
+
+- **Access tokens.** In the invited-students panel, **Email tokens** (all students with an email address) or **Email** on a row (one student) opens a dialog. You edit the subject and message, using the placeholders `{{student_name}}`, `{{quiz_title}}`, `{{institution_name}}`, `{{join_code}}`, `{{token}}` and `{{join_link}}` (click a chip to insert it; each student gets their own values), and see the exact formatted email for a real student on the right. **Send a test to me** sends a copy to your own address with an example token; **Send to N students** sends. Unknown placeholders are refused before anything is sent. A student only ever receives their own token. The server keeps issued tokens in memory only, so the buttons work until the server restarts or you issue **New token**; the panel then says who has no email, who needs a new token, and who failed. Nothing is sent without a click.
+- **Look of the emails.** A quiz with an institution brand shows the institution logo and name on its colour (text switches to dark on bright colours), then "Powered by" and the QuizUp logo; a quiz without a brand shows the QuizUp logo alone. The QuizUp logos are PNG files in `apps/web/public/email/` and are loaded from your web app (`APP_URL`), so they appear once the web app is deployed; the institution logo is the https address stored with the quiz. Every message has a button, the plain link under it, the join code and token, and a note that the link is personal.
+- **Host access.** When an admin adds an email to the host allowlist, the Admin page asks the server to send a welcome email with a link to the dashboard and who to contact. **Email again** resends it. The server only mails addresses that are on the allowlist, and only for admins. If email is not set up the host is still added and the page says the email was not sent.
+
+To check your mail settings without deploying anything, put the same variables in `apps/server/.env` and run `npm run mail:smoke -- you@example.com`. It sends one clearly marked test message and tells you, without printing any secret, whether the provider accepted it.
+
+Every email, with sample names and when it is sent, is shown in [docs/email-samples.md](docs/email-samples.md).
+
+Sample files: the question import and the student list both have a **Download a sample** button, and the student list can be filled from a CSV file (a `name,email` header row is fine). To ask for host access, people write to kushagra.shukla2005@gmail.com; that address is shown in the footer, on the sign-up page, and when a student opens the host area.
+
 ### Proctoring for every assessment type
 
 When the host presses **Start** (or **Open the exam**), a dialog asks whether to proctor this session. Proctoring records tab switches, the window losing focus, copy and paste (lengths only), right-clicks and window resizes, and shows them to the host; exams also ask students to stay in full screen. It records no webcam, microphone, screen or keystrokes. Students are told before they begin: the intro lists it as the host's choice, a proctored quiz shows a notice on every question, and a proctored exam shows the monitoring list on the consent screen. If the host starts without proctoring, no signals are recorded or shown, the exam consent says so, and the exam asks for no full screen. When the start request does not say, exams default to proctored and quizzes to not proctored. The host console shows a **Proctoring** panel for proctored quizzes (counts, latest signal, a timeline per student) and the summary page shows the signals table whenever a session was proctored. Run `supabase db push` to apply migration 0013 (`sessions.proctored`, `participants.devices`; exam sessions already stored are marked proctored).
@@ -307,7 +332,7 @@ The server reads the browser's user agent plus the screen size and touch support
 
 ### Landing page and system status
 
-The home page introduces the three assessment types, the three steps from questions to results and what makes it fit a classroom, with the join box at the top. The QuizUp logo (four squares and an amber check) is in the header, footer, favicon and the "Powered by" line. The server health and socket round-trip check moved into a quiet **Status** button in the footer of every page; it only runs when someone opens it.
+The home page opens with a small interactive walkthrough (student and host views, five steps you can click through or let play; it is labelled as simulated). It uses the visitor's first name in the sample question when signed in, and a generic question otherwise; the clock and the server status with its response time are live. The page then introduces the three assessment types, the three steps from questions to results and what makes it fit a classroom, with the join box at the top. The QuizUp logo (four squares and an amber check) is in the header, footer, favicon and the "Powered by" line. The server health and socket round-trip check moved into a quiet **Status** button in the footer of every page; it only runs when someone opens it.
 
 ### Reconnecting and invited-only quizzes
 
@@ -369,6 +394,14 @@ Database: create a Supabase project and run `supabase link` then `supabase db pu
 | `LLM_PROVIDER`              | server  | no       | `gemini` (default), see AI question generation  |
 | `GEMINI_MODEL`              | server  | no       | Overrides the default Gemini model id           |
 | `OPENAI_API_KEY`            | server  | no       | Reserved for later phases                       |
+| `APP_URL`                   | server  | no       | Public web URL used in emails (default: first `CORS_ORIGINS`) |
+| `SMTP_HOST`                 | server  | no       | Mail server, for example `smtp-relay.brevo.com` |
+| `SMTP_PORT`                 | server  | no       | Default 587 (465 uses implicit TLS)             |
+| `SMTP_USER`                 | server  | no       | Mail server login                               |
+| `SMTP_PASSWORD`             | server  | no       | Mail server password or SMTP key, server only   |
+| `MAIL_FROM`                 | server  | no       | Sender address, must be allowed by your provider |
+| `MAIL_FROM_NAME`            | server  | no       | Sender name, default `QuizUp`                   |
+| `MAIL_REPLY_TO`             | server  | no       | Optional reply address                          |
 | `VITE_SERVER_URL`           | web     | yes      | Public URL of the server                        |
 | `VITE_SUPABASE_URL`         | web     | yes      | Supabase project URL                            |
 | `VITE_SUPABASE_ANON_KEY`    | web     | yes      | Supabase anon key                               |

@@ -1,14 +1,20 @@
 import {
+  SAMPLE_ROSTER_CSV,
+  SAMPLE_ROSTER_FILENAME,
   buildTokensCsv,
+  parseCsvRecords,
   parseRosterText,
   type IssuedToken,
+  type RosterEmailResult,
   type RosterEntry,
   type RosterParseError,
 } from '@quizup/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 import { api, describeError } from '../lib/api';
 import { saveBlob } from '../lib/download';
+import { readFileText } from '../lib/readFile';
 import { CopyButton } from './CopyButton';
+import { EmailTokensDialog } from './EmailTokensDialog';
 import { Button, Notice, Panel, TableFrame, TextAreaField } from './ui';
 
 interface RosterPanelProps {
@@ -33,10 +39,18 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
   const [lineErrors, setLineErrors] = useState<RosterParseError[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailDialog, setEmailDialog] = useState<{
+    rosterIds: string[] | undefined;
+    count: number;
+  } | null>(null);
+  const [emailReport, setEmailReport] = useState<RosterEmailResult | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setEntries((await api.getRoster(sessionId)).entries);
+      const loaded = await api.getRoster(sessionId);
+      setEntries(loaded.entries);
+      setEmailEnabled(loaded.emailEnabled);
     } catch (error) {
       setMessage(describeError(error));
     }
@@ -103,6 +117,28 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
     }
   }
 
+  async function handleCsvChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const lines = parseCsvRecords(await readFileText(file))
+      .map(([name = '', email = '']) =>
+        email.trim() ? `${name.trim()}, ${email.trim()}` : name.trim(),
+      )
+      .filter((line) => line !== '');
+    setText(lines.join('\n'));
+    setLineErrors([]);
+  }
+
+  function handleSampleDownload() {
+    saveBlob(
+      new Blob([SAMPLE_ROSTER_CSV], { type: 'text/csv;charset=utf-8' }),
+      SAMPLE_ROSTER_FILENAME,
+    );
+  }
+
   function handleDownload() {
     const csv = buildTokensCsv(Object.values(tokens), joinCode, window.location.origin);
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `quizup-tokens-${joinCode}.csv`);
@@ -114,17 +150,40 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
   if (message) {
     problems.push(message);
   }
+  if (emailReport && emailReport.failed.length > 0) {
+    problems.push(
+      `Could not email: ${emailReport.failed.map((entry) => entry.displayName).join(', ')}`,
+    );
+  }
+  const emailableCount = entries.filter((entry) => entry.emailable).length;
+  const noEmailCount =
+    emailReport?.skipped.filter((entry) => entry.reason === 'no_email').length ?? 0;
+  const noTokenCount =
+    emailReport?.skipped.filter((entry) => entry.reason === 'no_token').length ?? 0;
 
   return (
     <Panel
       title="Invited students"
       description={`${joinedCount} of ${entries.length} joined. Only people on this list can take the quiz, each with their own token.`}
       actions={
-        issuedCount > 0 ? (
-          <Button variant="secondary" size="sm" onClick={handleDownload}>
-            Download tokens (CSV)
-          </Button>
-        ) : undefined
+        <span className="flex flex-wrap gap-2">
+          {emailEnabled && emailableCount > 0 && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEmailReport(null);
+                setEmailDialog({ rosterIds: undefined, count: emailableCount });
+              }}
+            >
+              Email tokens
+            </Button>
+          )}
+          {issuedCount > 0 && (
+            <Button variant="secondary" size="sm" onClick={handleDownload}>
+              Download tokens (CSV)
+            </Button>
+          )}
+        </span>
       }
     >
       <div className="space-y-5">
@@ -135,6 +194,15 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
                 <li key={problem}>{problem}</li>
               ))}
             </ul>
+          </Notice>
+        )}
+        {emailReport && (
+          <Notice tone="info">
+            Sent {emailReport.sent} {emailReport.sent === 1 ? 'email' : 'emails'}.
+            {noEmailCount > 0 &&
+              ` ${noEmailCount} ${noEmailCount === 1 ? 'student has' : 'students have'} no email address.`}
+            {noTokenCount > 0 &&
+              ` ${noTokenCount} ${noTokenCount === 1 ? 'student needs' : 'students need'} a new token first.`}
           </Notice>
         )}
         {issuedCount > 0 && (
@@ -151,9 +219,23 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
-          <Button disabled={busy || text.trim() === ''} onClick={() => void handleAdd()}>
-            Add students
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={busy || text.trim() === ''} onClick={() => void handleAdd()}>
+              Add students
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleSampleDownload}>
+              Download a sample list
+            </Button>
+            <label className="cursor-pointer text-sm font-medium text-board underline underline-offset-4">
+              Upload a CSV
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                onChange={(event) => void handleCsvChosen(event)}
+              />
+            </label>
+          </div>
         </div>
         {entries.length === 0 ? (
           <p className="rounded-lg border border-dashed border-rule-strong px-5 py-6 text-center text-muted">
@@ -219,7 +301,20 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
                         )}
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className="flex justify-end gap-2 whitespace-nowrap">
+                        <span className="flex min-w-36 flex-wrap justify-end gap-2">
+                          {emailEnabled && entry.emailable && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              aria-label={`Email token to ${entry.displayName}`}
+                              onClick={() => {
+                                setEmailReport(null);
+                                setEmailDialog({ rosterIds: [entry.id], count: 1 });
+                              }}
+                            >
+                              Email
+                            </Button>
+                          )}
                           <Button
                             variant="secondary"
                             size="sm"
@@ -248,6 +343,15 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
           </TableFrame>
         )}
       </div>
+      {emailDialog && (
+        <EmailTokensDialog
+          sessionId={sessionId}
+          rosterIds={emailDialog.rosterIds}
+          recipientCount={emailDialog.count}
+          onClose={() => setEmailDialog(null)}
+          onSent={setEmailReport}
+        />
+      )}
     </Panel>
   );
 }

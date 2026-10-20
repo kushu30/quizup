@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
+import { HOST_ACCESS_CONTACT_EMAIL, HOST_ACCESS_MAILTO } from '../lib/contact';
 import { BrandProvider, hasVisibleBrand, useBrand, useFocus } from '../lib/brandContext';
 import { BrandMark } from './branding/BrandMark';
 import { QuizUpLogo } from './brand/QuizUpLogo';
@@ -208,6 +209,15 @@ function LayoutFrame() {
             <div className="space-y-2">
               <QuizUpLogo size={22} />
               <p className="text-sm text-muted">Free and open source. Host it yourself.</p>
+              <p className="text-sm text-muted">
+                Need host access? Email{' '}
+                <a
+                  href={HOST_ACCESS_MAILTO}
+                  className="font-medium text-board underline underline-offset-4"
+                >
+                  {HOST_ACCESS_CONTACT_EMAIL}
+                </a>
+              </p>
             </div>
             <SystemStatus />
           </div>

@@ -9,6 +9,7 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "llm:smoke": "tsx --env-file-if-exists=.env src/llm/smoke.ts",
+    "mail:smoke": "tsx --env-file-if-exists=.env src/mail/smoke.ts",
     "adaptive:sim": "tsx src/adaptive/simulate.ts",
     "load:sim": "tsx src/analytics/loadSim.ts",
     "proctor:sim": "tsx src/exam/proctorSim.ts",
@@ -21,6 +22,7 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
+    "nodemailer": "^6.10.1",
     "socket.io": "^4.8.1",
     "zod": "^3.25.76"
   },
@@ -28,6 +30,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.24",
     "socket.io-client": "^4.8.4",
     "tsx": "^4.19.2"
   }

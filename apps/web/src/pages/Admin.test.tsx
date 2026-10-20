@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../lib/api';
 import { Admin } from './Admin';
 
 const calls = vi.hoisted(() => ({
@@ -21,6 +22,12 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
+vi.mock('../lib/api', () => ({
+  describeError: (error: unknown) =>
+    error instanceof Error ? error.message : 'Something went wrong',
+  api: { notifyHostAccess: vi.fn() },
+}));
+
 vi.mock('../lib/AuthContext', () => ({
   useAuth: () => ({
     session: {},
@@ -39,6 +46,7 @@ function renderAdmin() {
 
 afterEach(() => {
   cleanup();
+  vi.mocked(api.notifyHostAccess).mockReset();
   calls.insert.mockReset();
   calls.entries = [];
 });
@@ -68,5 +76,40 @@ describe('Admin host allowlist', () => {
     ];
     renderAdmin();
     expect(await screen.findByRole('button', { name: 'Remove teacher@school.org' })).toBeTruthy();
+  });
+
+  it('emails a new host straight after adding them', async () => {
+    vi.mocked(api.notifyHostAccess).mockResolvedValue(undefined);
+    renderAdmin();
+    fireEvent.change(screen.getByLabelText('Host email'), {
+      target: { value: 'teacher@school.org' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add host' }));
+    await waitFor(() => expect(api.notifyHostAccess).toHaveBeenCalledWith('teacher@school.org'));
+    expect(await screen.findByText(/We emailed teacher@school.org/)).toBeTruthy();
+  });
+
+  it('keeps the host added and says plainly when the email could not be sent', async () => {
+    vi.mocked(api.notifyHostAccess).mockRejectedValue(
+      new Error('Email is not set up on this server'),
+    );
+    renderAdmin();
+    fireEvent.change(screen.getByLabelText('Host email'), {
+      target: { value: 'teacher@school.org' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add host' }));
+    const notice = await screen.findByText(/was added, but the email was not sent/i);
+    expect(notice.textContent).toContain('Email is not set up on this server');
+    expect(calls.insert).toHaveBeenCalledWith({ email: 'teacher@school.org' });
+  });
+
+  it('can send the email again from the list', async () => {
+    vi.mocked(api.notifyHostAccess).mockResolvedValue(undefined);
+    calls.entries = [
+      { email: 'teacher@school.org', granted_by: null, created_at: '2026-10-01T10:00:00.000Z' },
+    ];
+    renderAdmin();
+    fireEvent.click(await screen.findByRole('button', { name: 'Email teacher@school.org again' }));
+    await waitFor(() => expect(api.notifyHostAccess).toHaveBeenCalledWith('teacher@school.org'));
   });
 });

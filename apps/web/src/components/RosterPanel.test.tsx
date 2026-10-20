@@ -13,9 +13,25 @@ vi.mock('../lib/api', () => ({
     addRoster: vi.fn(),
     reissueRosterToken: vi.fn(),
     removeRosterEntry: vi.fn(),
+    emailRosterTokens: vi.fn(),
   },
 }));
 vi.mock('../lib/download', () => ({ saveBlob: vi.fn() }));
+
+const dialog = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
+
+vi.mock('./EmailTokensDialog', () => ({
+  EmailTokensDialog: (props: Record<string, unknown>) => {
+    dialog.props = props;
+    return (
+      <div role="dialog" aria-label="Email dialog stub">
+        <button type="button" onClick={() => (props.onClose as () => void)()}>
+          Close stub
+        </button>
+      </div>
+    );
+  },
+}));
 
 const SESSION = '44444444-4444-4444-8444-444444444444';
 
@@ -26,6 +42,7 @@ const ASHA: RosterEntry = {
   participantId: '10000000-0000-4000-8000-000000000001',
   connected: true,
   openedElsewhere: 0,
+  emailable: true,
 };
 const BEN: RosterEntry = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -34,6 +51,7 @@ const BEN: RosterEntry = {
   participantId: null,
   connected: false,
   openedElsewhere: 0,
+  emailable: false,
 };
 
 function issued(entry: RosterEntry, token: string): IssuedToken {
@@ -45,7 +63,7 @@ function renderPanel() {
 }
 
 beforeEach(() => {
-  vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN] });
+  vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN], emailEnabled: true });
 });
 
 afterEach(() => {
@@ -68,6 +86,7 @@ describe('RosterPanel', () => {
   it('flags a token that was opened on another device', async () => {
     vi.mocked(api.getRoster).mockResolvedValue({
       entries: [{ ...ASHA, openedElsewhere: 2 }, BEN],
+      emailEnabled: true,
     });
     renderPanel();
     expect(await screen.findByText(/Opened on another device 2 times/)).toBeTruthy();
@@ -138,7 +157,7 @@ describe('RosterPanel', () => {
     renderPanel();
     await screen.findByRole('region', { name: 'Invited students' });
     expect(screen.queryByRole('button', { name: 'Remove Asha Rao' })).toBeNull();
-    vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA] });
+    vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA], emailEnabled: true });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove Ben Cole' }));
     });
@@ -169,5 +188,82 @@ describe('RosterPanel', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('opens the email dialog for everyone who can be emailed', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Email tokens' }));
+    expect(screen.getByRole('dialog', { name: 'Email dialog stub' })).toBeTruthy();
+    expect(dialog.props).toMatchObject({
+      sessionId: SESSION,
+      rosterIds: undefined,
+      recipientCount: 1,
+    });
+    expect(api.emailRosterTokens).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close stub' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens it for one student from their row, only when they have an email', async () => {
+    renderPanel();
+    await screen.findByRole('region', { name: 'Invited students' });
+    expect(screen.queryByRole('button', { name: 'Email token to Ben Cole' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Email token to Asha Rao' }));
+    expect(dialog.props).toMatchObject({ rosterIds: [ASHA.id], recipientCount: 1 });
+  });
+
+  it('reports who was left out, and who failed, after the dialog sends', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Email tokens' }));
+    act(() => {
+      (dialog.props?.onSent as (result: unknown) => void)({
+        sent: 1,
+        skipped: [{ rosterId: BEN.id, reason: 'no_email' }],
+        failed: [{ rosterId: ASHA.id, displayName: 'Asha Rao' }],
+      });
+    });
+    expect(screen.getByText(/Sent 1 email/)).toBeTruthy();
+    expect(screen.getByText(/1 student has no email/)).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Asha Rao');
+  });
+
+  it('hides every email button when the server has no email set up', async () => {
+    vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN], emailEnabled: false });
+    renderPanel();
+    await screen.findByRole('region', { name: 'Invited students' });
+    expect(screen.queryByRole('button', { name: 'Email tokens' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Email token to/ })).toBeNull();
+  });
+
+  it('offers a sample list to download', async () => {
+    renderPanel();
+    await screen.findByRole('region', { name: 'Invited students' });
+    fireEvent.click(screen.getByRole('button', { name: 'Download a sample list' }));
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveBlob).mock.calls[0]?.[1]).toBe('quizup-sample-students.csv');
+    const blob = vi.mocked(saveBlob).mock.calls[0]?.[0] as Blob;
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(blob);
+    });
+    expect(text).toContain('name,email');
+  });
+
+  it('fills the box from a CSV file, header row and all', async () => {
+    renderPanel();
+    await screen.findByRole('region', { name: 'Invited students' });
+    const file = new File(['name,email\nAsha Rao,asha@example.com\nBen Cole,\n'], 'students.csv', {
+      type: 'text/csv',
+    });
+    fireEvent.change(screen.getByLabelText('Upload a CSV'), { target: { files: [file] } });
+    await waitFor(() =>
+      expect((screen.getByLabelText('Add students') as HTMLTextAreaElement).value).toContain(
+        'Asha Rao, asha@example.com',
+      ),
+    );
+    expect((screen.getByLabelText('Add students') as HTMLTextAreaElement).value).toContain(
+      'Ben Cole',
+    );
   });
 });

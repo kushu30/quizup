@@ -23,8 +23,22 @@ export const serverEnvSchema = z.object({
   GEMINI_API_KEY: optionalSecretSchema,
   GEMINI_MODEL: optionalSecretSchema,
   OPENAI_API_KEY: optionalSecretSchema,
+  APP_URL: optionalSecretSchema.pipe(z.string().url().optional()),
+  SMTP_HOST: optionalSecretSchema,
+  SMTP_PORT: optionalSecretSchema
+    .transform((value) => (value === undefined ? 587 : Number(value)))
+    .pipe(z.number().int().min(1).max(65535)),
+  SMTP_USER: optionalSecretSchema,
+  SMTP_PASSWORD: optionalSecretSchema,
+  MAIL_FROM: optionalSecretSchema.pipe(z.string().email().optional()),
+  MAIL_FROM_NAME: optionalSecretSchema,
+  MAIL_REPLY_TO: optionalSecretSchema.pipe(z.string().email().optional()),
 });
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export function isMailConfigured(env: ServerEnv): boolean {
+  return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD && env.MAIL_FROM);
+}
 
 export const llmEnvSchema = serverEnvSchema.pick({
   LLM_PROVIDER: true,

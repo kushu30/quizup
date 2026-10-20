@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
@@ -246,6 +246,14 @@ describe('Layout focus mode', () => {
 });
 
 describe('Layout footer', () => {
+  it('says who to write to for host access', () => {
+    renderAt('/join');
+    const link = within(screen.getByRole('contentinfo')).getByRole('link', {
+      name: 'kushagra.shukla2005@gmail.com',
+    });
+    expect(link.getAttribute('href')).toContain('mailto:kushagra.shukla2005@gmail.com');
+  });
+
   it('ends every page with the logo and a quiet system status button', () => {
     renderAt('/join');
     const footer = screen.getByRole('contentinfo');
