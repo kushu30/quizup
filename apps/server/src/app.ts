@@ -22,6 +22,7 @@ import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
 import { createHistoryRouter } from './history/historyRouter.js';
 import { createJoinInfoRouter } from './joinInfo/joinInfoRouter.js';
+import { supabaseAccounts, type AccountDirectory } from './mail/accounts.js';
 import { createMailer, type Mailer } from './mail/mailer.js';
 import {
   createAdminRouter,
@@ -39,11 +40,13 @@ export interface AppDependencies {
   mailer?: Mailer;
   appUrl?: string;
   hostAllowlist?: HostAllowlistLookup;
+  accounts?: AccountDirectory;
 }
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
   const mailer = dependencies.mailer ?? createMailer(serverEnv);
+  const accounts = dependencies.accounts ?? supabaseAccounts;
   const appUrl = dependencies.appUrl ?? serverEnv.APP_URL ?? serverEnv.CORS_ORIGINS[0] ?? '';
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -82,6 +85,7 @@ export function createApp(dependencies: AppDependencies) {
       mailer,
       appUrl,
       allowlist: dependencies.hostAllowlist ?? supabaseHostAllowlist,
+      accounts,
     }),
   );
   app.use(
@@ -93,6 +97,7 @@ export function createApp(dependencies: AppDependencies) {
       exam: dependencies.exam,
       mailer,
       appUrl,
+      accounts,
     }),
   );
   app.use(errorHandler);

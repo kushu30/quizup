@@ -28,8 +28,12 @@ describe('emailing access tokens', () => {
     await Promise.all(harnesses.splice(0).map((harness) => harness.close()));
   });
 
-  async function setup(settings: unknown = { accessMode: 'token' }, mailer = new FakeMailer()) {
-    const harness = await startLiveHarness({}, {}, { mailer });
+  async function setup(
+    settings: unknown = { accessMode: 'token' },
+    mailer = new FakeMailer(),
+    accounts: Set<string> | 'broken' = new Set(),
+  ) {
+    const harness = await startLiveHarness({}, {}, { mailer, accounts });
     harnesses.push(harness);
     const quizId = harness.repository.seedQuiz({
       hostId: TEST_HOST.id,
@@ -338,6 +342,68 @@ describe('emailing access tokens', () => {
           )
         ).response.status,
       ).toBe(403);
+    });
+  });
+
+  describe('inviting students to make an account', () => {
+    it('says it is optional to a student without an account and points an existing one to sign in', async () => {
+      const { harness, summary, mailer } = await setup(
+        { accessMode: 'token' },
+        new FakeMailer(),
+        new Set(['ben@example.com']),
+      );
+      await addRoster(harness, summary.session.id, [
+        { displayName: 'Asha Rao', email: 'Asha@Example.com' },
+        { displayName: 'Ben Cole', email: 'ben@example.com' },
+      ]);
+      await sendEmails(harness, summary.session.id);
+      const asha = mailer.sent.find((mail) => mail.to === 'Asha@Example.com')!;
+      const ben = mailer.sent.find((mail) => mail.to === 'ben@example.com')!;
+      expect(asha.text).toMatch(/Optional: create a free account/);
+      expect(asha.text).toContain(
+        'https://quizup.test/login?mode=sign-up&email=Asha%40Example.com',
+      );
+      expect(ben.text).toMatch(/You already have a QuizUp account/);
+      expect(ben.text).not.toContain('mode=sign-up');
+    });
+
+    it('still sends every mail when the account lookup fails', async () => {
+      const { harness, summary, mailer } = await setup(
+        { accessMode: 'token' },
+        new FakeMailer(),
+        'broken',
+      );
+      await addRoster(harness, summary.session.id, [
+        { displayName: 'Asha', email: 'asha@example.com' },
+      ]);
+      const result = await sendEmails(harness, summary.session.id);
+      expect(result.body.sent).toBe(1);
+      expect(mailer.sent[0]?.text).toMatch(/Optional: create a free account/);
+    });
+
+    it('shows the host the same account wording in the preview, and the neutral one for the sample', async () => {
+      const { harness, summary } = await setup(
+        { accessMode: 'token' },
+        new FakeMailer(),
+        new Set(['asha@example.com']),
+      );
+      await addRoster(harness, summary.session.id, [
+        { displayName: 'Asha', email: 'asha@example.com' },
+      ]);
+      const real = await post(harness, `/sessions/${summary.session.id}/roster/email/preview`, {});
+      expect((real.body as unknown as RosterEmailPreview).text).toMatch(
+        /You already have a QuizUp account/,
+      );
+
+      const empty = await setup();
+      const sample = await post(
+        empty.harness,
+        `/sessions/${empty.summary.session.id}/roster/email/preview`,
+        {},
+      );
+      expect((sample.body as unknown as RosterEmailPreview).text).toMatch(
+        /Optional: create a free account/,
+      );
     });
   });
 });

@@ -138,6 +138,53 @@ function messageToHtml(text: string, link: string, accent: string): string {
     .join('\n');
 }
 
+export interface AccountInvite {
+  email: string;
+  hasAccount: boolean;
+}
+
+function loginLink(base: string, params: [string, string][]): string {
+  return `${base}/login?${params.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&')}`;
+}
+
+function accountSection(
+  account: AccountInvite,
+  base: string,
+  accent: string,
+): { text: string[]; html: string } {
+  if (account.hasAccount) {
+    const link = loginLink(base, [['email', account.email]]);
+    return {
+      text: [
+        'You already have a QuizUp account',
+        'Sign in before you join and this result is saved under My results.',
+        `Sign in: ${link}`,
+      ],
+      html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid ${RULE}"><tr><td style="padding:16px 18px">
+<p style="margin:0 0 6px;font-size:15px;font-weight:700">You already have a QuizUp account</p>
+<p style="margin:0 0 10px;font-size:14px;line-height:1.5;color:${MUTED}">Sign in before you join and this result is saved under My results.</p>
+<a href="${escapeHtml(link)}" style="font-size:14px;font-weight:700;color:${accent}">Sign in</a>
+</td></tr></table>`,
+    };
+  }
+  const link = loginLink(base, [
+    ['mode', 'sign-up'],
+    ['email', account.email],
+  ]);
+  return {
+    text: [
+      'Optional: create a free account',
+      'A QuizUp account keeps your results in one place. Sign in before you join and each assessment appears under My results, with your score and rank. You can take this assessment without one.',
+      `Create an account: ${link}`,
+    ],
+    html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid ${RULE}"><tr><td style="padding:16px 18px">
+<p style="margin:0 0 6px;font-size:15px;font-weight:700">Optional: create a free account</p>
+<p style="margin:0 0 10px;font-size:14px;line-height:1.5;color:${MUTED}">A QuizUp account keeps your results in one place. Sign in before you join and each assessment appears under My results, with your score and rank. You can take this assessment without one.</p>
+<a href="${escapeHtml(link)}" style="font-size:14px;font-weight:700;color:${accent}">Create a free account</a>
+</td></tr></table>`,
+  };
+}
+
 export interface TokenEmailInput {
   studentName: string;
   quizTitle: string;
@@ -147,6 +194,7 @@ export interface TokenEmailInput {
   brand?: EmailBrand | undefined;
   subject?: string | undefined;
   message?: string | undefined;
+  account?: AccountInvite | undefined;
 }
 
 export function renderTokenEmail(input: TokenEmailInput): RenderedMail {
@@ -165,6 +213,7 @@ export function renderTokenEmail(input: TokenEmailInput): RenderedMail {
   const message = fillPlaceholders(input.message ?? DEFAULT_TOKEN_EMAIL_MESSAGE, values).trim();
   const accent = brand.color ?? GREEN;
   const linkTone = linkColor(accent);
+  const accountBlock = input.account ? accountSection(input.account, base, linkTone) : null;
   const note =
     'This link and token are personal to you. Please do not share them. Each admits one person, and your host can see if one is used on another device.';
 
@@ -180,6 +229,7 @@ export function renderTokenEmail(input: TokenEmailInput): RenderedMail {
     '',
     note,
     '',
+    ...(accountBlock ? [...accountBlock.text, ''] : []),
     brand.name ? `Sent on behalf of ${brand.name} using QuizUp.` : 'Sent by QuizUp.',
   ].join('\n');
 
@@ -198,7 +248,8 @@ export function renderTokenEmail(input: TokenEmailInput): RenderedMail {
 </table>
 <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:${MUTED}">If the button does not work, copy this link into your browser:</p>
 <p style="margin:0 0 20px;font-size:13px;line-height:1.5;word-break:break-all"><a href="${escapeHtml(link)}" style="color:${linkTone}">${escapeHtml(link)}</a></p>
-<p style="margin:0;font-size:13px;line-height:1.5;color:${MUTED}">${escapeHtml(note)}</p>`,
+<p style="margin:0 0 20px;font-size:13px;line-height:1.5;color:${MUTED}">${escapeHtml(note)}</p>
+${accountBlock?.html ?? ''}`,
     brand.name
       ? `Sent on behalf of ${escapeHtml(brand.name)} using <a href="${escapeHtml(base)}" style="color:${MUTED}">QuizUp</a>.`
       : `Sent by <a href="${escapeHtml(base)}" style="color:${MUTED}">QuizUp</a>.`,
@@ -210,23 +261,41 @@ export function renderTokenEmail(input: TokenEmailInput): RenderedMail {
 export interface HostAccessEmailInput {
   appUrl: string;
   contactEmail: string;
+  email: string;
+  hasAccount: boolean;
 }
 
 export function renderHostAccessEmail(input: HostAccessEmailInput): RenderedMail {
   const base = trimSlash(input.appUrl);
-  const link = `${base}/host`;
+  const link = input.hasAccount
+    ? loginLink(base, [
+        ['email', input.email],
+        ['invite', 'host'],
+      ])
+    : loginLink(base, [
+        ['mode', 'sign-up'],
+        ['email', input.email],
+        ['invite', 'host'],
+      ]);
   const abilities = [
     'Write questions, import a spreadsheet or review AI drafts',
     'Run live quizzes, adaptive quizzes and timed exams',
     'Invite students with personal access tokens and review results, feedback and exports',
   ];
+  const headline = input.hasAccount
+    ? 'Your account now has host access.'
+    : 'You have been given host access to QuizUp.';
+  const instruction = input.hasAccount
+    ? 'Sign in with this email address to open your dashboard.'
+    : `To use it, create your account with this email address (${input.email}). Host access is tied to the same email address, so please do not use another. You choose your name and a password on the next page.`;
+  const buttonLabel = input.hasAccount ? 'Sign in to my dashboard' : 'Create my account';
   const text = [
-    'Your account now has host access.',
+    headline,
     '',
     'As a host you can:',
     ...abilities.map((ability) => `- ${ability}`),
     '',
-    'Sign in with this email address and open your dashboard:',
+    instruction,
     link,
     '',
     'If you were not expecting this, you can ignore this email.',
@@ -236,17 +305,23 @@ export function renderHostAccessEmail(input: HostAccessEmailInput): RenderedMail
   const html = frame(
     input.appUrl,
     cleanBrand(undefined),
-    `<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">Your account now has host access</h1>
+    `<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">${escapeHtml(headline.replace(/\.$/, ''))}</h1>
 <p style="margin:0 0 12px;font-size:16px;line-height:1.6">As a host you can:</p>
 <ul style="margin:0 0 24px;padding-left:20px;font-size:16px;line-height:1.7">
 ${abilities.map((ability) => `<li>${escapeHtml(ability)}</li>`).join('\n')}
 </ul>
-<p style="margin:0 0 16px;font-size:16px;line-height:1.6">Sign in with this email address, then open your dashboard.</p>
-<div style="margin:0 0 24px">${button(link, 'Open my dashboard', GREEN)}</div>
+<p style="margin:0 0 16px;font-size:16px;line-height:1.6">${escapeHtml(instruction)}</p>
+<div style="margin:0 0 24px">${button(link, buttonLabel, GREEN)}</div>
 <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:${MUTED}">If the button does not work, copy this link into your browser:</p>
 <p style="margin:0 0 20px;font-size:13px;line-height:1.5;word-break:break-all"><a href="${escapeHtml(link)}" style="color:${GREEN}">${escapeHtml(link)}</a></p>
 <p style="margin:0;font-size:13px;line-height:1.5;color:${MUTED}">If you were not expecting this, you can ignore this email. Questions: <a href="mailto:${escapeHtml(input.contactEmail)}" style="color:${GREEN}">${escapeHtml(input.contactEmail)}</a></p>`,
     `Sent by <a href="${escapeHtml(base)}" style="color:${MUTED}">QuizUp</a>.`,
   );
-  return { subject: 'You can now host quizzes on QuizUp', text, html };
+  return {
+    subject: input.hasAccount
+      ? 'You can now host quizzes on QuizUp'
+      : 'Create your QuizUp host account',
+    text,
+    html,
+  };
 }

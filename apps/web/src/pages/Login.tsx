@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { emailSchema } from '@quizup/shared';
 import { Button, Notice, PageHeader, Panel, TextField } from '../components/ui';
 import { useAuth } from '../lib/AuthContext';
 import { HOST_ACCESS_CONTACT_EMAIL, HOST_ACCESS_MAILTO } from '../lib/contact';
@@ -11,8 +12,15 @@ type Mode = 'sign-in' | 'sign-up';
 export function Login() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>('sign-in');
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  const parsedInvite = emailSchema.safeParse(searchParams.get('email') ?? '');
+  const invitedEmail = parsedInvite.success ? parsedInvite.data : '';
+  const invitedHost = searchParams.get('invite') === 'host' && invitedEmail !== '';
+  const destination = invitedHost ? '/host' : '/';
+  const [mode, setMode] = useState<Mode>(
+    searchParams.get('mode') === 'sign-up' ? 'sign-up' : 'sign-in',
+  );
+  const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -20,7 +28,7 @@ export function Login() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   async function handleGoogleSignIn() {
@@ -45,7 +53,7 @@ export function Login() {
       if (error) {
         setMessage(error.message);
       } else {
-        navigate('/');
+        navigate(destination);
       }
     } else {
       const { data, error } = await supabase.auth.signUp({
@@ -59,7 +67,7 @@ export function Login() {
         setMessageTone('info');
         setMessage('Check your email to confirm your account, then sign in.');
       } else {
-        navigate('/');
+        navigate(destination);
       }
     }
 
@@ -75,6 +83,8 @@ export function Login() {
         description={
           signingIn ? (
             'Hosts and students with an account sign in here. Joining a quiz never needs an account.'
+          ) : invitedHost ? (
+            'Choose your name and a password. Host access is already waiting for this email address.'
           ) : (
             <>
               Every new account starts as a student account. To become a host, email{' '}
@@ -89,6 +99,13 @@ export function Login() {
           )
         }
       />
+      {invitedHost && (
+        <Notice tone="info" className="mb-4">
+          {signingIn
+            ? 'You have been invited to host on QuizUp. Sign in with this email address to open your dashboard.'
+            : 'You have been invited to host on QuizUp. Create your account with this email address, then you will land on your dashboard.'}
+        </Notice>
+      )}
       <Panel>
         <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
           {!signingIn && (
@@ -104,6 +121,8 @@ export function Login() {
             type="email"
             required
             autoComplete="email"
+            readOnly={invitedHost}
+            hint={invitedHost ? 'Host access is tied to this email address.' : undefined}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />

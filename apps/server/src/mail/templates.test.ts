@@ -176,24 +176,98 @@ describe('renderTokenEmail structure', () => {
   });
 });
 
-describe('renderHostAccessEmail', () => {
-  const input = { appUrl: 'https://quizup.example', contactEmail: 'help@example.com' };
+describe('renderTokenEmail account invitation', () => {
+  const ACCOUNT_BASE = { ...BASE, brand: BRAND };
 
-  it('tells the new host plainly what changed and where to go', () => {
-    const mail = renderHostAccessEmail(input);
-    expect(mail.subject).toBe('You can now host quizzes on QuizUp');
-    expect(mail.text).toContain('Your account now has host access.');
-    expect(mail.text).toContain('https://quizup.example/host');
+  it('invites a student without an account to make one, and says it is optional', () => {
+    const mail = renderTokenEmail({
+      ...ACCOUNT_BASE,
+      account: { email: 'asha@example.com', hasAccount: false },
+    });
+    const signUp = 'https://quizup.example/login?mode=sign-up&email=asha%40example.com';
+    expect(mail.text).toContain(signUp);
+    expect(mail.text).toMatch(/optional/i);
+    expect(mail.text).toMatch(/without one|do not need/i);
+    expect(mail.text).toContain('My results');
+    expect(mail.html).toContain(`href="${signUp.replace(/&/g, '&amp;')}"`);
+    expect(mail.html).toContain('Create a free account');
+  });
+
+  it('points a student who already has an account to sign in before joining', () => {
+    const mail = renderTokenEmail({
+      ...ACCOUNT_BASE,
+      account: { email: 'asha@example.com', hasAccount: true },
+    });
+    expect(mail.text).toContain('https://quizup.example/login?email=asha%40example.com');
+    expect(mail.text).not.toContain('mode=sign-up');
+    expect(mail.text).toMatch(/already have/i);
+    expect(mail.html).toContain('Sign in');
+    expect(mail.html).not.toContain('Create a free account');
+  });
+
+  it('adds nothing about accounts when no account information is given', () => {
+    const mail = renderTokenEmail(ACCOUNT_BASE);
+    expect(mail.text).not.toMatch(/optional/i);
+    expect(mail.html).not.toContain('Create a free account');
+  });
+
+  it('keeps every link absolute and the address escaped', () => {
+    const mail = renderTokenEmail({
+      ...ACCOUNT_BASE,
+      account: { email: 'a+b"c@example.com', hasAccount: false },
+    });
+    for (const href of hrefs(mail.html)) {
+      expect(href).toMatch(/^(https:\/\/|mailto:)/);
+    }
+    expect(mail.html).not.toContain('a+b"c');
+  });
+});
+
+describe('renderHostAccessEmail', () => {
+  const input = {
+    appUrl: 'https://quizup.example',
+    contactEmail: 'help@example.com',
+    email: 'meera.iyer@school.org',
+  };
+
+  it('tells a host without an account to create one with this address, plainly', () => {
+    const mail = renderHostAccessEmail({ ...input, hasAccount: false });
+    expect(mail.subject).toBe('Create your QuizUp host account');
+    const link =
+      'https://quizup.example/login?mode=sign-up&email=meera.iyer%40school.org&invite=host';
+    expect(mail.text).toContain(link);
+    expect(mail.text).toContain('You have been given host access to QuizUp.');
+    expect(mail.text).toContain('meera.iyer@school.org');
+    expect(mail.text).toMatch(/create your account/i);
+    expect(mail.text).toMatch(/same email address|this email address/i);
     expect(mail.text).toContain('help@example.com');
-    expect(mail.text).toMatch(/sign in/i);
-    expect(mail.text).toMatch(/not expecting|did not expect/i);
-    expect(mail.text).not.toMatch(/good news/i);
+    expect(mail.html).toContain('Create my account');
+    expect(mail.html).toContain(`href="${link.replace(/&/g, '&amp;')}"`);
+  });
+
+  it('tells a host who already has an account to sign in', () => {
+    const mail = renderHostAccessEmail({ ...input, hasAccount: true });
+    expect(mail.subject).toBe('You can now host quizzes on QuizUp');
+    const link = 'https://quizup.example/login?email=meera.iyer%40school.org&invite=host';
+    expect(mail.text).toContain('Your account now has host access.');
+    expect(mail.text).toContain(link);
+    expect(mail.text).not.toContain('mode=sign-up');
+    expect(mail.html).toContain('Sign in to my dashboard');
+  });
+
+  it('explains what a host can do, and says to ignore it if unexpected', () => {
+    for (const hasAccount of [true, false]) {
+      const mail = renderHostAccessEmail({ ...input, hasAccount });
+      expect(mail.text).toMatch(/quiz/i);
+      expect(mail.text).toMatch(/exam/i);
+      expect(mail.text).toMatch(/not expecting|did not expect/i);
+      expect(mail.text).not.toMatch(/good news/i);
+    }
   });
 
   it('carries the QuizUp logo and absolute links only', () => {
-    const mail = renderHostAccessEmail(input);
+    const mail = renderHostAccessEmail({ ...input, hasAccount: false });
     expect(mail.html).toContain('src="https://quizup.example/email/quizup-logo-dark.png"');
-    expect(mail.html).toContain('href="https://quizup.example/host"');
     expect(mail.html).toContain('href="mailto:help@example.com"');
     for (const href of hrefs(mail.html)) {
       expect(href).toMatch(/^(https:\/\/|mailto:)/);

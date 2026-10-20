@@ -94,11 +94,13 @@ export async function startLiveHarness(
     repository?: InMemoryLiveRepository;
     mailer?: FakeMailer;
     allowlist?: Set<string>;
+    accounts?: Set<string> | 'broken';
   } = {},
 ) {
   const repository = harnessOptions.repository ?? new InMemoryLiveRepository();
   const mailer = harnessOptions.mailer ?? new FakeMailer();
   const allowlist = harnessOptions.allowlist ?? new Set<string>();
+  const accounts = harnessOptions.accounts ?? new Set<string>();
   const publisher = new SocketPublisher();
   const engine = new LiveEngine({
     repository,
@@ -124,6 +126,16 @@ export async function startLiveHarness(
       mailer,
       appUrl: 'https://quizup.test',
       hostAllowlist: { has: async (email: string) => allowlist.has(email) },
+      accounts: {
+        existing: async (emails: string[]) => {
+          if (accounts === 'broken') {
+            throw new Error('lookup failed');
+          }
+          return new Set(
+            emails.map((email) => email.toLowerCase()).filter((email) => accounts.has(email)),
+          );
+        },
+      },
     }),
   );
   const socketServer: QuizSocketServer = attachSocketServer(httpServer, {

@@ -2,6 +2,7 @@ import { HOST_ACCESS_CONTACT_EMAIL, hostAccessNotifySchema } from '@quizup/share
 import { Router } from 'express';
 import { createRequireAuth, requireRole, type AccessTokenVerifier } from '../auth.js';
 import { asyncRoute, parseOrReject } from '../http.js';
+import { knownAccounts, type AccountDirectory } from '../mail/accounts.js';
 import type { Mailer } from '../mail/mailer.js';
 import { renderHostAccessEmail } from '../mail/templates.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
@@ -29,8 +30,9 @@ export function createAdminRouter(dependencies: {
   mailer: Mailer;
   appUrl: string;
   allowlist: HostAllowlistLookup;
+  accounts: AccountDirectory;
 }): Router {
-  const { verifier, mailer, appUrl, allowlist } = dependencies;
+  const { verifier, mailer, appUrl, allowlist, accounts } = dependencies;
   const router = Router();
 
   router.use(createRequireAuth(verifier), requireRole('admin'));
@@ -50,10 +52,16 @@ export function createAdminRouter(dependencies: {
         response.status(409).json({ error: 'Email is not set up on this server' });
         return;
       }
+      const existing = await knownAccounts(accounts, [body.email]);
       try {
         await mailer.send({
           to: body.email,
-          ...renderHostAccessEmail({ appUrl, contactEmail: HOST_ACCESS_CONTACT_EMAIL }),
+          ...renderHostAccessEmail({
+            appUrl,
+            contactEmail: HOST_ACCESS_CONTACT_EMAIL,
+            email: body.email,
+            hasAccount: existing.has(body.email),
+          }),
         });
       } catch {
         response.status(502).json({ error: 'The email could not be sent. Try again later.' });

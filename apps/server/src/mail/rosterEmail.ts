@@ -1,10 +1,16 @@
 import type { RosterEmailResult } from '@quizup/shared';
 import type { Mailer } from './mailer.js';
-import { renderTokenEmail, type EmailBrand, type RenderedMail } from './templates.js';
+import {
+  renderTokenEmail,
+  type AccountInvite,
+  type EmailBrand,
+  type RenderedMail,
+} from './templates.js';
 
 const SEND_CONCURRENCY = 4;
 
 export const SAMPLE_STUDENT = { displayName: 'Asha Rao', token: 'K5B8J-AH9JV' };
+export const SAMPLE_ACCOUNT: AccountInvite = { email: 'asha.rao@example.com', hasAccount: false };
 
 export interface PreparedTokenEmails {
   quizTitle: string;
@@ -24,6 +30,7 @@ export function renderMailFor(
   student: { displayName: string; token: string },
   appUrl: string,
   custom: CustomMailText,
+  account?: AccountInvite,
 ): RenderedMail {
   return renderTokenEmail({
     studentName: student.displayName,
@@ -34,6 +41,7 @@ export function renderMailFor(
     brand: prepared.brand,
     subject: custom.subject,
     message: custom.message,
+    account,
   });
 }
 
@@ -42,6 +50,7 @@ export async function sendTokenEmails(
   appUrl: string,
   prepared: PreparedTokenEmails,
   custom: CustomMailText = {},
+  accounts: Set<string> = new Set(),
 ): Promise<RosterEmailResult> {
   const failed: RosterEmailResult['failed'] = [];
   let sent = 0;
@@ -55,7 +64,13 @@ export async function sendTokenEmails(
         return;
       }
       try {
-        await mailer.send({ to: item.email, ...renderMailFor(prepared, item, appUrl, custom) });
+        await mailer.send({
+          to: item.email,
+          ...renderMailFor(prepared, item, appUrl, custom, {
+            email: item.email,
+            hasAccount: accounts.has(item.email.toLowerCase()),
+          }),
+        });
         sent += 1;
       } catch {
         failed.push({ rosterId: item.rosterId, displayName: item.displayName });

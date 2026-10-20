@@ -10,8 +10,16 @@ describe('POST /admin/host-access/notify', () => {
     await Promise.all(harnesses.splice(0).map((harness) => harness.close()));
   });
 
-  async function start(mailer = new FakeMailer(), allowed: string[] = ['teacher@school.org']) {
-    const harness = await startLiveHarness({}, {}, { mailer, allowlist: new Set(allowed) });
+  async function start(
+    mailer = new FakeMailer(),
+    allowed: string[] = ['teacher@school.org'],
+    accounts: Set<string> | 'broken' = new Set(),
+  ) {
+    const harness = await startLiveHarness(
+      {},
+      {},
+      { mailer, allowlist: new Set(allowed), accounts },
+    );
     harnesses.push(harness);
     return { harness, mailer };
   }
@@ -35,8 +43,10 @@ describe('POST /admin/host-access/notify', () => {
     expect(result.body).toEqual({ sent: true });
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0]?.to).toBe('teacher@school.org');
-    expect(mailer.sent[0]?.subject).toBe('You can now host quizzes on QuizUp');
-    expect(mailer.sent[0]?.text).toContain('https://quizup.test/host');
+    expect(mailer.sent[0]?.subject).toBe('Create your QuizUp host account');
+    expect(mailer.sent[0]?.text).toContain(
+      'https://quizup.test/login?mode=sign-up&email=teacher%40school.org&invite=host',
+    );
     expect(mailer.sent[0]?.text).toContain('kushagra.shukla2005@gmail.com');
   });
 
@@ -77,5 +87,25 @@ describe('POST /admin/host-access/notify', () => {
     const { harness } = await start();
     expect((await notify(harness, { email: 'nope' })).status).toBe(400);
     expect((await notify(harness, {})).status).toBe(400);
+  });
+
+  it('tells a host who already has an account to sign in, not to sign up again', async () => {
+    const { harness, mailer } = await start(
+      new FakeMailer(),
+      ['teacher@school.org'],
+      new Set(['teacher@school.org']),
+    );
+    expect((await notify(harness, { email: 'teacher@school.org' })).status).toBe(200);
+    expect(mailer.sent[0]?.subject).toBe('You can now host quizzes on QuizUp');
+    expect(mailer.sent[0]?.text).toContain(
+      'https://quizup.test/login?email=teacher%40school.org&invite=host',
+    );
+    expect(mailer.sent[0]?.text).not.toContain('mode=sign-up');
+  });
+
+  it('still sends, with the create-account wording, when the account lookup fails', async () => {
+    const { harness, mailer } = await start(new FakeMailer(), ['teacher@school.org'], 'broken');
+    expect((await notify(harness, { email: 'teacher@school.org' })).status).toBe(200);
+    expect(mailer.sent[0]?.subject).toBe('Create your QuizUp host account');
   });
 });
