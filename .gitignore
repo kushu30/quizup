@@ -7,6 +7,5 @@ dist
 supabase/.branches
 supabase/.temp
 .vercel
-README.md
 decisions.md
 flow.md
