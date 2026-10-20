@@ -20,7 +20,10 @@ const MAIL = {
 };
 
 function fakeTransport() {
-  const sendMail = vi.fn(async () => ({ messageId: 'x' }));
+  const sendMail = vi.fn(async () => ({
+    messageId: '<abc123@mail.kushu30.me>',
+    response: '250 2.0.0 OK queued',
+  }));
   const createTransport = vi.fn(() => ({ sendMail }));
   return { sendMail, createTransport };
 }
@@ -87,5 +90,24 @@ describe('createMailer', () => {
     expect(failure).toBeInstanceOf(Error);
     expect((failure as Error).message).not.toContain('secret-value');
     expect((failure as Error).message).toBe('mail_send_failed');
+  });
+
+  it('logs that the provider accepted a message, with its id, but never who it was for or any secret', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { createTransport } = fakeTransport();
+    const mailer = createMailer(serverEnvSchema.parse(MAIL), createTransport);
+    await mailer.send({ to: 'ada@example.com', subject: 'Private subject', text: 't', html: 'h' });
+    const logged = info.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(logged).toContain('abc123@mail.kushu30.me');
+    expect(logged).toContain('250');
+    for (const hidden of [
+      'ada@example.com',
+      'Private subject',
+      'secret-value',
+      'login@example.com',
+    ]) {
+      expect(logged).not.toContain(hidden);
+    }
+    info.mockRestore();
   });
 });

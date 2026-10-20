@@ -35,6 +35,18 @@ export interface MailTransport {
 
 export type TransportFactory = (options: TransportOptions) => MailTransport;
 
+function describeResult(result: unknown): string {
+  if (typeof result !== 'object' || result === null) {
+    return 'no details';
+  }
+  const details = result as { messageId?: unknown; response?: unknown };
+  const parts = [
+    typeof details.messageId === 'string' ? `id ${details.messageId}` : null,
+    typeof details.response === 'string' ? details.response.slice(0, 80) : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(', ') : 'no details';
+}
+
 export const disabledMailer: Mailer = {
   enabled: false,
   send: async () => {
@@ -60,7 +72,7 @@ export function createMailer(
     enabled: true,
     send: async (message) => {
       try {
-        await transport.sendMail({
+        const result = await transport.sendMail({
           from,
           to: message.to,
           ...(env.MAIL_REPLY_TO ? { replyTo: env.MAIL_REPLY_TO } : {}),
@@ -68,6 +80,7 @@ export function createMailer(
           text: message.text,
           html: message.html,
         });
+        console.info(`Mail accepted by the provider (${describeResult(result)})`);
       } catch (error) {
         const code =
           typeof error === 'object' && error !== null && 'code' in error
