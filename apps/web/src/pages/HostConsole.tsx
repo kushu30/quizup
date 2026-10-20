@@ -258,9 +258,11 @@ export function HostConsole() {
                     Waiting for students
                   </h1>
                   <p className="max-w-prose text-muted">
-                    {room.mode === 'exam'
-                      ? 'When everyone is in, open the exam. Each student starts their own timer after accepting the exam rules.'
-                      : 'Students scan the QR code or enter the join code. Start the quiz when everyone you expect is on the list.'}
+                    {room.accessMode === 'token'
+                      ? 'This session is for invited students only. Add your students below and send each their token. The join code alone is not enough to get in.'
+                      : room.mode === 'exam'
+                        ? 'When everyone is in, open the exam. Each student starts their own timer after accepting the exam rules.'
+                        : 'Students scan the QR code or enter the join code. Start the quiz when everyone you expect is on the list.'}
                   </p>
                 </div>
                 <Button
@@ -272,6 +274,13 @@ export function HostConsole() {
                   {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
                 </Button>
               </div>
+              {room.accessMode === 'token' && (
+                <RosterPanel
+                  sessionId={sessionId}
+                  joinCode={room.joinCode}
+                  refreshKey={rosterRefreshKey}
+                />
+              )}
               <StudentRoster
                 participants={room.participants}
                 size="large"
@@ -526,7 +535,7 @@ export function HostConsole() {
             </section>
           )}
 
-          {room.accessMode === 'token' && room.status !== 'ended' && (
+          {room.accessMode === 'token' && room.status === 'running' && (
             <RosterPanel
               sessionId={sessionId}
               joinCode={room.joinCode}

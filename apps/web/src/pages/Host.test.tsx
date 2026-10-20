@@ -1,5 +1,5 @@
 import type { QuizActivity, QuizWithCount } from '@quizup/shared';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../lib/api';
@@ -155,14 +155,6 @@ describe('Host dashboard', () => {
     expect(api.createSession).toHaveBeenCalledWith(expect.objectContaining({ quizId: EXAM }));
   });
 
-  it('shows the validation message on the title field when it is empty', async () => {
-    renderHost();
-    await screen.findByRole('article', { name: 'Fractions' });
-    fireEvent.click(screen.getByRole('button', { name: 'Create quiz' }));
-    expect(screen.getByLabelText('New quiz title').getAttribute('aria-invalid')).toBe('true');
-    expect(api.createQuiz).not.toHaveBeenCalled();
-  });
-
   it('creates a quiz and opens it', async () => {
     vi.mocked(api.createQuiz).mockResolvedValue({ ...quizzes[0], id: 'new-quiz' } as QuizWithCount);
     renderHost();
@@ -215,5 +207,75 @@ describe('Host dashboard', () => {
     });
     expect(await screen.findByRole('article', { name: 'Fractions' })).toBeTruthy();
     expect(document.querySelectorAll('[data-skeleton-row]')).toHaveLength(0);
+  });
+
+  describe('naming a quiz after pressing Create quiz', () => {
+    async function openNameDialog() {
+      renderHost();
+      await screen.findByRole('article', { name: 'Fractions' });
+      fireEvent.click(screen.getByRole('button', { name: 'Create quiz' }));
+      return screen.getByRole('dialog', { name: 'Name your quiz' });
+    }
+
+    it('asks for the title in a dialog when the box is still empty, with the cursor in it', async () => {
+      const dialog = await openNameDialog();
+      expect(api.createQuiz).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(within(dialog).getByLabelText('Quiz title'));
+      expect(screen.getByLabelText('New quiz title').getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('treats a title of only spaces as empty', async () => {
+      renderHost();
+      await screen.findByRole('article', { name: 'Fractions' });
+      fireEvent.change(screen.getByLabelText('New quiz title'), { target: { value: '   ' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create quiz' }));
+      expect(screen.getByRole('dialog', { name: 'Name your quiz' })).toBeTruthy();
+    });
+
+    it('creates the quiz with the title typed in the dialog and opens it', async () => {
+      vi.mocked(api.createQuiz).mockResolvedValue({
+        ...quizzes[0],
+        id: 'new-quiz',
+      } as QuizWithCount);
+      const dialog = await openNameDialog();
+      fireEvent.change(within(dialog).getByLabelText('Quiz title'), {
+        target: { value: 'Decimals' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create quiz' }));
+      expect(await screen.findByText('Editing new-quiz')).toBeTruthy();
+      expect(api.createQuiz).toHaveBeenCalledWith(expect.objectContaining({ title: 'Decimals' }));
+    });
+
+    it('does not let the title stay empty in the dialog either', async () => {
+      const dialog = await openNameDialog();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create quiz' }));
+      const field = within(dialog).getByLabelText('Quiz title');
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      expect(api.createQuiz).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog', { name: 'Name your quiz' })).toBeTruthy();
+    });
+
+    it('closes with Cancel or Escape and creates nothing', async () => {
+      const dialog = await openNameDialog();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Create quiz' }));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(api.createQuiz).not.toHaveBeenCalled();
+    });
+
+    it('shows a server problem inside the dialog and keeps it open', async () => {
+      vi.mocked(api.createQuiz).mockRejectedValue(new Error('Could not create the quiz'));
+      const dialog = await openNameDialog();
+      fireEvent.change(within(dialog).getByLabelText('Quiz title'), {
+        target: { value: 'Decimals' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create quiz' }));
+      await waitFor(() =>
+        expect(within(dialog).getByRole('alert').textContent).toContain('Could not create'),
+      );
+      expect(screen.getByRole('dialog', { name: 'Name your quiz' })).toBeTruthy();
+    });
   });
 });

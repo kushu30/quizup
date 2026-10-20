@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { NewQuizDialog } from '../components/NewQuizDialog';
 import { QuizCard } from '../components/QuizCard';
 import {
   Button,
@@ -25,12 +26,12 @@ export function Host() {
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState<QuizWithCount[]>([]);
   const [title, setTitle] = useState('');
-  const [titleError, setTitleError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<Map<string, QuizActivity>>(new Map());
   const [runningQuizId, setRunningQuizId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<QuizWithCount | null>(null);
+  const [naming, setNaming] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -51,19 +52,29 @@ export function Host() {
     void load();
   }, [load]);
 
-  async function handleCreate(event: FormEvent) {
-    event.preventDefault();
-    const parsed = quizCreateSchema.safeParse({ title });
+  async function createWithTitle(rawTitle: string): Promise<string | null> {
+    const parsed = quizCreateSchema.safeParse({ title: rawTitle });
     if (!parsed.success) {
-      setTitleError(parsed.error.issues.map((issue) => issue.message).join('; '));
-      return;
+      return parsed.error.issues.map((issue) => issue.message).join('; ');
     }
-    setTitleError(null);
     try {
       const quiz = await api.createQuiz(parsed.data);
       navigate(`/host/quizzes/${quiz.id}`);
+      return null;
     } catch (error) {
-      setMessage(describeError(error));
+      return describeError(error);
+    }
+  }
+
+  async function handleCreate(event: FormEvent) {
+    event.preventDefault();
+    if (title.trim() === '') {
+      setNaming(true);
+      return;
+    }
+    const problem = await createWithTitle(title);
+    if (problem) {
+      setMessage(problem);
     }
   }
 
@@ -113,8 +124,8 @@ export function Host() {
           label="New quiz title"
           className="flex-1"
           placeholder="For example, Fractions review"
+          hint="Type a title here, or just press Create quiz and name it next."
           value={title}
-          error={titleError}
           onChange={(event) => setTitle(event.target.value)}
         />
         <Button type="submit" className="sm:mt-6">
@@ -152,6 +163,18 @@ export function Host() {
             />
           ))}
         </div>
+      )}
+      {naming && (
+        <NewQuizDialog
+          onCancel={() => setNaming(false)}
+          onSubmit={async (chosenTitle) => {
+            const problem = await createWithTitle(chosenTitle);
+            if (!problem) {
+              setNaming(false);
+            }
+            return problem;
+          }}
+        />
       )}
       {pendingDelete && (
         <ConfirmDialog

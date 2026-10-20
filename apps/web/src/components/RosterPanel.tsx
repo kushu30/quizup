@@ -1,21 +1,18 @@
 import {
-  SAMPLE_ROSTER_CSV,
-  SAMPLE_ROSTER_FILENAME,
   buildTokensCsv,
-  parseCsvRecords,
   parseRosterText,
   type IssuedToken,
   type RosterEmailResult,
   type RosterEntry,
   type RosterParseError,
 } from '@quizup/shared';
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, describeError } from '../lib/api';
 import { saveBlob } from '../lib/download';
-import { readFileText } from '../lib/readFile';
 import { CopyButton } from './CopyButton';
 import { EmailTokensDialog } from './EmailTokensDialog';
-import { Button, Notice, Panel, TableFrame, TextAreaField } from './ui';
+import { RosterAddStep } from './RosterAddStep';
+import { Button, Notice, Panel, TableFrame } from './ui';
 
 interface RosterPanelProps {
   sessionId: string;
@@ -30,6 +27,20 @@ function statusOf(entry: RosterEntry): string {
     return 'Not joined';
   }
   return entry.connected ? 'Connected' : 'Disconnected';
+}
+
+function StepHeading({ number, title }: { number: number; title: string }) {
+  return (
+    <h3 className="flex items-center gap-3 text-lg font-semibold">
+      <span
+        aria-hidden="true"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-marker text-sm font-bold text-ink"
+      >
+        {number}
+      </span>
+      {title}
+    </h3>
+  );
 }
 
 export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProps) {
@@ -117,28 +128,6 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
     }
   }
 
-  async function handleCsvChosen(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) {
-      return;
-    }
-    const lines = parseCsvRecords(await readFileText(file))
-      .map(([name = '', email = '']) =>
-        email.trim() ? `${name.trim()}, ${email.trim()}` : name.trim(),
-      )
-      .filter((line) => line !== '');
-    setText(lines.join('\n'));
-    setLineErrors([]);
-  }
-
-  function handleSampleDownload() {
-    saveBlob(
-      new Blob([SAMPLE_ROSTER_CSV], { type: 'text/csv;charset=utf-8' }),
-      SAMPLE_ROSTER_FILENAME,
-    );
-  }
-
   function handleDownload() {
     const csv = buildTokensCsv(Object.values(tokens), joinCode, window.location.origin);
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `quizup-tokens-${joinCode}.csv`);
@@ -164,185 +153,196 @@ export function RosterPanel({ sessionId, joinCode, refreshKey }: RosterPanelProp
   return (
     <Panel
       title="Invited students"
-      description={`${joinedCount} of ${entries.length} joined. Only people on this list can take the quiz, each with their own token.`}
-      actions={
-        <span className="flex flex-wrap gap-2">
-          {emailEnabled && emailableCount > 0 && (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEmailReport(null);
-                setEmailDialog({ rosterIds: undefined, count: emailableCount });
-              }}
-            >
-              Email tokens
-            </Button>
-          )}
-          {issuedCount > 0 && (
-            <Button variant="secondary" size="sm" onClick={handleDownload}>
-              Download tokens (CSV)
-            </Button>
-          )}
-        </span>
-      }
+      description="Only people on this list can take this quiz. Each gets a personal token, so nobody can join under someone else's name."
     >
-      <div className="space-y-5">
-        {problems.length > 0 && (
-          <Notice tone="danger">
-            <ul className="space-y-1">
-              {problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          </Notice>
-        )}
-        {emailReport && (
-          <Notice tone="info">
-            Sent {emailReport.sent} {emailReport.sent === 1 ? 'email' : 'emails'}.
-            {noEmailCount > 0 &&
-              ` ${noEmailCount} ${noEmailCount === 1 ? 'student has' : 'students have'} no email address.`}
-            {noTokenCount > 0 &&
-              ` ${noTokenCount} ${noTokenCount === 1 ? 'student needs' : 'students need'} a new token first.`}
-          </Notice>
-        )}
-        {issuedCount > 0 && (
-          <Notice tone="warning">
-            Tokens are shown only now. Download the CSV or copy them before you leave this page. If
-            one is lost, issue a new token.
-          </Notice>
-        )}
-        <div className="space-y-3">
-          <TextAreaField
-            label="Add students"
-            hint="One per line: a name, or a name and an email separated by a comma."
-            rows={4}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
+      <ol aria-label="How inviting students works" className="space-y-8">
+        <li className="space-y-4">
+          <StepHeading number={1} title="Add students" />
+          <RosterAddStep
+            text={text}
+            onTextChange={(next) => {
+              setText(next);
+              setLineErrors([]);
+            }}
+            onAdd={() => void handleAdd()}
+            busy={busy}
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button disabled={busy || text.trim() === ''} onClick={() => void handleAdd()}>
-              Add students
-            </Button>
-            <Button variant="secondary" size="sm" onClick={handleSampleDownload}>
-              Download a sample list
-            </Button>
-            <label className="cursor-pointer text-sm font-medium text-board underline underline-offset-4">
-              Upload a CSV
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                className="sr-only"
-                onChange={(event) => void handleCsvChosen(event)}
-              />
-            </label>
-          </div>
-        </div>
-        {entries.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-rule-strong px-5 py-6 text-center text-muted">
-            Nobody is on the list yet. Add students above to get their tokens.
+        </li>
+
+        <li className="space-y-4">
+          <StepHeading number={2} title="Send each student their token" />
+          {entries.length === 0 ? (
+            <p className="text-sm text-muted">Add students first. Their tokens appear here.</p>
+          ) : (
+            <div className="space-y-4">
+              {issuedCount > 0 && (
+                <Notice tone="warning">
+                  Tokens are shown only now. Send or download them before you leave this page. If
+                  one is lost, issue a new token.
+                </Notice>
+              )}
+              <p className="text-sm text-muted">
+                Every student needs their own token, or their personal link. Each row also has a
+                Copy link button.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {emailEnabled && emailableCount > 0 && (
+                  <Button
+                    onClick={() => {
+                      setEmailReport(null);
+                      setEmailDialog({ rosterIds: undefined, count: emailableCount });
+                    }}
+                  >
+                    Email tokens
+                  </Button>
+                )}
+                {issuedCount > 0 && (
+                  <Button variant="secondary" onClick={handleDownload}>
+                    Download tokens (CSV)
+                  </Button>
+                )}
+              </div>
+              {!emailEnabled && (
+                <Notice tone="info">
+                  Email is not set up on this server. Download the tokens CSV or copy each link and
+                  send them yourself, for example in your class group.
+                </Notice>
+              )}
+              {emailReport && (
+                <Notice tone="info">
+                  Sent {emailReport.sent} {emailReport.sent === 1 ? 'email' : 'emails'}.
+                  {noEmailCount > 0 &&
+                    ` ${noEmailCount} ${noEmailCount === 1 ? 'student has' : 'students have'} no email address.`}
+                  {noTokenCount > 0 &&
+                    ` ${noTokenCount} ${noTokenCount === 1 ? 'student needs' : 'students need'} a new token first.`}
+                </Notice>
+              )}
+            </div>
+          )}
+        </li>
+
+        <li className="space-y-4">
+          <StepHeading number={3} title="Watch them join" />
+          <p className="text-sm text-muted">
+            {joinedCount} of {entries.length} joined. Share the join code or link, then start when
+            everyone you expect is in.
           </p>
-        ) : (
-          <TableFrame label="Invited students list">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-rule text-muted">
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Student
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Status
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Token
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rule">
-                {entries.map((entry) => {
-                  const issued = tokens[entry.id];
-                  return (
-                    <tr key={entry.id}>
-                      <th scope="row" className="px-3 py-2.5 font-medium">
-                        {entry.displayName}
-                        {entry.email && (
-                          <span className="block text-xs font-normal text-muted">
-                            {entry.email}
-                          </span>
-                        )}
-                      </th>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {statusOf(entry)}
-                        {entry.openedElsewhere > 0 && (
-                          <span className="block text-xs text-alert">
-                            Opened on another device {entry.openedElsewhere}{' '}
-                            {entry.openedElsewhere === 1 ? 'time' : 'times'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {issued ? (
-                          <span className="flex items-center gap-2 whitespace-nowrap">
-                            <code className="rounded bg-paper px-2 py-1 font-semibold tracking-wider select-all">
-                              {issued.token}
-                            </code>
-                            <CopyButton
-                              text={`${window.location.origin}/join/${joinCode}#token=${issued.token}`}
-                              label="Copy link"
-                              ariaLabel={`Copy link for ${entry.displayName}`}
-                              size="sm"
-                              copiedMessage="Copied"
-                            />
-                          </span>
-                        ) : (
-                          <span className="text-muted">Hidden</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="flex min-w-36 flex-wrap justify-end gap-2">
-                          {emailEnabled && entry.emailable && (
+          {problems.length > 0 && (
+            <Notice tone="danger">
+              <ul className="space-y-1">
+                {problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            </Notice>
+          )}
+          {entries.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-rule-strong px-5 py-6 text-center text-muted">
+              Nobody is on the list yet.
+            </p>
+          ) : (
+            <TableFrame label="Invited students list">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-rule text-muted">
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Student
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Status
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Token
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rule">
+                  {entries.map((entry) => {
+                    const issued = tokens[entry.id];
+                    return (
+                      <tr key={entry.id}>
+                        <th scope="row" className="px-3 py-2.5 font-medium">
+                          {entry.displayName}
+                          {entry.email && (
+                            <span className="block text-xs font-normal text-muted">
+                              {entry.email}
+                            </span>
+                          )}
+                        </th>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {statusOf(entry)}
+                          {entry.openedElsewhere > 0 && (
+                            <span className="block text-xs text-alert">
+                              Opened on another device {entry.openedElsewhere}{' '}
+                              {entry.openedElsewhere === 1 ? 'time' : 'times'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {issued ? (
+                            <span className="flex items-center gap-2 whitespace-nowrap">
+                              <code className="rounded bg-paper px-2 py-1 font-semibold tracking-wider select-all">
+                                {issued.token}
+                              </code>
+                              <CopyButton
+                                text={`${window.location.origin}/join/${joinCode}#token=${issued.token}`}
+                                label="Copy link"
+                                ariaLabel={`Copy link for ${entry.displayName}`}
+                                size="sm"
+                                copiedMessage="Copied"
+                              />
+                            </span>
+                          ) : (
+                            <span className="text-muted">Hidden</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="flex min-w-36 flex-wrap justify-end gap-2">
+                            {emailEnabled && entry.emailable && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label={`Email token to ${entry.displayName}`}
+                                onClick={() => {
+                                  setEmailReport(null);
+                                  setEmailDialog({ rosterIds: [entry.id], count: 1 });
+                                }}
+                              >
+                                Email
+                              </Button>
+                            )}
                             <Button
                               variant="secondary"
                               size="sm"
-                              aria-label={`Email token to ${entry.displayName}`}
-                              onClick={() => {
-                                setEmailReport(null);
-                                setEmailDialog({ rosterIds: [entry.id], count: 1 });
-                              }}
+                              aria-label={`New token for ${entry.displayName}`}
+                              onClick={() => void handleReissue(entry)}
                             >
-                              Email
+                              New token
                             </Button>
-                          )}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            aria-label={`New token for ${entry.displayName}`}
-                            onClick={() => void handleReissue(entry)}
-                          >
-                            New token
-                          </Button>
-                          {!entry.participantId && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              aria-label={`Remove ${entry.displayName}`}
-                              onClick={() => void handleRemove(entry)}
-                            >
-                              Remove
-                            </Button>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableFrame>
-        )}
-      </div>
+                            {!entry.participantId && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label={`Remove ${entry.displayName}`}
+                                onClick={() => void handleRemove(entry)}
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableFrame>
+          )}
+        </li>
+      </ol>
       {emailDialog && (
         <EmailTokensDialog
           sessionId={sessionId}

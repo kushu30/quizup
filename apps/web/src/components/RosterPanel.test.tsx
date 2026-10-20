@@ -99,7 +99,7 @@ describe('RosterPanel', () => {
     });
     renderPanel();
     await screen.findByRole('region', { name: 'Invited students' });
-    fireEvent.change(screen.getByLabelText('Add students'), {
+    fireEvent.change(screen.getByLabelText('Student list'), {
       target: { value: 'Asha Rao, asha@example.com\nBen Cole' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add students' }));
@@ -127,7 +127,7 @@ describe('RosterPanel', () => {
   it('points out bad lines by number and does not send anything', async () => {
     renderPanel();
     await screen.findByRole('region', { name: 'Invited students' });
-    fireEvent.change(screen.getByLabelText('Add students'), {
+    fireEvent.change(screen.getByLabelText('Student list'), {
       target: { value: 'Asha\nBen, not-an-email' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add students' }));
@@ -139,7 +139,7 @@ describe('RosterPanel', () => {
     vi.mocked(api.addRoster).mockRejectedValue(new Error('Asha Rao is already on the list'));
     renderPanel();
     await screen.findByRole('region', { name: 'Invited students' });
-    fireEvent.change(screen.getByLabelText('Add students'), { target: { value: 'Asha Rao' } });
+    fireEvent.change(screen.getByLabelText('Student list'), { target: { value: 'Asha Rao' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add students' }));
     expect((await screen.findByRole('alert')).textContent).toContain('already on the list');
   });
@@ -162,7 +162,13 @@ describe('RosterPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove Ben Cole' }));
     });
     expect(api.removeRosterEntry).toHaveBeenCalledWith(SESSION, BEN.id);
-    await waitFor(() => expect(screen.queryByText('Ben Cole')).toBeNull());
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('region', { name: 'Invited students list' })).queryByText(
+          'Ben Cole',
+        ),
+      ).toBeNull(),
+    );
   });
 
   it('refreshes the list when told something changed', async () => {
@@ -238,7 +244,8 @@ describe('RosterPanel', () => {
   it('offers a sample list to download', async () => {
     renderPanel();
     await screen.findByRole('region', { name: 'Invited students' });
-    fireEvent.click(screen.getByRole('button', { name: 'Download a sample list' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Upload a CSV' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download a sample CSV' }));
     expect(saveBlob).toHaveBeenCalledTimes(1);
     expect(vi.mocked(saveBlob).mock.calls[0]?.[1]).toBe('quizup-sample-students.csv');
     const blob = vi.mocked(saveBlob).mock.calls[0]?.[0] as Blob;
@@ -256,14 +263,114 @@ describe('RosterPanel', () => {
     const file = new File(['name,email\nAsha Rao,asha@example.com\nBen Cole,\n'], 'students.csv', {
       type: 'text/csv',
     });
-    fireEvent.change(screen.getByLabelText('Upload a CSV'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Upload a CSV' }));
+    fireEvent.change(screen.getByLabelText('Choose a CSV file'), { target: { files: [file] } });
     await waitFor(() =>
-      expect((screen.getByLabelText('Add students') as HTMLTextAreaElement).value).toContain(
+      expect((screen.getByLabelText('Student list') as HTMLTextAreaElement).value).toContain(
         'Asha Rao, asha@example.com',
       ),
     );
-    expect((screen.getByLabelText('Add students') as HTMLTextAreaElement).value).toContain(
+    expect((screen.getByLabelText('Student list') as HTMLTextAreaElement).value).toContain(
       'Ben Cole',
     );
+  });
+
+  describe('the invite flow', () => {
+    it('lays the job out as three numbered steps', async () => {
+      renderPanel();
+      await screen.findByRole('region', { name: 'Invited students' });
+      for (const name of ['Add students', 'Send each student their token', 'Watch them join']) {
+        expect(screen.getByRole('heading', { level: 3, name })).toBeTruthy();
+      }
+      const steps = screen.getByRole('list', { name: 'How inviting students works' });
+      expect(steps.tagName).toBe('OL');
+      expect(steps.querySelectorAll(':scope > li')).toHaveLength(3);
+    });
+
+    it('starts on pasting a list and shows exactly what to type', async () => {
+      renderPanel();
+      await screen.findByRole('region', { name: 'Invited students' });
+      expect(screen.getByRole('tab', { name: 'Paste a list' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(screen.getByText(/One student per line/)).toBeTruthy();
+      expect(screen.getByText('Asha Rao, asha@example.com')).toBeTruthy();
+      expect(screen.getByText(/email is optional/i)).toBeTruthy();
+    });
+
+    it('explains the CSV columns on the upload tab and offers a sample', async () => {
+      renderPanel();
+      await screen.findByRole('region', { name: 'Invited students' });
+      fireEvent.click(screen.getByRole('tab', { name: 'Upload a CSV' }));
+      expect(screen.getByRole('tab', { name: 'Upload a CSV' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      const guide = screen.getByRole('table', { name: 'CSV columns' });
+      expect(within(guide).getByText('name')).toBeTruthy();
+      expect(within(guide).getByText('email')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Download a sample CSV' })).toBeTruthy();
+      expect(screen.getByLabelText('Choose a CSV file')).toBeTruthy();
+    });
+
+    it('loads a chosen file into the list, says how many it read, and lets the host check it before adding', async () => {
+      renderPanel();
+      await screen.findByRole('region', { name: 'Invited students' });
+      fireEvent.click(screen.getByRole('tab', { name: 'Upload a CSV' }));
+      const file = new File(
+        ['name,email\nAsha Rao,asha@example.com\nBen Cole,\n'],
+        'students.csv',
+        {
+          type: 'text/csv',
+        },
+      );
+      fireEvent.change(screen.getByLabelText('Choose a CSV file'), { target: { files: [file] } });
+      expect(await screen.findByText(/Loaded 2 students from students\.csv/)).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Paste a list' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(api.addRoster).not.toHaveBeenCalled();
+    });
+
+    it('clears the loaded-file note once the students have been added', async () => {
+      vi.mocked(api.addRoster).mockResolvedValue({
+        entries: [ASHA],
+        issued: [issued(ASHA, 'ABCDE-23456')],
+      });
+      renderPanel();
+      await screen.findByRole('region', { name: 'Invited students' });
+      fireEvent.click(screen.getByRole('tab', { name: 'Upload a CSV' }));
+      const file = new File(['name,email\nAsha Rao,asha@example.com\n'], 'students.csv', {
+        type: 'text/csv',
+      });
+      fireEvent.change(screen.getByLabelText('Choose a CSV file'), { target: { files: [file] } });
+      await screen.findByText(/Loaded 1 student from students\.csv/);
+      fireEvent.click(screen.getByRole('button', { name: 'Add students' }));
+      await waitFor(() => expect(screen.queryByText(/Loaded 1 student/)).toBeNull());
+    });
+
+    it('says step two waits for students, then offers the ways to send tokens', async () => {
+      vi.mocked(api.getRoster).mockResolvedValue({ entries: [], emailEnabled: true });
+      const { unmount } = renderPanel();
+      expect(await screen.findByText(/Add students first/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Email tokens' })).toBeNull();
+      unmount();
+      vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN], emailEnabled: true });
+      renderPanel();
+      expect(await screen.findByRole('button', { name: 'Email tokens' })).toBeTruthy();
+      expect(screen.getByText(/Each row also has a Copy link button/)).toBeTruthy();
+    });
+
+    it('tells the host plainly what to do instead when email is not set up', async () => {
+      vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN], emailEnabled: false });
+      renderPanel();
+      expect(await screen.findByText(/Email is not set up on this server/)).toBeTruthy();
+      expect(screen.getByText(/Download the tokens CSV or copy each link/)).toBeTruthy();
+    });
+
+    it('shows how many have joined in the last step', async () => {
+      renderPanel();
+      const region = await screen.findByRole('region', { name: 'Invited students' });
+      expect(within(region).getByText(/1 of 2 joined/)).toBeTruthy();
+    });
   });
 });
