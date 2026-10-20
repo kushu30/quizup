@@ -262,6 +262,7 @@ export class LiveEngine {
           shuffleQuestions: false,
           shuffleOptions: false,
           pools: [],
+          showCorrectAnswers: true,
           adaptiveRounds: undefined,
           durationMinutes: undefined,
         };

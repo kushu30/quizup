@@ -1,5 +1,6 @@
 import type { MyResultRow } from '@quizup/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { RequireRole } from '../components/RequireRole';
 import { BrandMark } from '../components/branding/BrandMark';
 import { Badge, Notice, PageHeader, SkeletonList } from '../components/ui';
@@ -64,7 +65,19 @@ function MyResultsContent() {
             >
               <div className="min-w-0 space-y-2">
                 {row.branding && <BrandMark branding={{ ...row.branding, tagline: undefined }} />}
-                <p className="text-lg font-semibold break-words">{row.quizTitle}</p>
+                <p className="text-lg font-semibold break-words">
+                  {row.resultsHidden || !row.endedAt ? (
+                    row.quizTitle
+                  ) : (
+                    <Link
+                      to={`/me/results/${row.sessionId}`}
+                      className="underline-offset-4 hover:underline"
+                    >
+                      {row.quizTitle}
+                      <span className="sr-only">, view details</span>
+                    </Link>
+                  )}
+                </p>
                 <p className="text-sm text-muted">
                   {typeLabel(row)}
                   {row.endedAt

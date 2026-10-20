@@ -18,7 +18,7 @@ interface DeliveryOptionsProps {
   onPoolsChange: (pools: PoolRule[]) => void;
 }
 
-function Switch({
+export function Switch({
   title,
   hint,
   checked,

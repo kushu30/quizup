@@ -201,6 +201,7 @@ export interface SessionAnalyticsSource {
     id: string;
     stem: string;
     options: string[];
+    correctIndex: number;
     topic: string;
     difficulty: Difficulty;
     answersCount?: number;

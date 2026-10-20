@@ -22,6 +22,7 @@ import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { AccessModePicker } from '../components/AccessModePicker';
 import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
+import { ResultsOptions } from '../components/ResultsOptions';
 import { DeliveryOptions, type ModuleCount } from '../components/DeliveryOptions';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
@@ -49,6 +50,7 @@ export function QuizEditor() {
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [pools, setPools] = useState<PoolRule[]>([]);
+  const [showCorrectAnswers, setShowCorrectAnswers] = useState(true);
   const [approvedModules, setApprovedModules] = useState<ModuleCount[]>([]);
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const examMode = assessmentType === 'exam';
@@ -70,6 +72,7 @@ export function QuizEditor() {
       setShuffleQuestions(settings.success ? settings.data.shuffleQuestions : false);
       setShuffleOptions(settings.success ? settings.data.shuffleOptions : false);
       setPools(settings.success ? settings.data.pools : []);
+      setShowCorrectAnswers(settings.success ? (settings.data.showCorrectAnswers ?? true) : true);
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
@@ -152,6 +155,7 @@ export function QuizEditor() {
     setAssessmentType(next);
     setShuffleQuestions(next === 'exam');
     setShuffleOptions(next === 'exam');
+    setShowCorrectAnswers(next !== 'exam');
   }
 
   async function handleSaveDetails(event: FormEvent) {
@@ -168,6 +172,7 @@ export function QuizEditor() {
         shuffleQuestions: assessmentType === 'adaptive' ? false : shuffleQuestions,
         shuffleOptions: examMode ? shuffleOptions : false,
         pools: assessmentType === 'adaptive' ? [] : pools,
+        showCorrectAnswers,
       },
     });
     if (!parsed.success) {
@@ -281,6 +286,11 @@ export function QuizEditor() {
                   onPoolsChange={setPools}
                 />
               )}
+              <ResultsOptions
+                assessmentType={assessmentType}
+                showCorrectAnswers={showCorrectAnswers}
+                onChange={setShowCorrectAnswers}
+              />
               <Button type="submit" className="w-full">
                 Save details
               </Button>

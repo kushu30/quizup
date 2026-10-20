@@ -66,3 +66,21 @@ describe('resolveAdaptiveRounds', () => {
     expect(resolveAdaptiveRounds(5, 12)).toBe(5);
   });
 });
+
+describe('showCorrectAnswers', () => {
+  it('defaults to hidden for exams and shown for live and adaptive quizzes', () => {
+    expect(quizSettingsSchema.parse({ mode: 'exam', durationMinutes: 20 }).showCorrectAnswers).toBe(
+      false,
+    );
+    expect(quizSettingsSchema.parse({}).showCorrectAnswers).toBe(true);
+    expect(quizSettingsSchema.parse({ adaptive: true }).showCorrectAnswers).toBe(true);
+  });
+
+  it('keeps an explicit choice', () => {
+    expect(
+      quizSettingsSchema.parse({ mode: 'exam', durationMinutes: 20, showCorrectAnswers: true })
+        .showCorrectAnswers,
+    ).toBe(true);
+    expect(quizSettingsSchema.parse({ showCorrectAnswers: false }).showCorrectAnswers).toBe(false);
+  });
+});

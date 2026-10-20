@@ -22,6 +22,7 @@ import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
 import { supabaseGroupRepository, type GroupRepository } from './groups/groupRepository.js';
 import { createGroupsRouter } from './groups/groupsRouter.js';
+import { StudentResultService } from './results/studentResultService.js';
 import { createHistoryRouter } from './history/historyRouter.js';
 import { createJoinInfoRouter } from './joinInfo/joinInfoRouter.js';
 import { supabaseAccounts, type AccountDirectory } from './mail/accounts.js';
@@ -78,7 +79,15 @@ export function createApp(dependencies: AppDependencies) {
     }),
   );
   app.use(createJoinInfoRouter({ engine: dependencies.engine }));
-  app.use(createHistoryRouter({ engine: dependencies.engine, verifier: dependencies.verifier }));
+  const analytics = new AnalyticsService(dependencies.engine);
+  const studentResults = new StudentResultService(dependencies.engine, analytics);
+  app.use(
+    createHistoryRouter({
+      engine: dependencies.engine,
+      verifier: dependencies.verifier,
+      studentResults,
+    }),
+  );
   app.use(
     '/groups',
     createGroupsRouter({
@@ -103,7 +112,8 @@ export function createApp(dependencies: AppDependencies) {
     createSessionsRouter({
       engine: dependencies.engine,
       verifier: dependencies.verifier,
-      analytics: new AnalyticsService(dependencies.engine),
+      analytics,
+      studentResults,
       exam: dependencies.exam,
       mailer,
       appUrl,

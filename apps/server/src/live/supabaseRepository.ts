@@ -461,13 +461,14 @@ export class SupabaseLiveRepository implements LiveRepository {
             id: string;
             stem: string;
             options: string[];
+            correct_index: number;
             topic: string;
             difficulty: Difficulty;
             answers_count: number | null;
           }>((from, to) =>
             supabaseAdmin
               .from('questions')
-              .select('id, stem, options, topic, difficulty, answers_count')
+              .select('id, stem, options, correct_index, topic, difficulty, answers_count')
               .in('id', questionIds)
               .range(from, to),
           );
@@ -512,6 +513,7 @@ export class SupabaseLiveRepository implements LiveRepository {
         id: row.id,
         stem: row.stem,
         options: row.options,
+        correctIndex: row.correct_index,
         topic: row.topic,
         difficulty: row.difficulty,
         answersCount: Number(row.answers_count ?? 0),

@@ -367,6 +367,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         id: question.id,
         stem: question.stem,
         options: question.options,
+        correctIndex: question.correctIndex,
         topic: question.topic,
         difficulty: question.difficulty,
         answersCount: question.answersCount,

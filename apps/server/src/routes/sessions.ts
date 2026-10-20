@@ -7,6 +7,7 @@ import {
   sessionCreateSchema,
   sessionIdParamsSchema,
   sessionParticipantParamsSchema,
+  studentResultParamsSchema,
   sessionStartSchema,
 } from '@quizup/shared';
 import type { Response } from 'express';
@@ -26,6 +27,7 @@ import {
   sendTokenEmails,
 } from '../mail/rosterEmail.js';
 import { EngineError } from '../live/types.js';
+import type { StudentResultService } from '../results/studentResultService.js';
 
 export function createSessionsRouter(dependencies: {
   engine: LiveEngine;
@@ -35,8 +37,10 @@ export function createSessionsRouter(dependencies: {
   mailer: Mailer;
   appUrl: string;
   accounts: AccountDirectory;
+  studentResults: StudentResultService;
 }): Router {
-  const { engine, verifier, analytics, exam, mailer, appUrl, accounts } = dependencies;
+  const { engine, verifier, analytics, exam, mailer, appUrl, accounts, studentResults } =
+    dependencies;
   const router = Router();
 
   router.use(createRequireAuth(verifier), requireRole('host', 'admin'));
@@ -360,6 +364,28 @@ export function createSessionsRouter(dependencies: {
       }
       const released = await exam.releaseResults(params.sessionId, getAuthUser(request).id);
       response.json(released);
+    }),
+  );
+
+  router.get(
+    '/:sessionId/participants/:participantId/result',
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(studentResultParamsSchema, request.params, response);
+      if (!params) {
+        return;
+      }
+      const access = await studentResults.forHost(
+        params.sessionId,
+        params.participantId,
+        getAuthUser(request),
+      );
+      if (access.kind === 'ok') {
+        response.json(access.value);
+      } else if (access.kind === 'forbidden') {
+        response.status(403).json({ error: 'forbidden' });
+      } else {
+        sendNotFound(response, 'Result');
+      }
     }),
   );
 

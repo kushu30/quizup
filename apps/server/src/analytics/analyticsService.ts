@@ -47,7 +47,15 @@ export class AnalyticsService {
       return access;
     }
 
-    const stored = analyticsSnapshotSchema.safeParse(access.value.storedSummary);
+    return this.snapshotFor(sessionId, access.value);
+  }
+
+  /** The snapshot for a session the caller has already been cleared to read. */
+  async snapshotFor(
+    sessionId: string,
+    record: SummaryRecord,
+  ): Promise<AnalyticsAccess<AnalyticsSnapshot>> {
+    const stored = analyticsSnapshotSchema.safeParse(record.storedSummary);
     if (stored.success) {
       return { kind: 'ok', value: stored.data };
     }

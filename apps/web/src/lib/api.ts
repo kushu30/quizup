@@ -57,6 +57,8 @@ import {
   type RosterResponse,
   type RosterStudentInput,
   type SessionStartInput,
+  studentResultSchema,
+  type StudentResult,
   groupDetailSchema,
   groupListSchema,
   type GroupDetail,
@@ -190,6 +192,14 @@ export const api = {
   listQuizSessions: (quizId: string): Promise<QuizSessionHistoryRow[]> =>
     requestJson(`/quizzes/${quizId}/sessions`, 'GET', quizSessionHistorySchema),
   getMyResults: (): Promise<MyResultRow[]> => requestJson('/me/results', 'GET', myResultsSchema),
+  getMyResult: (sessionId: string): Promise<StudentResult> =>
+    requestJson(`/me/results/${sessionId}`, 'GET', studentResultSchema),
+  getStudentResult: (sessionId: string, participantId: string): Promise<StudentResult> =>
+    requestJson(
+      `/sessions/${sessionId}/participants/${participantId}/result`,
+      'GET',
+      studentResultSchema,
+    ),
   getQuizActivity: (): Promise<QuizActivity[]> =>
     requestJson('/me/quiz-activity', 'GET', quizActivityListSchema),
   getSessionFeedback: (sessionId: string): Promise<SessionFeedbackResponse> =>

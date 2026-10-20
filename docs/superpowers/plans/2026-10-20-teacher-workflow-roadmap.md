@@ -39,7 +39,7 @@ Render free services sleep after 15 idle minutes and take about a minute to wake
 
 A **Students** page lists the host's groups; a group holds names and optional emails, filled by paste or CSV exactly as in the invite panel. In the invite panel, step 1 gains "Add a saved group". Adding a group to a quiz copies its members into that session's roster; later edits to the group do not change running sessions. Groups are private to their host.
 
-## Phase 4: results and performance
+## Phase 4: results and performance (done)
 
 Decided by the host: **no PDF, no emailed or sent results.** Results are only ever viewed inside the app.
 

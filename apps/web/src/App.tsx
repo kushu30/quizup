@@ -12,7 +12,9 @@ import { Play } from './pages/Play';
 import { QuestionBankPage } from './pages/QuestionBankPage';
 import { QuizEditor } from './pages/QuizEditor';
 import { SessionSummaryPage } from './pages/SessionSummaryPage';
+import { MyResultDetailPage } from './pages/MyResultDetailPage';
 import { MyResultsPage } from './pages/MyResultsPage';
+import { StudentResultPage } from './pages/StudentResultPage';
 import { QuizHistoryPage } from './pages/QuizHistoryPage';
 
 export function App() {
@@ -28,11 +30,16 @@ export function App() {
           <Route path="/host/quizzes/:quizId/history" element={<QuizHistoryPage />} />
           <Route path="/host/sessions/:sessionId" element={<HostConsole />} />
           <Route path="/sessions/:sessionId/summary" element={<SessionSummaryPage />} />
+          <Route
+            path="/sessions/:sessionId/students/:participantId"
+            element={<StudentResultPage />}
+          />
           <Route path="/host/questions" element={<QuestionBankPage />} />
           <Route path="/host/groups" element={<GroupsPage />} />
         </Route>
         <Route path="/join" element={<Join />} />
         <Route path="/me/results" element={<MyResultsPage />} />
+        <Route path="/me/results/:sessionId" element={<MyResultDetailPage />} />
         <Route path="/join/:code" element={<Join />} />
         <Route path="/play/:code" element={<Play />} />
       </Route>

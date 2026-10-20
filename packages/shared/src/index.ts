@@ -35,3 +35,4 @@ export * from './mailFailure.js';
 export * from './questionImage.js';
 export * from './delivery.js';
 export * from './groups.js';
+export * from './studentResult.js';

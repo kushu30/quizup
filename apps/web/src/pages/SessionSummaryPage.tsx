@@ -8,7 +8,7 @@ import {
   type SessionFeedbackResponse,
 } from '@quizup/shared';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { StudentDevice } from '../components/StudentDevice';
 import { Leaderboard } from '../components/Leaderboard';
 import { MasteryHeatmap } from '../components/analytics/MasteryHeatmap';
@@ -168,6 +168,51 @@ export function SessionSummaryPage() {
           />
         </Panel>
       </div>
+
+      <Panel
+        title="Students"
+        description="Open a student to see their answers, accuracy by module, time taken and proctoring."
+      >
+        <TableFrame label="Students table">
+          <table aria-label="Students">
+            <thead>
+              <tr>
+                <th scope="col" className="text-right">
+                  Rank
+                </th>
+                <th scope="col">Student</th>
+                <th scope="col" className="text-right">
+                  Score
+                </th>
+                <th scope="col" className="text-right">
+                  Correct
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...summary.participants]
+                .sort((first, second) => first.rank - second.rank)
+                .map((participant) => (
+                  <tr key={participant.participantId}>
+                    <td className="text-right tabular-nums">{participant.rank}</td>
+                    <td className="font-medium">
+                      <Link
+                        to={`/sessions/${sessionId}/students/${participant.participantId}`}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        {participant.displayName}
+                      </Link>
+                    </td>
+                    <td className="text-right tabular-nums">{participant.score}</td>
+                    <td className="text-right tabular-nums">
+                      {participant.correct} of {participant.answered}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </TableFrame>
+      </Panel>
 
       <FeedbackSummary feedback={feedback} />
 

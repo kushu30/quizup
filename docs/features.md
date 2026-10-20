@@ -234,3 +234,13 @@ Create a Google OAuth client with redirect URI `<supabase url>/auth/v1/callback`
 Hosts keep reusable class lists under **Students** in the top menu (`/host/groups`). A group has a name (unique per host, up to 60 characters) and up to 500 students, each with a name and an optional email, added by pasting lines or uploading a CSV exactly as in the invite panel. In an invited-only session, step 1 of the **Invited students** panel has **Add a saved group**: it copies the group's students into that session's roster and issues their tokens. Students already on the roster (same name, ignoring case) are skipped and counted. Later edits to a group never change a session that already used it, and deleting a group leaves those sessions alone. Groups are private to their host: another host's request returns 404.
 
 API (host or admin): `GET/POST /groups`, `GET/PUT/DELETE /groups/:groupId`. `PUT` replaces the name and all students in one transaction (`save_student_group`). Run `supabase db push` to apply migration 0016 (`student_groups`, `student_group_members`, server access only).
+
+## Results for students and hosts
+
+Results are only ever viewed inside the app: no PDF export, nothing is emailed or sent to students.
+
+- **Student.** In **My results**, a finished assessment's title links to a detail page (`/me/results/:sessionId`) with score, rank, time taken, accuracy per module and every question with the student's answer. Exam results stay hidden until the host releases them, and a live quiz result appears once the session has ended. A student only ever gets their own attempt.
+- **Show correct answers.** A quiz setting in the editor's **Results** block (`showCorrectAnswers`): on by default for live and adaptive quizzes, off by default for timed exams. When it is off, the student still sees their score, rank, time and the answers they gave, but no per-question right or wrong, no correct option and no module accuracy; the server leaves those fields out, so they never reach the browser.
+- **Host.** The session summary has a **Students** table; each name opens `/sessions/:sessionId/students/:participantId` with the same result view (always with correct answers), plus that student's proctor signal counts and timeline, and device. Only the quiz's own host (or an admin) can open it.
+- **Time taken.** Exams: from the student's start to submit. Live quizzes: the sum of the time spent on each answer.
+- **API.** `GET /me/results/:sessionId` (409 `session_not_finished` or `results_not_released` when not ready) and `GET /sessions/:sessionId/participants/:participantId/result` (host or admin). No database change.

@@ -30,6 +30,7 @@ const quizSettingsBaseSchema = z.object({
   shuffleQuestions: z.boolean().optional(),
   shuffleOptions: z.boolean().optional(),
   pools: poolRulesSchema.default([]),
+  showCorrectAnswers: z.boolean().optional(),
   branding: brandingSchema.optional(),
 });
 
@@ -51,6 +52,7 @@ export const quizSettingsSchema = quizSettingsBaseSchema
         adaptiveRounds: undefined,
         shuffleQuestions: settings.shuffleQuestions ?? true,
         shuffleOptions: settings.shuffleOptions ?? true,
+        showCorrectAnswers: settings.showCorrectAnswers ?? false,
       };
     }
     if (settings.adaptive) {
@@ -60,6 +62,7 @@ export const quizSettingsSchema = quizSettingsBaseSchema
         shuffleQuestions: false,
         shuffleOptions: false,
         pools: [],
+        showCorrectAnswers: settings.showCorrectAnswers ?? true,
       };
     }
     return {
@@ -67,6 +70,7 @@ export const quizSettingsSchema = quizSettingsBaseSchema
       durationMinutes: undefined,
       shuffleQuestions: settings.shuffleQuestions ?? false,
       shuffleOptions: false,
+      showCorrectAnswers: settings.showCorrectAnswers ?? true,
     };
   });
 export type QuizSettings = z.output<typeof quizSettingsSchema>;
