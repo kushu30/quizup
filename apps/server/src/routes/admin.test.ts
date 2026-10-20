@@ -81,6 +81,14 @@ describe('POST /admin/host-access/notify', () => {
     const refused = await notify(broken.harness, { email: 'teacher@school.org' });
     expect(refused.status).toBe(502);
     expect(String(refused.body.error)).toMatch(/could not be sent/i);
+
+    const blocked = new FakeMailer();
+    blocked.failFor.add('teacher@school.org');
+    blocked.failReason = 'unreachable';
+    const unreachable = await start(blocked);
+    const reply = await notify(unreachable.harness, { email: 'teacher@school.org' });
+    expect(reply.status).toBe(502);
+    expect(String(reply.body.error)).toMatch(/BREVO_API_KEY/);
   });
 
   it('rejects a malformed address', async () => {

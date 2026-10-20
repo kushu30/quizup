@@ -1,5 +1,5 @@
 import type { RosterEmailResult } from '@quizup/shared';
-import type { Mailer } from './mailer.js';
+import { mailFailureText, type Mailer } from './mailer.js';
 import {
   renderTokenEmail,
   type AccountInvite,
@@ -55,6 +55,7 @@ export async function sendTokenEmails(
   const failed: RosterEmailResult['failed'] = [];
   let sent = 0;
   let next = 0;
+  let failureHint: string | undefined;
 
   async function worker() {
     while (next < prepared.items.length) {
@@ -72,7 +73,8 @@ export async function sendTokenEmails(
           }),
         });
         sent += 1;
-      } catch {
+      } catch (error) {
+        failureHint ??= mailFailureText(error);
         failed.push({ rosterId: item.rosterId, displayName: item.displayName });
       }
     }
@@ -82,5 +84,5 @@ export async function sendTokenEmails(
     Array.from({ length: Math.min(SEND_CONCURRENCY, prepared.items.length) }, () => worker()),
   );
   failed.sort((first, second) => first.displayName.localeCompare(second.displayName));
-  return { sent, skipped: prepared.skipped, failed };
+  return { sent, skipped: prepared.skipped, failed, ...(failureHint ? { failureHint } : {}) };
 }

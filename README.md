@@ -299,9 +299,11 @@ Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/re
 
 ### Email (tokens and host access)
 
-QuizUp can email invited students their access token and tell a new host they can start. It speaks plain SMTP, so any provider works; nothing is sent, and no email buttons appear, until all of `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` and `MAIL_FROM` are set. Settings live only in `.env` (or the host's environment variables on Render).
+QuizUp can email invited students their access token and tell a new host they can start. It can send through the Brevo HTTPS API (recommended) or through plain SMTP. Nothing is sent, and no email buttons appear, until `MAIL_FROM` and either `BREVO_API_KEY` or all of `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are set. If both are set the API is used.
 
-Brevo (free tier, no domain needed; check Brevo's page for the current daily limit):
+**Render free blocks SMTP.** Free web services on Render cannot open outbound connections on ports 25, 465 or 587, so SMTP mail that works on your laptop fails once deployed. The Brevo API uses HTTPS (port 443) and is not affected. The server retries a network failure twice, and every failure is shown to the host in plain words (blocked port, rejected key, unverified sender, rate limit) instead of a generic error. Settings live only in `.env` (or the host's environment variables on Render).
+
+Brevo (free tier, no domain needed; check Brevo's page for the current daily limit). For the HTTPS API: in Brevo open **SMTP & API**, then the **API keys** tab, generate a key, and set it as `BREVO_API_KEY` together with `MAIL_FROM` (a verified sender). If you turned on **Authorized IPs** in Brevo's security settings, switch that off or add Render's outbound addresses, otherwise Brevo answers 401. For SMTP instead:
 
 1. Create a Brevo account, then open **SMTP & API** and the **SMTP** tab.
 2. Note the SMTP server (`smtp-relay.brevo.com`), the port (587) and the login Brevo shows you, and generate an **SMTP key** to use as the password.
@@ -396,6 +398,7 @@ Database: create a Supabase project and run `supabase link` then `supabase db pu
 | `GEMINI_MODEL`              | server  | no       | Overrides the default Gemini model id           |
 | `OPENAI_API_KEY`            | server  | no       | Reserved for later phases                       |
 | `APP_URL`                   | server  | no       | Public web URL used in emails (default: first `CORS_ORIGINS`) |
+| `BREVO_API_KEY`             | server  | no       | Brevo API key; sends over HTTPS, works on Render free |
 | `SMTP_HOST`                 | server  | no       | Mail server, for example `smtp-relay.brevo.com` |
 | `SMTP_PORT`                 | server  | no       | Default 587 (465 uses implicit TLS)             |
 | `SMTP_USER`                 | server  | no       | Mail server login                               |

@@ -1,3 +1,4 @@
+import { MailSendError } from '../mail/mailer.js';
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -6,6 +7,7 @@ import type {
   MeResponse,
   ServerToClientEvents,
   SessionSummary,
+  MailFailureReason,
 } from '@quizup/shared';
 import { io as createClient, type Socket } from 'socket.io-client';
 import { createApp } from '../app.js';
@@ -74,10 +76,11 @@ export class FakeMailer {
   enabled = true;
   readonly sent: { to: string; subject: string; text: string; html: string }[] = [];
   readonly failFor = new Set<string>();
+  failReason: MailFailureReason = 'unknown';
 
   send = async (message: { to: string; subject: string; text: string; html: string }) => {
     if (this.failFor.has(message.to)) {
-      throw new Error('mail_send_failed');
+      throw new MailSendError(this.failReason);
     }
     this.sent.push(message);
   };

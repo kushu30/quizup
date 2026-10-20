@@ -17,7 +17,7 @@ import type { ExamService } from '../exam/examService.js';
 import { asyncRoute, parseOrReject, sendNotFound } from '../http.js';
 import type { LiveEngine } from '../live/engine.js';
 import { getSessionFeedback } from '../feedback/feedback.js';
-import type { Mailer } from '../mail/mailer.js';
+import { mailFailureText, type Mailer } from '../mail/mailer.js';
 import { knownAccounts, type AccountDirectory } from '../mail/accounts.js';
 import {
   SAMPLE_ACCOUNT,
@@ -274,8 +274,8 @@ export function createSessionsRouter(dependencies: {
       const mail = renderMailFor(prepared, SAMPLE_STUDENT, appUrl, body, SAMPLE_ACCOUNT);
       try {
         await mailer.send({ to: user.email, ...mail, subject: `[Test] ${mail.subject}` });
-      } catch {
-        response.status(502).json({ error: 'The test email could not be sent. Try again later.' });
+      } catch (error) {
+        response.status(502).json({ error: mailFailureText(error) });
         return;
       }
       response.set('Cache-Control', 'no-store').json({ sentTo: user.email });

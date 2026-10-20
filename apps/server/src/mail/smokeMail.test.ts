@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Mailer } from './mailer.js';
+import { MailSendError, type Mailer } from './mailer.js';
 import { sendSmokeMail } from './smokeMail.js';
 
 function mailer(enabled = true, fail = false): Mailer & { send: ReturnType<typeof vi.fn> } {
@@ -54,5 +54,19 @@ describe('sendSmokeMail', () => {
     );
     expect(result.ok).toBe(false);
     expect(result.ok ? '' : result.reason).toMatch(/provider|refused|check/i);
+  });
+});
+
+describe('sendSmokeMail failure wording', () => {
+  it('tells the operator about a blocked mail port when the provider is unreachable', async () => {
+    const fake: Mailer = {
+      enabled: true,
+      send: async () => {
+        throw new MailSendError('unreachable');
+      },
+    };
+    const result = await sendSmokeMail(fake, 'me@example.com', 'https://quizup.example');
+    expect(result).toMatchObject({ ok: false });
+    expect(result.ok ? '' : result.reason).toMatch(/BREVO_API_KEY/);
   });
 });

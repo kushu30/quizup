@@ -8,7 +8,9 @@ const appUrl = serverEnv.APP_URL ?? serverEnv.CORS_ORIGINS[0] ?? '';
 
 console.log(
   mailer.enabled
-    ? `Sending from ${serverEnv.MAIL_FROM} through ${serverEnv.SMTP_HOST}:${serverEnv.SMTP_PORT} as ${serverEnv.SMTP_USER}`
+    ? serverEnv.BREVO_API_KEY
+      ? `Sending from ${serverEnv.MAIL_FROM} through the Brevo HTTPS API`
+      : `Sending from ${serverEnv.MAIL_FROM} through ${serverEnv.SMTP_HOST}:${serverEnv.SMTP_PORT} as ${serverEnv.SMTP_USER}`
     : 'Email is not configured.',
 );
 

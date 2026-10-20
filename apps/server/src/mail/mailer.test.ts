@@ -111,3 +111,109 @@ describe('createMailer', () => {
     info.mockRestore();
   });
 });
+
+describe('createMailer over the Brevo HTTPS API', () => {
+  const API = {
+    ...BASE,
+    BREVO_API_KEY: 'xkeysib-secret',
+    MAIL_FROM: 'quizup@example.com',
+    MAIL_REPLY_TO: 'help@example.com',
+  };
+  const message = { to: 'a@example.com', subject: 'Hello', text: 'plain', html: '<p>plain</p>' };
+
+  function respond(status: number, body: unknown = { messageId: '<id@brevo>' }) {
+    return new Response(JSON.stringify(body), { status });
+  }
+
+  it('posts the message to Brevo on port 443 with the key in a header, never SMTP', async () => {
+    const { createTransport } = fakeTransport();
+    const fetchMock = vi.fn(async () => respond(201));
+    const mailer = createMailer(
+      serverEnvSchema.parse({ ...API, ...MAIL, BREVO_API_KEY: 'xkeysib-secret' }),
+      createTransport,
+      fetchMock,
+    );
+    expect(mailer.enabled).toBe(true);
+    await mailer.send(message);
+    expect(createTransport).not.toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['api-key']).toBe('xkeysib-secret');
+    expect(JSON.parse(init.body as string)).toEqual({
+      sender: { name: 'QuizUp', email: 'quizup@example.com' },
+      to: [{ email: 'a@example.com' }],
+      replyTo: { email: 'help@example.com' },
+      subject: 'Hello',
+      textContent: 'plain',
+      htmlContent: '<p>plain</p>',
+    });
+  });
+
+  it('is enabled with only an API key and a sender', () => {
+    expect(createMailer(serverEnvSchema.parse(API), undefined, vi.fn()).enabled).toBe(true);
+  });
+
+  it.each([
+    [401, 'login_rejected'],
+    [403, 'login_rejected'],
+    [400, 'refused'],
+    [429, 'rate_limited'],
+  ])('maps HTTP %i to the %s reason without retrying', async (status, reason) => {
+    const fetchMock = vi.fn(async () => respond(status, { message: 'nope', code: 'x' }));
+    const mailer = createMailer(serverEnvSchema.parse(API), undefined, fetchMock, {
+      retryDelayMs: 0,
+    });
+    await expect(mailer.send(message)).rejects.toMatchObject({
+      message: 'mail_send_failed',
+      reason,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a network failure or a 5xx twice, then succeeds when the provider recovers', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(respond(503, {}))
+      .mockResolvedValueOnce(respond(201));
+    const mailer = createMailer(serverEnvSchema.parse(API), undefined, fetchMock, {
+      retryDelayMs: 0,
+    });
+    await expect(mailer.send(message)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up as unreachable after three failed network attempts', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    const mailer = createMailer(serverEnvSchema.parse(API), undefined, fetchMock, {
+      retryDelayMs: 0,
+    });
+    await expect(mailer.send(message)).rejects.toMatchObject({ reason: 'unreachable' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('never puts the key or the provider text in the thrown error or the logs', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = vi.fn(async () => respond(401, { message: 'Key xkeysib-secret is invalid' }));
+    const mailer = createMailer(serverEnvSchema.parse(API), undefined, fetchMock, {
+      retryDelayMs: 0,
+    });
+    const failure = await mailer.send(message).catch((error: Error) => error);
+    expect(String(failure)).not.toContain('xkeysib');
+    expect(JSON.stringify(errors.mock.calls)).not.toContain('xkeysib');
+    errors.mockRestore();
+  });
+
+  it('logs the accepted message id', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const mailer = createMailer(
+      serverEnvSchema.parse(API),
+      undefined,
+      vi.fn(async () => respond(201)),
+    );
+    await mailer.send(message);
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('<id@brevo>'));
+    info.mockRestore();
+  });
+});

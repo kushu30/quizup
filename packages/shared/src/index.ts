@@ -31,3 +31,4 @@ export * from './contact.js';
 export * from './emailTemplate.js';
 export * from './brandColor.js';
 export * from './samples.js';
+export * from './mailFailure.js';

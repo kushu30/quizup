@@ -118,6 +118,7 @@ export const rosterEmailResultSchema = z.object({
     z.object({ rosterId: z.string().uuid(), reason: z.enum(['no_email', 'no_token']) }),
   ),
   failed: z.array(z.object({ rosterId: z.string().uuid(), displayName: z.string() })),
+  failureHint: z.string().optional(),
 });
 export type RosterEmailResult = z.infer<typeof rosterEmailResultSchema>;
 

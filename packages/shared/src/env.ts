@@ -24,6 +24,7 @@ export const serverEnvSchema = z.object({
   GEMINI_MODEL: optionalSecretSchema,
   OPENAI_API_KEY: optionalSecretSchema,
   APP_URL: optionalSecretSchema.pipe(z.string().url().optional()),
+  BREVO_API_KEY: optionalSecretSchema,
   SMTP_HOST: optionalSecretSchema,
   SMTP_PORT: optionalSecretSchema
     .transform((value) => (value === undefined ? 587 : Number(value)))
@@ -37,7 +38,8 @@ export const serverEnvSchema = z.object({
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function isMailConfigured(env: ServerEnv): boolean {
-  return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD && env.MAIL_FROM);
+  const hasSmtp = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
+  return Boolean(env.MAIL_FROM && (env.BREVO_API_KEY || hasSmtp));
 }
 
 export const llmEnvSchema = serverEnvSchema.pick({

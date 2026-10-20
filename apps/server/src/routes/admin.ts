@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { createRequireAuth, requireRole, type AccessTokenVerifier } from '../auth.js';
 import { asyncRoute, parseOrReject } from '../http.js';
 import { knownAccounts, type AccountDirectory } from '../mail/accounts.js';
-import type { Mailer } from '../mail/mailer.js';
+import { mailFailureText, type Mailer } from '../mail/mailer.js';
 import { renderHostAccessEmail } from '../mail/templates.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
@@ -63,8 +63,8 @@ export function createAdminRouter(dependencies: {
             hasAccount: existing.has(body.email),
           }),
         });
-      } catch {
-        response.status(502).json({ error: 'The email could not be sent. Try again later.' });
+      } catch (error) {
+        response.status(502).json({ error: mailFailureText(error) });
         return;
       }
       response.json({ sent: true });

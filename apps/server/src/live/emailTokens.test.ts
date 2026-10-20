@@ -149,6 +149,17 @@ describe('emailing access tokens', () => {
     expect(mailer.sent[0]?.text).not.toContain(added.issued[0]!.token);
   });
 
+  it('tells the host why sending failed, not just who it failed for', async () => {
+    const { harness, summary, mailer } = await setup();
+    mailer.failFor.add('ben@example.com');
+    mailer.failReason = 'refused';
+    await addRoster(harness, summary.session.id, [
+      { displayName: 'Ben Cole', email: 'ben@example.com' },
+    ]);
+    const { body } = await sendEmails(harness, summary.session.id);
+    expect(body.failureHint).toMatch(/sender|verified/i);
+  });
+
   it('keeps going when one address fails and says who failed', async () => {
     const { harness, summary, mailer } = await setup();
     mailer.failFor.add('ben@example.com');

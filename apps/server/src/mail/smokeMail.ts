@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Mailer } from './mailer.js';
+import { mailFailureText, type Mailer } from './mailer.js';
 import { renderTokenEmail } from './templates.js';
 
 export type SmokeMailResult = { ok: true; to: string } | { ok: false; reason: string };
@@ -32,12 +32,8 @@ export async function sendSmokeMail(
   });
   try {
     await mailer.send({ to: address.data, ...mail });
-  } catch {
-    return {
-      ok: false,
-      reason:
-        'The mail provider refused the message. Check the SMTP login, the SMTP key and that the sender address is verified in Brevo (Transactional, Logs shows the reason).',
-    };
+  } catch (error) {
+    return { ok: false, reason: mailFailureText(error) };
   }
   return { ok: true, to: address.data };
 }

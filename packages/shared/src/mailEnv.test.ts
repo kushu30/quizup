@@ -49,4 +49,13 @@ describe('mail settings in the server environment', () => {
     expect(serverEnvSchema.safeParse({ ...BASE, MAIL_FROM: 'not an email' }).success).toBe(false);
     expect(serverEnvSchema.safeParse({ ...BASE, APP_URL: 'nope' }).success).toBe(false);
   });
+
+  it('also turn on with only a Brevo API key and a sender, which needs no SMTP port', () => {
+    const apiOnly = { ...BASE, BREVO_API_KEY: 'xkeysib-secret', MAIL_FROM: 'quizup@example.com' };
+    expect(isMailConfigured(serverEnvSchema.parse(apiOnly))).toBe(true);
+    expect(
+      isMailConfigured(serverEnvSchema.parse({ ...BASE, BREVO_API_KEY: 'xkeysib-secret' })),
+    ).toBe(false);
+    expect(isMailConfigured(serverEnvSchema.parse({ ...apiOnly, BREVO_API_KEY: '' }))).toBe(false);
+  });
 });
