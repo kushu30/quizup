@@ -4,6 +4,7 @@ export * from './socket.js';
 export * from './env.js';
 export * from './api.js';
 export * from './csv.js';
+export * from './deviceInfo.js';
 export * from './scoring.js';
 export * from './clock.js';
 export * from './joinCode.js';

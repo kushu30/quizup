@@ -1,15 +1,24 @@
-import { PROCTOR_EVENT_BADGE_THRESHOLD, type ExamProgressRow } from '@quizup/shared';
+import {
+  PROCTOR_EVENT_BADGE_THRESHOLD,
+  type DeviceInfo,
+  type ExamProgressRow,
+} from '@quizup/shared';
 import { memo } from 'react';
 import { useServerNow } from '../../hooks/useServerNow';
 import { useStableRows } from '../../lib/stableRows';
+import { StudentDevice } from '../StudentDevice';
 import { TableFrame } from '../ui';
 
 interface ExamProgressTableProps {
   rows: ExamProgressRow[];
+  devicesById: Record<string, DeviceInfo[]>;
+  proctored: boolean;
   offsetMs: number;
   selectedId: string | null;
   onSelect: (participantId: string) => void;
 }
+
+const NO_DEVICES: DeviceInfo[] = [];
 
 const STATUS_LABELS: Record<ExamProgressRow['status'], string> = {
   not_started: 'Not started',
@@ -35,11 +44,15 @@ function RemainingTime({
 
 const ProgressRowView = memo(function ProgressRowView({
   row,
+  devices,
+  proctored,
   offsetMs,
   selected,
   onSelect,
 }: {
   row: ExamProgressRow;
+  devices: DeviceInfo[];
+  proctored: boolean;
   offsetMs: number;
   selected: boolean;
   onSelect: (participantId: string) => void;
@@ -58,6 +71,9 @@ const ProgressRowView = memo(function ProgressRowView({
         </button>
       </td>
       <td className="whitespace-nowrap">{STATUS_LABELS[row.status]}</td>
+      <td>
+        <StudentDevice devices={devices} />
+      </td>
       <td className="text-right tabular-nums">
         {row.answered}/{row.totalQuestions}
       </td>
@@ -68,16 +84,18 @@ const ProgressRowView = memo(function ProgressRowView({
           '-'
         )}
       </td>
-      <td className="text-right">
-        <span
-          title={`${row.proctorEventCount} proctor events${flagged ? ' (above the highlight threshold)' : ''}`}
-          className={`inline-block min-w-8 rounded-md px-2 py-0.5 text-center text-xs tabular-nums ${
-            flagged ? 'bg-marker font-semibold text-ink' : 'bg-paper text-muted'
-          }`}
-        >
-          {row.proctorEventCount}
-        </span>
-      </td>
+      {proctored && (
+        <td className="text-right">
+          <span
+            title={`${row.proctorEventCount} proctor events${flagged ? ' (above the highlight threshold)' : ''}`}
+            className={`inline-block min-w-8 rounded-md px-2 py-0.5 text-center text-xs tabular-nums ${
+              flagged ? 'bg-marker font-semibold text-ink' : 'bg-paper text-muted'
+            }`}
+          >
+            {row.proctorEventCount}
+          </span>
+        </td>
+      )}
       <td className="text-right tabular-nums">{row.score === null ? '-' : row.score}</td>
     </tr>
   );
@@ -85,6 +103,8 @@ const ProgressRowView = memo(function ProgressRowView({
 
 export function ExamProgressTable({
   rows,
+  devicesById,
+  proctored,
   offsetMs,
   selectedId,
   onSelect,
@@ -100,15 +120,18 @@ export function ExamProgressTable({
           <tr>
             <th scope="col">Student</th>
             <th scope="col">Status</th>
+            <th scope="col">Device</th>
             <th scope="col" className="text-right">
               Answered
             </th>
             <th scope="col" className="text-right">
               Time left
             </th>
-            <th scope="col" className="text-right">
-              Proctor events
-            </th>
+            {proctored && (
+              <th scope="col" className="text-right">
+                Proctor events
+              </th>
+            )}
             <th scope="col" className="text-right">
               Score
             </th>
@@ -119,6 +142,8 @@ export function ExamProgressTable({
             <ProgressRowView
               key={row.participantId}
               row={row}
+              devices={devicesById[row.participantId] ?? NO_DEVICES}
+              proctored={proctored}
               offsetMs={offsetMs}
               selected={row.participantId === selectedId}
               onSelect={onSelect}

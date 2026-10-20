@@ -23,6 +23,8 @@ export function rebuildAnalyticsSnapshot(
     mode: source.session.exam_duration_minutes === null ? 'live' : 'exam',
   });
 
+  analytics.setProctored(source.session.proctored);
+
   const questionById = new Map(source.questions.map((question) => [question.id, question]));
   const topicLabelByKey = new Map(
     source.questions.map((question) => [normalizeTopicKey(question.topic), question.topic]),
@@ -31,6 +33,7 @@ export function rebuildAnalyticsSnapshot(
   for (const participant of source.participants) {
     analytics.registerParticipant(participant.id, participant.displayName);
     analytics.setRating(participant.id, participant.elo);
+    analytics.setDevices(participant.id, participant.devices);
     joinedAtById.set(participant.id, participant.joinedAtMs);
   }
 

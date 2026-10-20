@@ -43,7 +43,7 @@ const view: ExamStudentView = {
   resultsReleased: false,
 };
 
-function renderAttempt(initiallyConnected = true) {
+function renderAttempt(initiallyConnected = true, proctored = true) {
   const { socket, emit } = makeSocket();
   const onViewChange = vi.fn();
   const attempt = (connected: boolean, currentView: ExamStudentView = view) => (
@@ -52,6 +52,7 @@ function renderAttempt(initiallyConnected = true) {
       view={currentView}
       offsetMs={0}
       connected={connected}
+      proctored={proctored}
       onViewChange={onViewChange}
     />
   );
@@ -276,5 +277,29 @@ describe('ExamAttemptView timer', () => {
     expect(screen.getByText('0 of 2 answered')).toBeTruthy();
     pickOption('A');
     expect(screen.getByText('1 of 2 answered')).toBeTruthy();
+  });
+});
+
+describe('ExamAttemptView without proctoring', () => {
+  it('records no signals and never demands full screen', () => {
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => null,
+    });
+    const { emit } = renderAttempt(true, false);
+    fireEvent.contextMenu(document);
+    expect(emitted(emit, 'proctor:event')).toHaveLength(0);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('still asks for full screen and records signals when proctored', () => {
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => null,
+    });
+    const { emit } = renderAttempt(true, true);
+    expect(screen.getByRole('alertdialog', { name: 'Full screen required' })).toBeTruthy();
+    fireEvent.contextMenu(document);
+    expect(emitted(emit, 'proctor:event').length).toBeGreaterThan(0);
   });
 });

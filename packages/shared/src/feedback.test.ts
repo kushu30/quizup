@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FEEDBACK_COMMENT_MAX,
   feedbackSubmitPayloadSchema,
+  sessionFeedbackItemSchema,
   summarizeFeedback,
 } from './feedback.js';
 
@@ -39,5 +40,18 @@ describe('feedback', () => {
       count: 3,
       averageRating: 4.3,
     });
+  });
+});
+
+describe('sessionFeedbackItemSchema', () => {
+  it('keeps only the rating and the comment, so nothing identifies the student', () => {
+    const parsed = sessionFeedbackItemSchema.parse({
+      displayName: 'Ada',
+      participantId: '11111111-1111-4111-8111-111111111111',
+      createdAt: '2026-10-19T10:00:00Z',
+      rating: 4,
+      comment: 'Clear',
+    });
+    expect(parsed).toEqual({ rating: 4, comment: 'Clear' });
   });
 });

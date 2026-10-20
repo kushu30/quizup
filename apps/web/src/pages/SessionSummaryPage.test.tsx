@@ -30,7 +30,6 @@ const snapshot = {
   totalRounds: 1,
   roundsCompleted: 1,
   currentRound: null,
-  checkpointRound: null,
   topics: [],
   questions: [],
   sessionHistogram: Array(10).fill(0),
@@ -93,13 +92,8 @@ describe('SessionSummaryPage feedback', () => {
       count: 2,
       averageRating: 4.5,
       items: [
-        {
-          displayName: 'Ada',
-          rating: 4,
-          comment: 'Question 3 was tricky',
-          createdAt: '2026-10-19T10:00:00Z',
-        },
-        { displayName: 'Grace', rating: 5, comment: null, createdAt: '2026-10-19T10:01:00Z' },
+        { rating: 5, comment: null },
+        { rating: 4, comment: 'Question 3 was tricky' },
       ],
     });
     renderPage();
@@ -107,12 +101,87 @@ describe('SessionSummaryPage feedback', () => {
     expect(panel.textContent).toContain('4.5 out of 5');
     expect(panel.textContent).toContain('2 responses');
     expect(panel.textContent).toContain('Question 3 was tricky');
-    expect(panel.textContent).toContain('Ada');
+    expect(panel.textContent).toContain('Anonymous');
   });
 
   it('says when nobody has left feedback yet', async () => {
     renderPage();
     const panel = await screen.findByRole('region', { name: 'Student feedback' });
     expect(panel.textContent).toContain('No feedback yet');
+  });
+});
+
+describe('SessionSummaryPage devices', () => {
+  it('lists what each student used, in a dropdown per student', async () => {
+    vi.mocked(api.getSessionSummary).mockResolvedValue({
+      ...snapshot,
+      participants: [
+        {
+          participantId: '11111111-1111-4111-8111-111111111111',
+          displayName: 'Ada',
+          rank: 1,
+          score: 10,
+          answered: 1,
+          correct: 1,
+          avgResponseMs: 100,
+          rating: null,
+          proctorCounts: null,
+          devices: [{ kind: 'phone', os: 'iOS 17', browser: 'Safari 17', screen: null }],
+          mastery: [],
+        },
+      ],
+    });
+    renderPage();
+    const panel = await screen.findByRole('region', { name: 'Where students joined from' });
+    expect(panel.textContent).toContain('Ada');
+    expect(panel.textContent).toContain('Phone');
+    expect(panel.textContent).toContain('Phone, iOS 17, Safari 17');
+  });
+});
+
+describe('SessionSummaryPage proctor signals', () => {
+  const participant = {
+    participantId: '11111111-1111-4111-8111-111111111111',
+    displayName: 'Ada',
+    rank: 1,
+    score: 10,
+    answered: 1,
+    correct: 1,
+    avgResponseMs: 100,
+    rating: null,
+    devices: [],
+    mastery: [],
+  };
+
+  it('shows the signals of a proctored quiz, not only of exams', async () => {
+    vi.mocked(api.getSessionSummary).mockResolvedValue({
+      ...snapshot,
+      participants: [
+        {
+          ...participant,
+          proctorCounts: {
+            tab_switch: 3,
+            window_blur: 0,
+            fullscreen_exit: 0,
+            copy: 0,
+            paste: 1,
+            right_click: 0,
+            resize: 0,
+          },
+        },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByRole('region', { name: 'Proctor signals per student' })).toBeTruthy();
+  });
+
+  it('shows no signals table when the host did not proctor', async () => {
+    vi.mocked(api.getSessionSummary).mockResolvedValue({
+      ...snapshot,
+      participants: [{ ...participant, proctorCounts: null }],
+    });
+    renderPage();
+    await screen.findByRole('region', { name: 'Where students joined from' });
+    expect(screen.queryByRole('region', { name: 'Proctor signals per student' })).toBeNull();
   });
 });

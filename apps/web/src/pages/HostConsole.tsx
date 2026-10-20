@@ -14,7 +14,9 @@ import { CopyButton } from '../components/CopyButton';
 import { JoinQr } from '../components/JoinQr';
 import { BrandMark } from '../components/branding/BrandMark';
 import { ExamProgressTable } from '../components/exam/ExamProgressTable';
+import { LiveProctorPanel } from '../components/exam/LiveProctorPanel';
 import { ProctorTimeline } from '../components/exam/ProctorTimeline';
+import { ProctoringChoiceDialog } from '../components/ProctoringChoiceDialog';
 import { AnalyticsPanel } from '../components/analytics/AnalyticsPanel';
 import { Leaderboard } from '../components/Leaderboard';
 import { RosterPanel } from '../components/RosterPanel';
@@ -42,6 +44,7 @@ export function HostConsole() {
   const [liveProctor, setLiveProctor] = useState<Record<string, ProctorEventRecord[]>>({});
   const [loadedTimelines, setLoadedTimelines] = useState<ProctorParticipantTimeline[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [choosingProctoring, setChoosingProctoring] = useState(false);
   const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState<SocketErrorCode | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -94,9 +97,9 @@ export function HostConsole() {
     };
   }, [sessionId]);
 
-  const isExamSession = room?.mode === 'exam';
+  const isProctored = room?.proctored ?? false;
   useEffect(() => {
-    if (!isExamSession || !connected) {
+    if (!isProctored || !connected) {
       return;
     }
     let cancelled = false;
@@ -116,7 +119,7 @@ export function HostConsole() {
     return () => {
       cancelled = true;
     };
-  }, [isExamSession, connected, sessionId]);
+  }, [isProctored, connected, sessionId]);
 
   const runCommand = useCallback(async (command: () => Promise<unknown>) => {
     setBusy(true);
@@ -173,6 +176,19 @@ export function HostConsole() {
           await api.allowRejoin(sessionId, participantId);
         }
       : undefined;
+  const devicesById = Object.fromEntries(
+    room.participants.map((participant) => [participant.participantId, participant.devices]),
+  );
+  const allProctorEvents = room.participants.flatMap((participant) =>
+    mergeProctorEvents(
+      loadedTimelines.find((timeline) => timeline.participantId === participant.participantId)
+        ?.events ?? [],
+      liveProctor[participant.participantId] ?? [],
+    ),
+  );
+  const liveSelected =
+    room.participants.find((participant) => participant.participantId === selectedStudentId) ??
+    null;
   const question = room.currentQuestion;
   const round = room.round;
   const isLastQuestion = question ? question.questionNumber === question.totalQuestions : false;
@@ -253,7 +269,7 @@ export function HostConsole() {
                   variant="brand"
                   size="lg"
                   disabled={busy || room.participants.length === 0}
-                  onClick={() => void runCommand(() => api.startSession(sessionId))}
+                  onClick={() => setChoosingProctoring(true)}
                 >
                   {room.mode === 'exam' ? 'Open the exam' : 'Start quiz'}
                 </Button>
@@ -287,11 +303,13 @@ export function HostConsole() {
               </div>
               <ExamProgressTable
                 rows={examRows ?? []}
+                devicesById={devicesById}
+                proctored={room.proctored}
                 offsetMs={offsetMs}
                 selectedId={selectedStudentId}
                 onSelect={setSelectedStudentId}
               />
-              {selectedRow && (
+              {room.proctored && selectedRow && (
                 <ProctorTimeline
                   displayName={selectedRow.displayName}
                   attemptStartedAtMs={
@@ -452,6 +470,36 @@ export function HostConsole() {
             </section>
           )}
 
+          {room.proctored && !isExam && room.status !== 'lobby' && (
+            <Panel
+              title="Proctoring"
+              description="Signals recorded from students' browsers. They are hints, not proof of misconduct."
+            >
+              <div className="space-y-4">
+                <LiveProctorPanel
+                  participants={room.participants}
+                  events={allProctorEvents}
+                  selectedId={selectedStudentId}
+                  onSelect={setSelectedStudentId}
+                />
+                {liveSelected && (
+                  <ProctorTimeline
+                    displayName={liveSelected.displayName}
+                    attemptStartedAtMs={room.startedAtServerMs}
+                    events={mergeProctorEvents(
+                      loadedTimelines.find(
+                        (timeline) => timeline.participantId === liveSelected.participantId,
+                      )?.events ?? [],
+                      liveProctor[liveSelected.participantId] ?? [],
+                    )}
+                    droppedEvents={0}
+                    onClose={() => setSelectedStudentId(null)}
+                  />
+                )}
+              </div>
+            </Panel>
+          )}
+
           {room.status === 'ended' && (
             <section aria-labelledby="final-heading" className="space-y-4">
               {!isExam && (
@@ -491,6 +539,18 @@ export function HostConsole() {
       </div>
 
       {!isExam && <AnalyticsPanel snapshot={analytics} connected={connected} />}
+
+      {choosingProctoring && (
+        <ProctoringChoiceDialog
+          kind={isExam ? 'exam' : 'live'}
+          busy={busy}
+          onCancel={() => setChoosingProctoring(false)}
+          onChoose={(proctored) => {
+            setChoosingProctoring(false);
+            void runCommand(() => api.startSession(sessionId, { proctored }));
+          }}
+        />
+      )}
 
       {room.status !== 'ended' && (
         <div className="border-t border-rule pt-6">

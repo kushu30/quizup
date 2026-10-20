@@ -1,22 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MIN_CONFIDENT_SAMPLE,
-  addRegressionPoint,
   applyParticipantResponse,
   applyQuestionResponse,
   bucketIndex,
   difficultyMismatch,
   emptyParticipantAggregate,
   emptyQuestionAggregate,
-  emptyRegressionSums,
   medianOf,
-  projectScore,
-  type RegressionSums,
 } from './analytics.js';
-
-function sumsFor(points: [number, number][]): RegressionSums {
-  return points.reduce((sums, [x, y]) => addRegressionPoint(sums, x, y), emptyRegressionSums());
-}
 
 describe('bucketIndex', () => {
   it('puts 0 percent in the first bucket', () => {
@@ -50,126 +41,6 @@ describe('bucketIndex', () => {
   });
 });
 
-describe('projectScore', () => {
-  const base = { totalRounds: 10, roundsCompleted: 3, adaptive: false };
-
-  it('gives the known slope and projection for linear points', () => {
-    const sums = sumsFor([
-      [1, 100],
-      [2, 200],
-      [3, 300],
-    ]);
-    const result = projectScore({ ...base, sums, currentScore: 300 });
-    expect(result?.slope).toBeCloseTo(100, 9);
-    expect(result?.projected).toBeCloseTo(1000, 9);
-    expect(result?.n).toBe(3);
-  });
-
-  it('fits points that are not collinear by least squares', () => {
-    const sums = sumsFor([
-      [1, 500],
-      [2, 1000],
-      [3, 1000],
-      [4, 1900],
-    ]);
-    const result = projectScore({ ...base, roundsCompleted: 4, sums, currentScore: 1900 });
-    expect(result?.slope).toBeCloseTo(420, 9);
-    expect(result?.projected).toBeCloseTo(4250, 9);
-  });
-
-  it('returns null with fewer than three answers', () => {
-    expect(
-      projectScore({
-        ...base,
-        sums: sumsFor([
-          [1, 100],
-          [2, 200],
-        ]),
-        currentScore: 200,
-      }),
-    ).toBeNull();
-    expect(projectScore({ ...base, sums: emptyRegressionSums(), currentScore: 0 })).toBeNull();
-  });
-
-  it('returns null when the total rounds are unknown', () => {
-    const sums = sumsFor([
-      [1, 100],
-      [2, 200],
-      [3, 300],
-    ]);
-    expect(projectScore({ ...base, totalRounds: null, sums, currentScore: 300 })).toBeNull();
-  });
-
-  it('never projects below the current score', () => {
-    const sums = sumsFor([
-      [1, 1000],
-      [2, 900],
-      [3, 800],
-    ]);
-    const result = projectScore({ ...base, sums, currentScore: 800 });
-    expect(result?.slope).toBeCloseTo(-100, 9);
-    expect(result?.projected).toBe(800);
-  });
-
-  it('never projects above the current score plus remaining rounds times 1000', () => {
-    const sums = sumsFor([
-      [1, 0],
-      [2, 5000],
-      [3, 10000],
-    ]);
-    const result = projectScore({
-      sums,
-      currentScore: 10000,
-      totalRounds: 4,
-      roundsCompleted: 3,
-      adaptive: false,
-    });
-    expect(result?.projected).toBe(11000);
-  });
-
-  it('projects exactly the current score when no rounds remain', () => {
-    const sums = sumsFor([
-      [1, 100],
-      [2, 200],
-      [3, 300],
-    ]);
-    const result = projectScore({
-      sums,
-      currentScore: 300,
-      totalRounds: 3,
-      roundsCompleted: 3,
-      adaptive: false,
-    });
-    expect(result?.projected).toBe(300);
-  });
-
-  it('flags low confidence below the named sample size and clears it at the boundary', () => {
-    expect(MIN_CONFIDENT_SAMPLE).toBe(6);
-    const points: [number, number][] = [1, 2, 3, 4, 5, 6].map((x) => [x, x * 100]);
-    const five = projectScore({
-      ...base,
-      sums: sumsFor(points.slice(0, 5)),
-      currentScore: 500,
-    });
-    const six = projectScore({ ...base, sums: sumsFor(points), currentScore: 600 });
-    expect(five?.lowConfidence).toBe(true);
-    expect(six?.lowConfidence).toBe(false);
-  });
-
-  it('forces low confidence in adaptive sessions regardless of sample size', () => {
-    const points: [number, number][] = [1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x * 100]);
-    const result = projectScore({
-      sums: sumsFor(points),
-      currentScore: 800,
-      totalRounds: 10,
-      roundsCompleted: 8,
-      adaptive: true,
-    });
-    expect(result?.n).toBe(8);
-    expect(result?.lowConfidence).toBe(true);
-  });
-});
-
 describe('difficultyMismatch', () => {
   it('flags easy questions with accuracy under 40 percent', () => {
     expect(difficultyMismatch('easy', 0.39, 10)).toBe('harder_than_labeled');
@@ -197,28 +68,19 @@ describe('aggregate updates', () => {
     expect(after.histogram[3]).toBe(1);
   });
 
-  it('accumulates score and regression points per participant', () => {
+  it('accumulates score and counts per participant', () => {
     let aggregate = emptyParticipantAggregate();
     aggregate = applyParticipantResponse(aggregate, {
       correct: true,
       points: 800,
       responseMs: 400,
-      round: 1,
     });
     aggregate = applyParticipantResponse(aggregate, {
       correct: false,
       points: 0,
       responseMs: 600,
-      round: 3,
     });
     expect(aggregate).toMatchObject({ score: 800, answered: 2, correct: 1, responseMsSum: 1000 });
-    expect(aggregate.regression).toEqual({
-      n: 2,
-      sumX: 4,
-      sumY: 1600,
-      sumXY: 800 + 2400,
-      sumXX: 10,
-    });
   });
 });
 

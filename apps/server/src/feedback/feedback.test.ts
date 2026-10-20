@@ -102,12 +102,14 @@ describe('session feedback', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { count: number; items: unknown[] };
     expect(body).toMatchObject({ count: 2, averageRating: 4.5 });
-    expect(body.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ displayName: 'Ada', rating: 4, comment: 'Clear questions' }),
-        expect.objectContaining({ displayName: 'Grace', rating: 5, comment: null }),
-      ]),
-    );
+    expect(body.items).toEqual([
+      { rating: 5, comment: null },
+      { rating: 4, comment: 'Clear questions' },
+    ]);
+    const raw = JSON.stringify(body);
+    for (const secret of ['Ada', 'Grace', ada.participantId, grace.participantId]) {
+      expect(raw).not.toContain(secret);
+    }
     expect(
       (await harness.request(`/sessions/${summary.session.id}/feedback`, 'other-host-token'))
         .status,

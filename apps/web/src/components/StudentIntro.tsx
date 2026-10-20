@@ -12,11 +12,14 @@ const TYPE_LABELS: Record<AssessmentType, string> = {
   exam: 'Timed exam',
 };
 
+const PROCTORING_RULE =
+  'If your host turns on proctoring, you are told before you begin. Switching tabs, copying and pasting and similar actions are then recorded and shown to your host.';
+
 function rulesFor(type: AssessmentType, durationMinutes?: number): string[] {
   if (type === 'exam') {
     return [
       `You have ${durationMinutes ?? 'a set number of'} minutes once you start. The timer keeps running if you leave.`,
-      'The exam opens in full screen. Leaving full screen, switching tabs, copying and pasting are recorded and shown to your host.',
+      PROCTORING_RULE,
       'Move between questions and change answers freely until you submit.',
       'Your results appear when your host releases them, not straight away.',
     ];
@@ -25,6 +28,7 @@ function rulesFor(type: AssessmentType, durationMinutes?: number): string[] {
     'Each question has a timer. Answer before it runs out; your answer locks when you tap it.',
     'Faster correct answers earn more points.',
     'If the page reloads, you pick up where you left off.',
+    PROCTORING_RULE,
   ];
   if (type === 'adaptive') {
     rules.unshift(

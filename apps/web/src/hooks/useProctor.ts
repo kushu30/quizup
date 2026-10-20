@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseProctorOptions {
   enabled: boolean;
+  requireFullscreen?: boolean;
   connected: boolean;
   send: (event: ProctorEventPayload) => void;
   now?: () => number;
@@ -23,6 +24,7 @@ type AwaySource = 'tab_switch' | 'window_blur';
 
 export function useProctor(options: UseProctorOptions): UseProctorResult {
   const { enabled, connected } = options;
+  const requireFullscreen = options.requireFullscreen ?? true;
   const sendRef = useRef(options.send);
   const nowRef = useRef(options.now ?? Date.now);
   const connectedRef = useRef(connected);
@@ -71,7 +73,7 @@ export function useProctor(options: UseProctorOptions): UseProctorResult {
     let lastHeight = window.innerHeight;
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
-    setFullscreenLost(!wasFullscreen);
+    setFullscreenLost(requireFullscreen && !wasFullscreen);
 
     const stamp = () => Math.round(nowRef.current());
 
@@ -179,7 +181,9 @@ export function useProctor(options: UseProctorOptions): UseProctorResult {
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onBlur);
     window.addEventListener('focus', onFocus);
-    document.addEventListener('fullscreenchange', onFullscreenChange);
+    if (requireFullscreen) {
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+    }
     document.addEventListener('copy', onCopy);
     document.addEventListener('cut', onCut);
     document.addEventListener('paste', onPaste);
@@ -203,7 +207,7 @@ export function useProctor(options: UseProctorOptions): UseProctorResult {
         clearTimeout(blurTimer);
       }
     };
-  }, [enabled, dispatch]);
+  }, [enabled, requireFullscreen, dispatch]);
 
   const requestFullscreen = useCallback(async () => {
     try {

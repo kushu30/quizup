@@ -14,10 +14,8 @@ export const feedbackSubmitPayloadSchema = z
 export type FeedbackSubmitPayload = z.infer<typeof feedbackSubmitPayloadSchema>;
 
 export const sessionFeedbackItemSchema = z.object({
-  displayName: z.string(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().nullable(),
-  createdAt: z.string(),
 });
 export type SessionFeedbackItem = z.infer<typeof sessionFeedbackItemSchema>;
 

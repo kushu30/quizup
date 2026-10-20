@@ -57,13 +57,21 @@ describe('StudentIntro', () => {
     renderIntro({ assessmentType: 'exam', durationMinutes: 45 });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByText(/You have 45 minutes/)).toBeTruthy();
-    expect(screen.getByText(/full screen/)).toBeTruthy();
     expect(screen.getByText(/when your host releases them/)).toBeTruthy();
+  });
+
+  it("tells students of every type that proctoring is the host's choice and they will be told", () => {
+    for (const assessmentType of ['live', 'adaptive', 'exam'] as const) {
+      renderIntro({ assessmentType, durationMinutes: 30 });
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(screen.getByText(/if your host turns on proctoring/i)).toBeTruthy();
+      cleanup();
+    }
   });
 
   it('works without any branding', () => {
     renderIntro({ branding: null });
-    expect(screen.getByText('QuizUp')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'QuizUp' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.queryByText('From your host')).toBeNull();
   });

@@ -7,6 +7,7 @@ import { fetchJoinInfo } from '../lib/joinInfoClient';
 import { Join } from './Join';
 
 vi.mock('../lib/joinInfoClient', () => ({ fetchJoinInfo: vi.fn(async () => null) }));
+vi.mock('../components/SystemStatus', () => ({ SystemStatus: () => null }));
 vi.mock('../lib/AuthContext', () => ({
   useAuth: () => ({ session: null, canHost: false, isAdmin: false, signOut: vi.fn() }),
 }));

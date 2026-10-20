@@ -14,6 +14,7 @@ interface ExamPlayProps {
   displayName: string;
   offsetMs: number;
   connected: boolean;
+  proctored: boolean;
   onViewChange: (view: ExamStudentView) => void;
 }
 
@@ -91,6 +92,7 @@ export function ExamPlay({
   displayName,
   offsetMs,
   connected,
+  proctored,
   onViewChange,
 }: ExamPlayProps) {
   const [declined, setDeclined] = useState(false);
@@ -106,7 +108,9 @@ export function ExamPlay({
   }, [examOver]);
 
   function accept() {
-    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+    if (proctored) {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined);
+    }
     setBusy(true);
     setError(null);
     socket.emit('exam:start', { consentVersion: EXAM_CONSENT_VERSION }, (ack) => {
@@ -151,6 +155,7 @@ export function ExamPlay({
     return (
       <ExamConsent
         durationMinutes={view.durationMinutes}
+        proctored={proctored}
         busy={busy}
         error={error}
         onAccept={accept}
@@ -166,6 +171,7 @@ export function ExamPlay({
         view={view}
         offsetMs={offsetMs}
         connected={connected}
+        proctored={proctored}
         onViewChange={onViewChange}
       />
     );

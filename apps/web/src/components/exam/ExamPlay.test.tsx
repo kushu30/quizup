@@ -6,6 +6,7 @@ import type { QuizSocket } from '../../lib/socket';
 import { Layout } from '../Layout';
 import { ExamPlay } from './ExamPlay';
 
+vi.mock('../SystemStatus', () => ({ SystemStatus: () => null }));
 vi.mock('../../lib/AuthContext', () => ({
   useAuth: () => ({ session: null, canHost: false, isAdmin: false, signOut: vi.fn() }),
 }));
@@ -34,6 +35,7 @@ function renderPhase(phase: ExamStudentView['phase']) {
       displayName="Ada"
       offsetMs={0}
       connected
+      proctored
       onViewChange={() => undefined}
     />,
   );
@@ -94,6 +96,7 @@ describe('ExamPlay navigation', () => {
                   displayName="Ada"
                   offsetMs={0}
                   connected
+                  proctored
                   onViewChange={() => undefined}
                 />
               }

@@ -139,22 +139,6 @@ function batchBucket(responseMs: number, durationMs: number): number {
   return 0;
 }
 
-function batchProjection(
-  points: [number, number][],
-  total: number,
-  completed: number,
-  score: number,
-) {
-  const meanX = points.reduce((sum, [x]) => sum + x, 0) / points.length;
-  const meanY = points.reduce((sum, [, y]) => sum + y, 0) / points.length;
-  const sxx = points.reduce((sum, [x]) => sum + (x - meanX) ** 2, 0);
-  const sxy = points.reduce((sum, [x, y]) => sum + (x - meanX) * (y - meanY), 0);
-  const slope = sxx === 0 ? 0 : sxy / sxx;
-  const predicted = meanY + slope * (total - meanX);
-  const upper = score + Math.max(total - completed, 0) * 1000;
-  return { slope, projected: Math.min(Math.max(predicted, score), upper) };
-}
-
 describe('incremental aggregation equals a full batch recompute', () => {
   for (const adaptive of [false, true]) {
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
@@ -202,11 +186,7 @@ describe('incremental aggregation equals a full batch recompute', () => {
           const events = allEvents.filter(
             (event) => event.participantId === participant.participantId,
           );
-          let running = 0;
-          const points: [number, number][] = events.map((event) => {
-            running += event.points;
-            return [event.round, running];
-          });
+          const running = events.reduce((sum, event) => sum + event.points, 0);
           expect(participant.score).toBe(running);
           expect(participant.answered).toBe(events.length);
           expect(participant.correct).toBe(events.filter((event) => event.correct).length);
@@ -218,34 +198,18 @@ describe('incremental aggregation equals a full batch recompute', () => {
               9,
             );
           }
-
-          if (events.length < 3) {
-            expect(participant.projection).toBeNull();
-          } else {
-            const expected = batchProjection(
-              points,
-              stream.totalRounds,
-              stream.totalRounds,
-              running,
-            );
-            expect(participant.projection?.slope).toBeCloseTo(expected.slope, 6);
-            expect(participant.projection?.projected).toBeCloseTo(expected.projected, 6);
-            expect(participant.projection?.n).toBe(events.length);
-            expect(participant.projection?.lowConfidence).toBe(adaptive || events.length < 6);
-          }
         }
       });
     }
   }
 
-  it('checkpoint projections are taken once at half the rounds', () => {
-    const stream = buildStream(3, false);
-    const snapshot = runIncremental(stream, false);
-    expect(snapshot.checkpointRound).toBe(Math.ceil(stream.totalRounds / 2));
-    const withCheckpoint = snapshot.participants.filter(
-      (participant) => participant.checkpointProjection !== null,
-    );
-    expect(withCheckpoint.length).toBeGreaterThan(0);
+  it('carries no projection fields', () => {
+    const snapshot = runIncremental(buildStream(3, false), false);
+    expect(snapshot).not.toHaveProperty('checkpointRound');
+    for (const participant of snapshot.participants) {
+      expect(participant).not.toHaveProperty('projection');
+      expect(participant).not.toHaveProperty('checkpointProjection');
+    }
   });
 
   it('keeps mastery cells null until a mastery update arrives', () => {

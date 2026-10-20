@@ -18,6 +18,10 @@ vi.mock('../lib/AuthContext', () => ({
   useAuth: () => authState.value,
 }));
 
+vi.mock('./SystemStatus', () => ({
+  SystemStatus: () => <button type="button">System status</button>,
+}));
+
 function BrandedBody({
   branding,
   hero,
@@ -116,7 +120,7 @@ describe('Layout', () => {
       ['/host/sessions/1', 'wide'],
       ['/sessions/1/summary', 'wide'],
       ['/admin', 'wide'],
-      ['/', 'focused'],
+      ['/', 'landing'],
       ['/join', 'focused'],
       ['/play/ABC234', 'focused'],
       ['/login', 'focused'],
@@ -228,7 +232,7 @@ describe('Layout focus mode', () => {
 
   it('shows the plain QuizUp wordmark in the slim bar when there is no brand', () => {
     renderFocused();
-    expect(screen.getByText('QuizUp')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'QuizUp' })).toBeTruthy();
     expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual([
       'Skip to content',
     ]);
@@ -238,5 +242,20 @@ describe('Layout focus mode', () => {
     renderFocused();
     fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeTruthy();
+  });
+});
+
+describe('Layout footer', () => {
+  it('ends every page with the logo and a quiet system status button', () => {
+    renderAt('/join');
+    const footer = screen.getByRole('contentinfo');
+    expect(footer.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('QuizUp');
+    expect(footer.textContent).toContain('open source');
+    expect(screen.getByRole('button', { name: 'System status' })).toBeTruthy();
+  });
+
+  it('has no footer while an assessment is in focus', () => {
+    renderFocused();
+    expect(screen.queryByRole('contentinfo')).toBeNull();
   });
 });

@@ -55,7 +55,7 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
         <p role="status" className="text-lg font-semibold">
           Thanks for your feedback.
         </p>
-        <p className="mt-1 text-sm text-muted">Your host will see it with the results.</p>
+        <p className="mt-1 text-sm text-muted">Your host will see it without your name.</p>
       </div>
     );
   }
@@ -70,6 +70,9 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
         <h2 id={headingId} className="text-xl font-semibold">
           How was this assessment?
         </h2>
+        <p className="text-sm text-muted">
+          This is anonymous. Your host will not see your name with your answer.
+        </p>
         <div role="radiogroup" aria-labelledby={headingId} className="flex gap-2">
           {RATING_WORDS.map((word, index) => {
             const value = index + 1;

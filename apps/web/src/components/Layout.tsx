@@ -3,6 +3,8 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { BrandProvider, hasVisibleBrand, useBrand, useFocus } from '../lib/brandContext';
 import { BrandMark } from './branding/BrandMark';
+import { QuizUpLogo } from './brand/QuizUpLogo';
+import { SystemStatus } from './SystemStatus';
 import { buttonClasses } from './ui';
 
 const WIDE_PREFIXES = ['/host', '/sessions/', '/admin'];
@@ -41,7 +43,8 @@ function LayoutFrame() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
-  const wide = isWidePath(location.pathname);
+  const layout =
+    location.pathname === '/' ? 'landing' : isWidePath(location.pathname) ? 'wide' : 'focused';
   const { branding: brand, hero } = useBrand();
   const branded = hasVisibleBrand(brand);
   const focus = useFocus();
@@ -61,15 +64,7 @@ function LayoutFrame() {
     branded && (!hero || focus) ? (
       <BrandMark branding={{ ...brand, tagline: undefined }} />
     ) : (
-      <>
-        <span
-          aria-hidden="true"
-          className="flex h-8 w-8 items-center justify-center rounded-md bg-board text-base font-bold text-white"
-        >
-          Q
-        </span>
-        QuizUp
-      </>
+      <QuizUpLogo size={30} />
     );
 
   return (
@@ -195,13 +190,27 @@ function LayoutFrame() {
       <main
         id="main-content"
         tabIndex={-1}
-        data-layout={wide ? 'wide' : 'focused'}
-        className={`mx-auto w-full flex-1 px-4 py-8 focus:outline-none sm:py-12 ${
-          wide ? 'max-w-6xl' : 'max-w-3xl'
+        data-layout={layout}
+        className={`mx-auto w-full flex-1 focus:outline-none ${
+          layout === 'landing'
+            ? ''
+            : `px-4 py-8 sm:py-12 ${layout === 'wide' ? 'max-w-6xl' : 'max-w-3xl'}`
         }`}
       >
         <Outlet />
       </main>
+
+      {!focus && (
+        <footer className="border-t border-rule bg-surface">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-6">
+            <div className="space-y-2">
+              <QuizUpLogo size={22} />
+              <p className="text-sm text-muted">Free and open source. Host it yourself.</p>
+            </div>
+            <SystemStatus />
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

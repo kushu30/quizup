@@ -5,6 +5,7 @@ import {
   sessionCreateSchema,
   sessionIdParamsSchema,
   sessionParticipantParamsSchema,
+  sessionStartSchema,
 } from '@quizup/shared';
 import type { Response } from 'express';
 import { Router } from 'express';
@@ -60,7 +61,15 @@ export function createSessionsRouter(dependencies: {
       if (!params) {
         return;
       }
-      response.json(await engine.startSession(params.sessionId, getAuthUser(request).id));
+      const body = parseOrReject(sessionStartSchema, request.body ?? {}, response);
+      if (!body) {
+        return;
+      }
+      response.json(
+        await engine.startSession(params.sessionId, getAuthUser(request).id, {
+          proctored: body.proctored,
+        }),
+      );
     }),
   );
 

@@ -78,6 +78,7 @@ export class ExamService implements ExamHooks {
   private readonly proctorFlushMs: number;
   private readonly randomSeed: () => number;
   private readonly entries = new Map<string, AttemptEntry>();
+  private readonly liveCounts = new Map<string, ProctorCounts>();
   private readonly participantsBySession = new Map<string, Set<string>>();
   private readonly progressTimers = new Map<string, NodeJS.Timeout>();
   private proctorBuffer: ProctorEventRecord[] = [];
@@ -663,8 +664,19 @@ export class ExamService implements ExamHooks {
   }
 
   async recordProctorEvent(participantId: string, payload: ProctorEventPayload): Promise<Ack> {
+    const reference = this.engine.getParticipantRef(participantId);
+    const info = reference ? this.engine.getProctorInfo(reference.sessionId) : null;
+    if (!reference || !info || info.status !== 'running') {
+      return { ok: false, error: 'no_open_attempt' };
+    }
+    if (!info.proctored) {
+      return { ok: true };
+    }
+    if (!info.exam) {
+      return this.recordLiveProctorEvent(participantId, reference.sessionId, payload);
+    }
     const resolved = this.resolve(participantId);
-    if (!resolved || resolved.context.status !== 'running') {
+    if (!resolved) {
       return { ok: false, error: 'no_open_attempt' };
     }
     const entry = this.entries.get(participantId);
@@ -694,10 +706,32 @@ export class ExamService implements ExamHooks {
     return { ok: true };
   }
 
+  private recordLiveProctorEvent(
+    participantId: string,
+    sessionId: string,
+    payload: ProctorEventPayload,
+  ): Ack {
+    const record = this.pushProctorRecord({
+      sessionId,
+      participantId,
+      attemptId: null,
+      type: payload.type,
+      clientAt: payload.clientAt,
+      detail: 'detail' in payload ? { ...payload.detail } : null,
+    });
+    if (isCountedType(record.type)) {
+      const counts = this.liveCounts.get(participantId) ?? emptyProctorCounts();
+      counts[record.type] += 1;
+      this.liveCounts.set(participantId, counts);
+      this.engine.getSessionAnalytics(sessionId)?.setProctorCounts(participantId, { ...counts });
+    }
+    return { ok: true };
+  }
+
   private pushProctorRecord(input: {
     sessionId: string;
     participantId: string;
-    attemptId: string;
+    attemptId: string | null;
     type: ProctorRecordType;
     clientAt: number;
     detail: Record<string, unknown> | null;

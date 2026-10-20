@@ -16,9 +16,12 @@ export function FeedbackSummary({ feedback }: { feedback: SessionFeedbackRespons
               out of 5 from {feedback.count} {feedback.count === 1 ? 'response' : 'responses'}
             </span>
           </p>
+          <p className="text-sm text-muted">
+            Anonymous. Students are not named, and answers are listed from highest to lowest rating.
+          </p>
           <ul className="divide-y divide-rule border-y border-rule">
-            {feedback.items.map((item) => (
-              <li key={`${item.displayName}-${item.createdAt}`} className="flex gap-4 py-3">
+            {feedback.items.map((item, index) => (
+              <li key={index} className="flex gap-4 py-3">
                 <span className="shrink-0 text-marker-ink" aria-label={`${item.rating} out of 5`}>
                   {'★'.repeat(item.rating)}
                   <span aria-hidden="true" className="text-rule-strong">
@@ -26,7 +29,6 @@ export function FeedbackSummary({ feedback }: { feedback: SessionFeedbackRespons
                   </span>
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{item.displayName}</span>
                   {item.comment ? (
                     <span className="block break-words">{item.comment}</span>
                   ) : (

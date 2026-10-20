@@ -1,4 +1,5 @@
 import type {
+  DeviceInfo,
   Difficulty,
   ExamProgressRow,
   ExamStudentView,
@@ -59,6 +60,7 @@ export interface SessionUpdate {
   status?: Session['status'];
   started_at?: string;
   ended_at?: string;
+  proctored?: boolean;
 }
 
 export interface LiveRepository extends ExamRepository {
@@ -96,15 +98,7 @@ export interface LiveRepository extends ExamRepository {
     rating: number;
     comment: string | null;
   }) => Promise<void>;
-  listSessionFeedback: (sessionId: string) => Promise<
-    {
-      participantId: string;
-      displayName: string;
-      rating: number;
-      comment: string | null;
-      createdAt: string;
-    }[]
-  >;
+  listSessionFeedback: (sessionId: string) => Promise<{ rating: number; comment: string | null }[]>;
   updateSession: (sessionId: string, update: SessionUpdate) => Promise<void>;
   insertParticipant: (input: NewParticipantInput) => Promise<Participant | 'name_taken'>;
   listRoster: (sessionId: string) => Promise<RosterRecord[]>;
@@ -124,6 +118,7 @@ export interface LiveRepository extends ExamRepository {
   }) => Promise<void>;
   applyQuestionRatingDelta: (questionId: string, delta: number) => Promise<number>;
   updateParticipantElo: (participantId: string, elo: number) => Promise<void>;
+  updateParticipantDevices: (participantId: string, devices: DeviceInfo[]) => Promise<void>;
   upsertKnowledgeState: (input: {
     participantId: string;
     topic: string;
@@ -171,6 +166,7 @@ export interface OpenExamSession {
     elo: number;
     joinedAtMs: number;
     tokenHash: string;
+    devices: DeviceInfo[];
   }[];
 }
 
@@ -191,7 +187,13 @@ export interface SessionAnalyticsSource {
   session: Session;
   hostId: string;
   proctorEvents: { participantId: string; type: string }[];
-  participants: { id: string; displayName: string; elo: number; joinedAtMs: number }[];
+  participants: {
+    id: string;
+    displayName: string;
+    elo: number;
+    joinedAtMs: number;
+    devices: DeviceInfo[];
+  }[];
   questions: {
     id: string;
     stem: string;

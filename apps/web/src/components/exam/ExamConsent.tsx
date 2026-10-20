@@ -3,6 +3,7 @@ import { Button, Notice } from '../ui';
 
 interface ExamConsentProps {
   durationMinutes: number;
+  proctored: boolean;
   busy: boolean;
   error: string | null;
   onAccept: () => void;
@@ -24,6 +25,7 @@ function Section({ heading, items }: { heading: string; items: readonly string[]
 
 export function ExamConsent({
   durationMinutes,
+  proctored,
   busy,
   error,
   onAccept,
@@ -38,19 +40,33 @@ export function ExamConsent({
           The timer starts when you accept.
         </p>
       </div>
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Section heading={EXAM_CONSENT_TEXT.monitoredHeading} items={EXAM_CONSENT_TEXT.monitored} />
-        <Section
-          heading={EXAM_CONSENT_TEXT.notCollectedHeading}
-          items={EXAM_CONSENT_TEXT.notCollected}
-        />
-      </div>
-      <div className="border-t border-rule pt-5">
-        <Section
-          heading={EXAM_CONSENT_TEXT.statementsHeading}
-          items={EXAM_CONSENT_TEXT.statements}
-        />
-      </div>
+      {proctored ? (
+        <>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Section
+              heading={EXAM_CONSENT_TEXT.monitoredHeading}
+              items={EXAM_CONSENT_TEXT.monitored}
+            />
+            <Section
+              heading={EXAM_CONSENT_TEXT.notCollectedHeading}
+              items={EXAM_CONSENT_TEXT.notCollected}
+            />
+          </div>
+          <div className="border-t border-rule pt-5">
+            <Section
+              heading={EXAM_CONSENT_TEXT.statementsHeading}
+              items={EXAM_CONSENT_TEXT.statements}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="border-t border-rule pt-5">
+          <Section
+            heading="This exam is not proctored"
+            items={['Nothing about your browsing is recorded.']}
+          />
+        </div>
+      )}
       {error && <Notice tone="danger">{error}</Notice>}
       <div className="flex flex-col gap-3 sm:flex-row-reverse">
         <Button variant="brand" size="lg" disabled={busy} onClick={onAccept} className="sm:flex-1">

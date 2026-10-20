@@ -10,16 +10,19 @@ const participants: ParticipantPresence[] = [
     participantId: '11111111-1111-4111-8111-111111111111',
     displayName: 'Ada Lovelace',
     connected: true,
+    devices: [],
   },
   {
     participantId: '22222222-2222-4222-8222-222222222222',
     displayName: 'Grace Hopper',
     connected: true,
+    devices: [],
   },
   {
     participantId: '33333333-3333-4333-8333-333333333333',
     displayName: 'Edsger Dijkstra',
     connected: false,
+    devices: [],
   },
 ];
 

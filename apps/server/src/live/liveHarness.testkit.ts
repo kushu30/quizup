@@ -109,11 +109,15 @@ export async function startLiveHarness(
   const baseUrl = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`;
   const openSockets: TestSocket[] = [];
 
-  async function connect(accessToken?: string): Promise<TestSocket> {
+  async function connect(
+    accessToken?: string,
+    extraHeaders?: Record<string, string>,
+  ): Promise<TestSocket> {
     const socket: TestSocket = createClient(baseUrl, {
       transports: ['websocket'],
       forceNew: true,
       auth: accessToken ? { accessToken } : {},
+      ...(extraHeaders ? { extraHeaders } : {}),
     });
     openSockets.push(socket);
     await new Promise<void>((resolve, reject) => {

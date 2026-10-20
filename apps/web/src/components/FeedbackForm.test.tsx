@@ -54,4 +54,10 @@ describe('FeedbackForm', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/could not be sent/);
     expect(screen.getByRole('button', { name: 'Send feedback' })).toBeTruthy();
   });
+
+  it('says up front that the feedback is anonymous', () => {
+    render(<FeedbackForm submit={vi.fn()} />);
+    expect(screen.getByText(/anonymous/i)).toBeTruthy();
+    expect(screen.getByText(/your host will not see your name/i)).toBeTruthy();
+  });
 });

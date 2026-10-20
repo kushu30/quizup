@@ -288,7 +288,6 @@ describe('analytics over sockets and REST', () => {
     expect(rebuilt.source).toBe('rebuilt');
     expect(rebuilt.totalRounds).toBeNull();
     for (const participant of rebuilt.participants) {
-      expect(participant.projection).toBeNull();
       const original = stored.participants.find(
         (candidate) => candidate.participantId === participant.participantId,
       );

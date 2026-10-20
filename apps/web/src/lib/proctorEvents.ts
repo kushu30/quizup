@@ -1,4 +1,8 @@
-import type { ProctorEventRecord } from '@quizup/shared';
+import {
+  PROCTOR_COUNTED_TYPES,
+  type ProctorCountedType,
+  type ProctorEventRecord,
+} from '@quizup/shared';
 
 export function mergeProctorEvents(
   loaded: readonly ProctorEventRecord[],
@@ -14,4 +18,9 @@ export function mergeProctorEvents(
       first.clientAt - second.clientAt ||
       first.id.localeCompare(second.id),
   );
+}
+
+export function countedProctorEvents(events: readonly ProctorEventRecord[]): number {
+  return events.filter((event) => PROCTOR_COUNTED_TYPES.includes(event.type as ProctorCountedType))
+    .length;
 }

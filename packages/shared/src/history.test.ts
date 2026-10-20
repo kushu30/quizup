@@ -17,6 +17,7 @@ function session(overrides: Partial<Session> = {}): Session {
     question_ids: [],
     exam_duration_minutes: null,
     results_released_at: null,
+    proctored: false,
     ...overrides,
   };
 }

@@ -9,6 +9,7 @@ import {
 } from '@quizup/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { StudentDevice } from '../components/StudentDevice';
 import { Leaderboard } from '../components/Leaderboard';
 import { MasteryHeatmap } from '../components/analytics/MasteryHeatmap';
 import { QuestionDifficultyTable } from '../components/analytics/QuestionDifficultyTable';
@@ -155,7 +156,7 @@ export function SessionSummaryPage() {
       {summary.source === 'rebuilt' && (
         <Notice tone="warning">
           This summary was rebuilt from the saved responses. Time buckets use the slowest answer as
-          the time limit and projections are not available.
+          the time limit.
         </Notice>
       )}
       {message && <Notice tone="danger">{message}</Notice>}
@@ -184,7 +185,35 @@ export function SessionSummaryPage() {
         <MasteryHeatmap topics={summary.topics} rows={heatmapRows} />
       </Panel>
 
-      {summary.mode === 'exam' && (
+      <Panel
+        title="Where students joined from"
+        description="The device each student used. Open a row for browser, system and screen."
+      >
+        <TableFrame label="Student devices table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Student</th>
+                <th scope="col">Device</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...summary.participants]
+                .sort((first, second) => first.displayName.localeCompare(second.displayName))
+                .map((participant) => (
+                  <tr key={participant.participantId}>
+                    <td className="font-medium">{participant.displayName}</td>
+                    <td>
+                      <StudentDevice devices={participant.devices} />
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </TableFrame>
+      </Panel>
+
+      {summary.participants.some((participant) => participant.proctorCounts !== null) && (
         <Panel
           title="Proctor signals per student"
           description="These are indicators recorded with the student's consent, not proof of misconduct."
@@ -218,58 +247,6 @@ export function SessionSummaryPage() {
                       ))}
                     </tr>
                   ))}
-              </tbody>
-            </table>
-          </TableFrame>
-        </Panel>
-      )}
-
-      {summary.mode !== 'exam' && (
-        <Panel
-          title="Projection vs actual"
-          description={`${
-            summary.checkpointRound
-              ? `Projection made after round ${summary.checkpointRound}, compared with the final score.`
-              : 'No projection checkpoint was reached.'
-          }${summary.adaptive ? ' Adaptive sessions are always low confidence.' : ''}`}
-        >
-          <TableFrame label="Projection vs actual table">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Student</th>
-                  <th scope="col" className="text-right">
-                    Projected
-                  </th>
-                  <th scope="col" className="text-right">
-                    Actual final
-                  </th>
-                  <th scope="col" className="text-right">
-                    Difference
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.participants.map((participant) => (
-                  <tr key={participant.participantId}>
-                    <td className="font-medium">{participant.displayName}</td>
-                    <td className="text-right tabular-nums">
-                      {participant.checkpointProjection === null
-                        ? '-'
-                        : Math.round(participant.checkpointProjection).toLocaleString()}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {participant.score.toLocaleString()}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {participant.checkpointProjection === null
-                        ? '-'
-                        : Math.round(
-                            participant.score - participant.checkpointProjection,
-                          ).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </TableFrame>

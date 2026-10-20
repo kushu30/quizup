@@ -637,7 +637,7 @@ describe('exam mode', () => {
     const byName = new Map(
       snapshot.participants.map((participant) => [participant.displayName, participant]),
     );
-    expect(byName.get('Ada')).toMatchObject({ score: 5, rank: 1, answered: 5, projection: null });
+    expect(byName.get('Ada')).toMatchObject({ score: 5, rank: 1, answered: 5 });
     expect(byName.get('Bo')).toMatchObject({ score: 2, rank: 2 });
     expect(byName.get('Bo')?.proctorCounts).toMatchObject({ tab_switch: 3, paste: 1, copy: 0 });
     expect(byName.get('Ada')?.proctorCounts?.tab_switch).toBe(0);

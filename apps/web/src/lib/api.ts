@@ -46,6 +46,7 @@ import {
   type RosterReissueResponse,
   type RosterResponse,
   type RosterStudentInput,
+  type SessionStartInput,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -196,8 +197,8 @@ export const api = {
     requestJson(`/sessions/${sessionId}`, 'GET', sessionSummarySchema),
   createSession: (input: SessionCreateInput): Promise<SessionSummary> =>
     requestJson('/sessions', 'POST', sessionSummarySchema, input),
-  startSession: (sessionId: string): Promise<SessionSummary> =>
-    requestJson(`/sessions/${sessionId}/start`, 'POST', sessionSummarySchema),
+  startSession: (sessionId: string, options: SessionStartInput = {}): Promise<SessionSummary> =>
+    requestJson(`/sessions/${sessionId}/start`, 'POST', sessionSummarySchema, options),
   nextQuestion: (sessionId: string): Promise<SessionSummary> =>
     requestJson(`/sessions/${sessionId}/next`, 'POST', sessionSummarySchema),
   endSession: (sessionId: string): Promise<SessionSummary> =>

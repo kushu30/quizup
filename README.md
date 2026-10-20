@@ -230,14 +230,11 @@ What the live panel shows (all of it comes from one server event, `analytics:sna
 
 - **Live / Reconnecting** badge, driven by the socket connection.
 - **Leaderboard**: the points-based leaderboard.
-- **Students and projected final score**: score, correct/answered, and a projection (below).
 - **Mastery heatmap**: one row per student, one column per topic, colour = BKT mastery 0 to 1 with the number in the cell. A dash means no data yet. Rows are sorted by score (or name).
 - **Response time**: a 10-bucket histogram of how much of the time limit students used, switchable between the current question (current round in adaptive sessions) and the whole session.
 - **Question difficulty**: labeled difficulty against observed accuracy, flagged when an easy question is answered correctly less than 40% of the time or a hard one more than 80% of the time (needs at least 3 answers).
 
-Projection: a straight line is fitted (least squares, from running sums) to the student's cumulative score against the round number of each answer. It appears after 3 answers and predicts the score at the last round, never below the current score and never above the current score plus 1000 per remaining round. It is marked **low confidence** while the student has fewer than 6 answers. In adaptive sessions every student sees different questions, so projections are always marked low confidence (the tooltip says so). If the number of rounds is unknown, no projection is shown.
-
-Summary page: `/sessions/:id/summary` (linked from the end-of-session screen) shows the final leaderboard, a per-question table (labeled difficulty, observed accuracy, median response time, mismatch flag), the response-time histogram, the mastery heatmap, and each student's projection (taken once, at half the rounds) against their actual final score. The summary is saved when the session ends. Older sessions without one are rebuilt from the responses once; rebuilt summaries use the slowest answer as the time limit and have no projections.
+Summary page: `/sessions/:id/summary` (linked from the end-of-session screen) shows the final leaderboard, a per-question table (labeled difficulty, observed accuracy, median response time, mismatch flag), the response-time histogram, the mastery heatmap, where each student joined from and, for proctored sessions, the proctor signals. The summary is saved when the session ends. Older sessions without one are rebuilt from the responses once; rebuilt summaries use the slowest answer as the time limit.
 
 CSV export (two buttons on the summary page, downloaded through an authenticated request; cells that start with `=`, `+`, `-` or `@` get a leading single quote):
 
@@ -292,13 +289,25 @@ Run `supabase db reset` to apply migration 0010, which creates the public `brand
 
 ### Student feedback
 
-When a live quiz ends, or once a student submits their exam, students see a short form: a rating from 1 to 5 and an optional comment (up to 500 characters). It is sent over the socket (`feedback:submit`) and accepted only after the session has ended or the student's own exam attempt is submitted; sending again replaces the earlier answer (one row per student per session). Hosts see the average, the count and every comment on the session summary (`GET /sessions/:id/feedback`, host of the session or admin). Run `supabase db reset` to apply migration 0011 (`session_feedback`, server access only).
+When a live quiz ends, or once a student submits their exam, students see a short form: a rating from 1 to 5 and an optional comment (up to 500 characters). It is sent over the socket (`feedback:submit`) and accepted only after the session has ended or the student's own exam attempt is submitted; sending again replaces the earlier answer (one row per student per session). Feedback is anonymous to the host: the summary shows the average, the count and each rating with its comment, listed from highest to lowest rating, with no names, ids or times (the server keeps a link to the student only so a second answer replaces the first). Run `supabase db reset` to apply migration 0011 (`session_feedback`, server access only).
 
 ### History
 
 Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:quizId/history`) listing every session: when it started, its type and status, how many students joined, the average score (from the stored session summary) and the average feedback rating. Ended sessions link to the full summary and CSV exports; sessions still open link back to the host console. Served by `GET /quizzes/:quizId/sessions` (quiz owner only).
 
 Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/results`): each assessment they joined while signed in, with the institution brand, score and rank. Exam scores stay hidden until the host releases results. Students who join without signing in have no history, because nothing links their answers to an account.
+
+### Proctoring for every assessment type
+
+When the host presses **Start** (or **Open the exam**), a dialog asks whether to proctor this session. Proctoring records tab switches, the window losing focus, copy and paste (lengths only), right-clicks and window resizes, and shows them to the host; exams also ask students to stay in full screen. It records no webcam, microphone, screen or keystrokes. Students are told before they begin: the intro lists it as the host's choice, a proctored quiz shows a notice on every question, and a proctored exam shows the monitoring list on the consent screen. If the host starts without proctoring, no signals are recorded or shown, the exam consent says so, and the exam asks for no full screen. When the start request does not say, exams default to proctored and quizzes to not proctored. The host console shows a **Proctoring** panel for proctored quizzes (counts, latest signal, a timeline per student) and the summary page shows the signals table whenever a session was proctored. Run `supabase db push` to apply migration 0013 (`sessions.proctored`, `participants.devices`; exam sessions already stored are marked proctored).
+
+### Where each student joined from
+
+The server reads the browser's user agent plus the screen size and touch support the page sends when joining, and keeps a short description per student (for example "Phone, iOS 17, Safari 17, 390 × 844"). A student who comes back from another device gets a second entry. Hosts see it as a small dropdown in the exam progress table, the live proctoring panel and the summary page's "Where students joined from" panel; students never receive other students' devices. It is a description of the browser, not an identity check, and saving it never blocks a join.
+
+### Landing page and system status
+
+The home page introduces the three assessment types, the three steps from questions to results and what makes it fit a classroom, with the join box at the top. The QuizUp logo (four squares and an amber check) is in the header, footer, favicon and the "Powered by" line. The server health and socket round-trip check moved into a quiet **Status** button in the footer of every page; it only runs when someone opens it.
 
 ### Reconnecting and invited-only quizzes
 

@@ -1,5 +1,6 @@
 import type { Branding } from '@quizup/shared';
 import { readableTextOn } from '../../lib/brandColor';
+import { QuizUpLogo } from '../brand/QuizUpLogo';
 
 const DEFAULT_BRAND_COLOR = '#1e5446';
 
@@ -25,21 +26,7 @@ export function QuizUpMark({
   tone?: 'light' | 'dark';
   small?: boolean;
 }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 font-bold tracking-tight ${small ? 'text-sm' : 'text-lg'}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`flex items-center justify-center rounded font-bold ${
-          small ? 'h-5 w-5 text-[11px]' : 'h-7 w-7 text-sm'
-        } ${tone === 'dark' ? 'bg-white text-board' : 'bg-board text-white'}`}
-      >
-        Q
-      </span>
-      QuizUp
-    </span>
-  );
+  return <QuizUpLogo size={small ? 18 : 26} tone={tone === 'dark' ? 'onDark' : 'color'} />;
 }
 
 export function PoweredBy({ tone = 'light' }: { tone?: 'light' | 'dark' }) {

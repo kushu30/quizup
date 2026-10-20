@@ -56,6 +56,8 @@ const ROOM: RoomStatePayload = {
   quizTitle: 'Fractions review',
   branding: null,
   accessMode: 'open',
+  proctored: false,
+  startedAtServerMs: null,
   status: 'lobby',
   role: 'student',
   serverNowMs: 0,
@@ -192,5 +194,86 @@ describe('Play connection', () => {
     fake.fire('connect');
     act(() => fake.joins().at(-1)?.ack?.({ ok: false, error: 'invalid_access_token' }));
     expect(screen.getByText(/token is not valid/i)).toBeTruthy();
+  });
+
+  it('tells the server what device it is on, so the host can see it', async () => {
+    Object.defineProperty(window.screen, 'width', { configurable: true, value: 390 });
+    Object.defineProperty(window.screen, 'height', { configurable: true, value: 844 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+    try {
+      await renderPlay();
+      fake.fire('connect');
+      expect(fake.joins().at(-1)?.payload).toMatchObject({
+        client: { screenWidth: 390, screenHeight: 844, touch: true },
+      });
+    } finally {
+      Object.defineProperty(window.screen, 'width', { configurable: true, value: 0 });
+      Object.defineProperty(window.screen, 'height', { configurable: true, value: 0 });
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 0 });
+    }
+  });
+});
+
+describe('Play proctoring in a live quiz', () => {
+  const RUNNING = (proctored: boolean): RoomStatePayload => ({
+    ...ROOM,
+    proctored,
+    status: 'running',
+    currentQuestion: {
+      questionId: '66666666-6666-4666-8666-666666666666',
+      stem: 'Which one?',
+      options: ['a', 'b', 'c', 'd'],
+      startsAtServerMs: Date.now() - 1000,
+      durationMs: 60_000,
+      questionNumber: 1,
+      totalQuestions: 2,
+    },
+  });
+
+  function proctorEvents() {
+    return fake.emitted.filter((entry) => entry.event === 'proctor:event');
+  }
+
+  async function startRunning(proctored: boolean) {
+    await renderPlay();
+    fake.fire('connect');
+    act(() => fake.joins().at(-1)?.ack?.(OK));
+    fake.fire('room:state', RUNNING(proctored));
+  }
+
+  it('tells students the session is proctored and sends their signals', async () => {
+    await startRunning(true);
+    expect(screen.getByText(/this session is proctored/i)).toBeTruthy();
+    act(() => {
+      document.dispatchEvent(new Event('contextmenu'));
+    });
+    expect(proctorEvents().map((entry) => (entry.payload as { type: string }).type)).toEqual([
+      'right_click',
+    ]);
+  });
+
+  it('never demands full screen in a quiz', async () => {
+    await startRunning(true);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('says nothing and records nothing when the host chose no proctoring', async () => {
+    await startRunning(false);
+    expect(screen.queryByText(/proctored/i)).toBeNull();
+    act(() => {
+      document.dispatchEvent(new Event('contextmenu'));
+    });
+    expect(proctorEvents()).toHaveLength(0);
+  });
+
+  it('does not record anything while still waiting in the lobby', async () => {
+    await renderPlay();
+    fake.fire('connect');
+    act(() => fake.joins().at(-1)?.ack?.(OK));
+    fake.fire('room:state', { ...ROOM, proctored: true });
+    act(() => {
+      document.dispatchEvent(new Event('contextmenu'));
+    });
+    expect(proctorEvents()).toHaveLength(0);
   });
 });

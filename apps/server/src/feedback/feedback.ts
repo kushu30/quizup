@@ -43,11 +43,8 @@ export async function getSessionFeedback(
   const rows = await engine.repository.listSessionFeedback(sessionId);
   return {
     ...summarizeFeedback(rows),
-    items: rows.map((row) => ({
-      displayName: row.displayName,
-      rating: row.rating,
-      comment: row.comment,
-      createdAt: row.createdAt,
-    })),
+    items: rows
+      .map((row) => ({ rating: row.rating, comment: row.comment }))
+      .sort((first, second) => second.rating - first.rating),
   };
 }

@@ -12,9 +12,9 @@ import {
   medianOf,
   normalizeTopicKey,
   observedAccuracy,
-  projectScore,
   type AnalyticsSnapshot,
   type AnalyticsTopic,
+  type DeviceInfo,
   type Difficulty,
   type LeaderboardEntry,
   type ParticipantAggregate,
@@ -63,8 +63,8 @@ interface ParticipantEntry {
   displayName: string;
   aggregate: ParticipantAggregate;
   rating: number | null;
-  checkpointProjection: number | null;
   proctorCounts: ProctorCounts | null;
+  devices: DeviceInfo[];
 }
 
 interface QuestionEntry {
@@ -81,6 +81,7 @@ export class SessionAnalytics {
   private readonly totalRounds: number | null;
   private readonly source: 'live' | 'rebuilt';
   private readonly mode: 'live' | 'exam';
+  private proctored = false;
   private readonly participants = new Map<string, ParticipantEntry>();
   private readonly mastery = new Map<string, Map<string, number>>();
   private readonly topics = new Map<string, string>();
@@ -89,7 +90,6 @@ export class SessionAnalytics {
   private currentRoundHistogram = emptyHistogram();
   private roundsCompleted = 0;
   private currentRound: number | null = null;
-  private checkpointRound: number | null = null;
 
   constructor(options: SessionAnalyticsOptions) {
     this.sessionId = options.sessionId;
@@ -105,8 +105,8 @@ export class SessionAnalytics {
         displayName,
         aggregate: emptyParticipantAggregate(),
         rating: null,
-        checkpointProjection: null,
         proctorCounts: null,
+        devices: [],
       });
     }
   }
@@ -155,7 +155,6 @@ export class SessionAnalytics {
       correct: event.correct,
       points: event.points,
       responseMs: event.responseMs,
-      round: event.round,
     });
     question.aggregate = applyQuestionResponse(question.aggregate, {
       correct: event.correct,
@@ -183,6 +182,17 @@ export class SessionAnalytics {
     }
   }
 
+  setProctored(proctored: boolean) {
+    this.proctored = proctored;
+  }
+
+  setDevices(participantId: string, devices: DeviceInfo[]) {
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      participant.devices = devices;
+    }
+  }
+
   setRating(participantId: string, rating: number) {
     const participant = this.participants.get(participantId);
     if (participant) {
@@ -192,26 +202,6 @@ export class SessionAnalytics {
 
   onRoundClose(round: number) {
     this.roundsCompleted = Math.max(this.roundsCompleted, round);
-    if (
-      this.totalRounds !== null &&
-      this.checkpointRound === null &&
-      this.roundsCompleted === Math.ceil(this.totalRounds / 2)
-    ) {
-      this.checkpointRound = this.roundsCompleted;
-      for (const participant of this.participants.values()) {
-        participant.checkpointProjection = this.projectionFor(participant)?.projected ?? null;
-      }
-    }
-  }
-
-  private projectionFor(participant: ParticipantEntry) {
-    return projectScore({
-      sums: participant.aggregate.regression,
-      currentScore: participant.aggregate.score,
-      totalRounds: this.totalRounds,
-      roundsCompleted: this.roundsCompleted,
-      adaptive: this.adaptive,
-    });
   }
 
   buildSnapshot(input: AnalyticsSnapshotInput): AnalyticsSnapshot {
@@ -232,10 +222,10 @@ export class SessionAnalytics {
           avgResponseMs:
             aggregate.answered === 0 ? null : aggregate.responseMsSum / aggregate.answered,
           rating: this.adaptive ? participant.rating : null,
-          projection: this.projectionFor(participant),
-          checkpointProjection: participant.checkpointProjection,
-          proctorCounts:
-            this.mode === 'exam' ? (participant.proctorCounts ?? emptyProctorCounts()) : null,
+          proctorCounts: this.proctored
+            ? (participant.proctorCounts ?? emptyProctorCounts())
+            : null,
+          devices: participant.devices,
           mastery: topics.map((topic) => masteryForParticipant?.get(topic.key) ?? null),
         };
       })
@@ -272,7 +262,6 @@ export class SessionAnalytics {
       totalRounds: this.totalRounds,
       roundsCompleted: this.roundsCompleted,
       currentRound: this.currentRound,
-      checkpointRound: this.checkpointRound,
       topics,
       questions,
       sessionHistogram: this.sessionHistogram,

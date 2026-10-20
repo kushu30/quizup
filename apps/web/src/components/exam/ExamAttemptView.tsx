@@ -12,6 +12,7 @@ interface ExamAttemptViewProps {
   view: ExamStudentView;
   offsetMs: number;
   connected: boolean;
+  proctored: boolean;
   onViewChange: (view: ExamStudentView) => void;
 }
 
@@ -33,6 +34,7 @@ export function ExamAttemptView({
   view,
   offsetMs,
   connected,
+  proctored,
   onViewChange,
 }: ExamAttemptViewProps) {
   const attempt = view.attempt;
@@ -56,7 +58,7 @@ export function ExamAttemptView({
   const confirmBodyId = useId();
 
   const proctor = useProctor({
-    enabled: !submitting,
+    enabled: proctored && !submitting,
     connected,
     now: () => Date.now() + offsetRef.current,
     send: (event) => socket.emit('proctor:event', event, () => undefined),
@@ -187,7 +189,7 @@ export function ExamAttemptView({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      {proctor.fullscreenLost && (
+      {proctored && proctor.fullscreenLost && (
         <div
           role="alertdialog"
           aria-modal="true"

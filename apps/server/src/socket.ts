@@ -189,6 +189,8 @@ export function attachSocketServer(
           const joined = await engine.joinStudent(payload, {
             userId: socket.data.authUser?.id ?? null,
             source: clientSource(socket),
+            userAgent: socket.handshake.headers['user-agent'],
+            client: payload.client,
           });
           if (!joined.ok || joined.role !== 'student') {
             respond(joined);

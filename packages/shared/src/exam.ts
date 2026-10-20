@@ -53,6 +53,9 @@ export const PROCTOR_COUNTED_TYPES = [
   'right_click',
   'resize',
 ] as const;
+export const sessionStartSchema = z.object({ proctored: z.boolean().optional() }).strict();
+export type SessionStartInput = z.infer<typeof sessionStartSchema>;
+
 export const proctorCountedTypeSchema = z.enum(PROCTOR_COUNTED_TYPES);
 export type ProctorCountedType = z.infer<typeof proctorCountedTypeSchema>;
 
@@ -154,7 +157,7 @@ export const proctorEventRecordSchema = z.object({
   id: z.string().uuid(),
   sessionId: z.string().uuid(),
   participantId: z.string().uuid(),
-  attemptId: z.string().uuid(),
+  attemptId: z.string().uuid().nullable(),
   type: proctorRecordTypeSchema,
   clientAt: z.number(),
   serverAt: z.number(),

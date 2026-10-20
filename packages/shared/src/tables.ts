@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { deviceInfoSchema } from './deviceInfo.js';
 import {
   difficultySchema,
   questionSourceSchema,
@@ -63,6 +64,7 @@ export const sessionSchema = z.object({
   question_ids: z.array(uuidSchema),
   exam_duration_minutes: z.number().int().nullable(),
   results_released_at: timestampSchema.nullable(),
+  proctored: z.boolean().default(false),
 });
 export type Session = z.infer<typeof sessionSchema>;
 
@@ -74,6 +76,7 @@ export const participantSchema = z.object({
   elo: z.number(),
   joined_at: timestampSchema,
   rejoin_token_hash: z.string().nullable(),
+  devices: z.array(deviceInfoSchema).default([]),
 });
 export type Participant = z.infer<typeof participantSchema>;
 

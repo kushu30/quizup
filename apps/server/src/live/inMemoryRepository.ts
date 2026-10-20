@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   ELO_MAX_RATING,
   ELO_MIN_RATING,
+  type DeviceInfo,
   initialQuestionRating,
   type Participant,
   type ProctorEventRecord,
@@ -156,6 +157,7 @@ export class InMemoryLiveRepository implements LiveRepository {
       question_ids: input.questionIds,
       exam_duration_minutes: input.examDurationMinutes,
       results_released_at: null,
+      proctored: false,
     };
     this.sessions.set(session.id, { session, hostId: quiz.hostId });
     return session;
@@ -190,6 +192,7 @@ export class InMemoryLiveRepository implements LiveRepository {
       elo: 1000,
       joined_at: new Date().toISOString(),
       rejoin_token_hash: input.rejoinTokenHash,
+      devices: [],
     };
     this.participants.push(participant);
     return participant;
@@ -244,6 +247,13 @@ export class InMemoryLiveRepository implements LiveRepository {
     const participant = this.participants.find((candidate) => candidate.id === participantId);
     if (participant) {
       participant.rejoin_token_hash = tokenHash;
+    }
+  }
+
+  async updateParticipantDevices(participantId: string, devices: DeviceInfo[]) {
+    const participant = this.participants.find((candidate) => candidate.id === participantId);
+    if (participant) {
+      participant.devices = devices;
     }
   }
 
@@ -364,6 +374,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         displayName: participant.display_name,
         elo: participant.elo,
         joinedAtMs: Date.parse(participant.joined_at),
+        devices: participant.devices,
       })),
       questions,
       responses: responses.map((response) => ({
@@ -451,15 +462,7 @@ export class InMemoryLiveRepository implements LiveRepository {
   async listSessionFeedback(sessionId: string) {
     return this.sessionFeedback
       .filter((row) => row.sessionId === sessionId)
-      .map((row) => ({
-        participantId: row.participantId,
-        displayName:
-          this.participants.find((participant) => participant.id === row.participantId)
-            ?.display_name ?? 'Student',
-        rating: row.rating,
-        comment: row.comment,
-        createdAt: row.createdAt,
-      }));
+      .map((row) => ({ rating: row.rating, comment: row.comment }));
   }
 
   async listOpenExamSessions(): Promise<OpenExamSession[]> {
@@ -483,6 +486,7 @@ export class InMemoryLiveRepository implements LiveRepository {
             elo: participant.elo,
             joinedAtMs: Date.parse(participant.joined_at),
             tokenHash: participant.rejoin_token_hash ?? '',
+            devices: participant.devices,
           })),
       }));
   }

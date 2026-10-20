@@ -1,7 +1,10 @@
+import { z } from 'zod';
 import {
+  deviceInfoSchema,
   proctorEventRecordSchema,
   participantSchema,
   sessionSchema,
+  type DeviceInfo,
   type Difficulty,
   type Participant,
   type ProctorEventRecord,
@@ -47,6 +50,11 @@ interface QuestionRow {
   difficulty: Difficulty;
   elo_rating: number;
   answers_count?: number;
+}
+
+function toDevices(value: unknown): DeviceInfo[] {
+  const parsed = z.array(deviceInfoSchema).safeParse(value);
+  return parsed.success ? parsed.data : [];
 }
 
 function toRosterRecord(row: {
@@ -332,6 +340,14 @@ export class SupabaseLiveRepository implements LiveRepository {
     return Number(data);
   }
 
+  async updateParticipantDevices(participantId: string, devices: DeviceInfo[]) {
+    const { error } = await supabaseAdmin
+      .from('participants')
+      .update({ devices })
+      .eq('id', participantId);
+    throwUnexpected(error);
+  }
+
   async updateParticipantElo(participantId: string, elo: number) {
     const { error } = await supabaseAdmin
       .from('participants')
@@ -400,10 +416,11 @@ export class SupabaseLiveRepository implements LiveRepository {
       display_name: string;
       elo: number;
       joined_at: string;
+      devices: unknown;
     }>((from, to) =>
       supabaseAdmin
         .from('participants')
-        .select('id, display_name, elo, joined_at')
+        .select('id, display_name, elo, joined_at, devices')
         .eq('session_id', sessionId)
         .order('joined_at', { ascending: true })
         .range(from, to),
@@ -462,16 +479,15 @@ export class SupabaseLiveRepository implements LiveRepository {
                 .range(from, to),
           );
 
-    const proctorRows =
-      record.session.exam_duration_minutes === null
-        ? []
-        : await fetchAllPages<{ participant_id: string; type: string }>((from, to) =>
-            supabaseAdmin
-              .from('proctor_events')
-              .select('participant_id, type')
-              .eq('session_id', sessionId)
-              .range(from, to),
-          );
+    const proctorRows = !record.session.proctored
+      ? []
+      : await fetchAllPages<{ participant_id: string; type: string }>((from, to) =>
+          supabaseAdmin
+            .from('proctor_events')
+            .select('participant_id, type')
+            .eq('session_id', sessionId)
+            .range(from, to),
+        );
 
     return {
       session: record.session,
@@ -485,6 +501,7 @@ export class SupabaseLiveRepository implements LiveRepository {
         displayName: row.display_name,
         elo: Number(row.elo),
         joinedAtMs: Date.parse(row.joined_at),
+        devices: toDevices(row.devices),
       })),
       questions: questionRows.map((row) => ({
         id: row.id,
@@ -625,24 +642,12 @@ export class SupabaseLiveRepository implements LiveRepository {
   async listSessionFeedback(sessionId: string) {
     const { data, error } = await supabaseAdmin
       .from('session_feedback')
-      .select('participant_id, rating, comment, created_at, participants(display_name)')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+      .select('rating, comment')
+      .eq('session_id', sessionId);
     throwUnexpected(error);
-    return (
-      (data ?? []) as unknown as {
-        participant_id: string;
-        rating: number;
-        comment: string | null;
-        created_at: string;
-        participants: { display_name: string } | null;
-      }[]
-    ).map((row) => ({
-      participantId: row.participant_id,
-      displayName: row.participants?.display_name ?? 'Student',
+    return ((data ?? []) as { rating: number; comment: string | null }[]).map((row) => ({
       rating: row.rating,
       comment: row.comment,
-      createdAt: row.created_at,
     }));
   }
 
@@ -671,10 +676,11 @@ export class SupabaseLiveRepository implements LiveRepository {
         elo: number;
         joined_at: string;
         rejoin_token_hash: string | null;
+        devices: unknown;
       }>((from, to) =>
         supabaseAdmin
           .from('participants')
-          .select('id, display_name, elo, joined_at, rejoin_token_hash')
+          .select('id, display_name, elo, joined_at, rejoin_token_hash, devices')
           .eq('session_id', session.id)
           .range(from, to),
       );
@@ -689,6 +695,7 @@ export class SupabaseLiveRepository implements LiveRepository {
           elo: Number(participant.elo),
           joinedAtMs: Date.parse(participant.joined_at),
           tokenHash: participant.rejoin_token_hash ?? '',
+          devices: toDevices(participant.devices),
         })),
       });
     }

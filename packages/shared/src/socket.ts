@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { accessModeSchema } from './adaptive.js';
 import { brandingSchema } from './branding.js';
+import { clientHintsSchema, deviceInfoSchema } from './deviceInfo.js';
 import type { FeedbackSubmitPayload } from './feedback.js';
 import type { AnalyticsSnapshot } from './analytics.js';
 import type {
@@ -64,6 +65,7 @@ export const studentJoinPayloadSchema = z
     displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX_LENGTH).optional(),
     accessToken: z.string().max(64).optional(),
     rejoinToken: z.string().max(128).optional(),
+    client: clientHintsSchema.optional(),
   })
   .strict()
   .refine((payload) => payload.displayName !== undefined || payload.accessToken !== undefined);
@@ -102,6 +104,7 @@ export const participantPresenceSchema = z.object({
   participantId: z.string().uuid(),
   displayName: z.string(),
   connected: z.boolean(),
+  devices: z.array(deviceInfoSchema),
 });
 export type ParticipantPresence = z.infer<typeof participantPresenceSchema>;
 
@@ -182,6 +185,8 @@ export const roomStatePayloadSchema = z.object({
   quizTitle: z.string(),
   branding: brandingSchema.nullable(),
   accessMode: accessModeSchema,
+  proctored: z.boolean(),
+  startedAtServerMs: z.number().nullable(),
   status: sessionStatusSchema,
   role: z.enum(['host', 'student']),
   serverNowMs: z.number(),

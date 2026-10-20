@@ -18,6 +18,8 @@ import {
   generateJoinCode,
   getAnswerWindowStatus,
   normalizeTopicKey,
+  parseUserAgent,
+  sameDevice,
   selectNextAdaptiveQuestion,
   quizSettingsSchema,
   resolveAdaptiveRounds,
@@ -39,6 +41,8 @@ import {
   type RosterStudentInput,
   splitStoredBranding,
   type Branding,
+  type ClientHints,
+  type DeviceInfo,
   type JoinInfo,
   type RoomStatePayload,
   type Session,
@@ -61,6 +65,7 @@ import {
 } from './types.js';
 
 const JOIN_CODE_ATTEMPTS = 20;
+const MAX_DEVICES_PER_STUDENT = 5;
 const DEFAULT_HOST_REFRESH_INTERVAL_MS = 200;
 const DEFAULT_ENDED_RETENTION_MS = 10 * 60 * 1000;
 export const EXAM_ENDED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -100,6 +105,7 @@ interface ParticipantState {
   userId: string | null;
   connected: boolean;
   rejoinOpenUntilMs: number | null;
+  devices: DeviceInfo[];
   score: number;
   totalResponseMs: number;
   elo: number;
@@ -327,7 +333,11 @@ export class LiveEngine {
     };
   }
 
-  async startSession(sessionId: string, hostId: string): Promise<SessionSummary> {
+  async startSession(
+    sessionId: string,
+    hostId: string,
+    options: { proctored?: boolean } = {},
+  ): Promise<SessionSummary> {
     const state = this.requireHostedSession(sessionId, hostId);
     if (state.record.status !== 'lobby') {
       throw new EngineError('invalid_session_state', 'The session has already started');
@@ -343,16 +353,20 @@ export class LiveEngine {
       this.registerExamQuestions(state);
     }
     const startedAtIso = new Date(this.now()).toISOString();
+    const proctored = options.proctored ?? state.exam !== null;
     await this.repository.updateSession(state.record.id, {
       status: 'running',
       started_at: startedAtIso,
+      proctored,
     });
-    state.record = { ...state.record, status: 'running', started_at: startedAtIso };
+    state.record = { ...state.record, status: 'running', started_at: startedAtIso, proctored };
+    state.analytics.setProctored(proctored);
     if (state.exam) {
       this.pushRoomStateToParticipants(state);
       this.flushHostState(state);
       return this.summarize(state);
     }
+    this.pushRoomStateToParticipants(state);
     await this.showRound(state, 0);
     return this.summarize(state);
   }
@@ -395,7 +409,42 @@ export class LiveEngine {
 
   async joinStudent(
     payload: StudentJoinPayload,
-    options: { userId?: string | null; source?: string } = {},
+    options: {
+      userId?: string | null;
+      source?: string;
+      userAgent?: string | undefined;
+      client?: ClientHints | undefined;
+    } = {},
+  ): Promise<RoomJoinAck> {
+    const result = await this.joinStudentCore(payload, options);
+    if (result.ok && result.role === 'student') {
+      await this.recordDevice(
+        result.participantId,
+        parseUserAgent(options.userAgent, options.client ?? payload.client),
+      );
+    }
+    return result;
+  }
+
+  private async recordDevice(participantId: string, device: DeviceInfo): Promise<void> {
+    const state = this.findStateByParticipant(participantId);
+    const participant = state?.participants.get(participantId);
+    if (!state || !participant || participant.devices.some((known) => sameDevice(known, device))) {
+      return;
+    }
+    participant.devices = [...participant.devices, device].slice(-MAX_DEVICES_PER_STUDENT);
+    state.analytics.setDevices(participantId, participant.devices);
+    this.requestHostRefresh(state);
+    try {
+      await this.repository.updateParticipantDevices(participantId, participant.devices);
+    } catch (error) {
+      console.error('Saving the participant device failed', error);
+    }
+  }
+
+  private async joinStudentCore(
+    payload: StudentJoinPayload,
+    options: { userId?: string | null; source?: string },
   ): Promise<RoomJoinAck> {
     const sessionId = this.sessionIdByJoinCode.get(payload.joinCode);
     const state = sessionId ? this.sessionsById.get(sessionId) : undefined;
@@ -481,6 +530,7 @@ export class LiveEngine {
       userId,
       connected: false,
       rejoinOpenUntilMs: null,
+      devices: [],
       score: 0,
       totalResponseMs: 0,
       elo: Number.isFinite(inserted.elo) ? inserted.elo : INITIAL_PLAYER_RATING,
@@ -1397,6 +1447,19 @@ export class LiveEngine {
     };
   }
 
+  getProctorInfo(
+    sessionId: string,
+  ): { proctored: boolean; status: SessionStatus; exam: boolean } | null {
+    const state = this.sessionsById.get(sessionId);
+    return state
+      ? {
+          proctored: state.record.proctored,
+          status: state.record.status,
+          exam: state.exam !== null,
+        }
+      : null;
+  }
+
   getSessionStatus(sessionId: string): SessionStatus | null {
     return this.sessionsById.get(sessionId)?.record.status ?? null;
   }
@@ -1531,6 +1594,7 @@ export class LiveEngine {
           userId: null,
           connected: false,
           rejoinOpenUntilMs: null,
+          devices: participant.devices,
           score: 0,
           totalResponseMs: 0,
           elo: participant.elo,
@@ -1541,8 +1605,10 @@ export class LiveEngine {
         });
         state.participantIdByName.set(participant.displayName.toLowerCase(), participant.id);
         state.analytics.registerParticipant(participant.id, participant.displayName);
+        state.analytics.setDevices(participant.id, participant.devices);
         this.sessionIdByParticipantId.set(participant.id, session.id);
       }
+      state.analytics.setProctored(session.proctored);
       for (const question of questions) {
         state.analytics.registerTopic(question.topic);
       }
@@ -1637,6 +1703,8 @@ export class LiveEngine {
       quizTitle: state.quizTitle,
       branding: state.branding,
       accessMode: state.accessMode,
+      proctored: state.record.proctored,
+      startedAtServerMs: state.record.started_at ? Date.parse(state.record.started_at) : null,
       status,
       role: viewer.role,
       serverNowMs: this.now(),
@@ -1658,6 +1726,7 @@ export class LiveEngine {
                 participantId: participant.id,
                 displayName: participant.displayName,
                 connected: participant.connected,
+                devices: viewer.role === 'host' ? participant.devices : [],
               })),
       currentQuestion:
         run && visibleQuestion

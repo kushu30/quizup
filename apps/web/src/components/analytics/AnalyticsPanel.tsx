@@ -4,7 +4,6 @@ import { Leaderboard } from '../Leaderboard';
 import { Panel } from '../ui';
 import { LiveIndicator } from './LiveIndicator';
 import { MasteryHeatmap } from './MasteryHeatmap';
-import { ProjectionTable } from './ProjectionTable';
 import { QuestionDifficultyTable } from './QuestionDifficultyTable';
 import { ResponseHistogram } from './ResponseHistogram';
 
@@ -51,10 +50,6 @@ export const AnalyticsPanel = memo(function AnalyticsPanel({
               sessionCounts={snapshot.sessionHistogram}
               currentLabel={snapshot.adaptive ? 'Current round' : 'Current question'}
             />
-          </Panel>
-
-          <Panel title="Students and projected final score" level={3} className="xl:col-span-2">
-            <ProjectionTable participants={snapshot.participants} adaptive={snapshot.adaptive} />
           </Panel>
 
           <Panel title="Mastery heatmap" level={3} className="xl:col-span-2">

@@ -32,7 +32,7 @@ describe('BrandMark', () => {
 
   it('falls back to QuizUp alone without branding', () => {
     render(<BrandMark branding={null} />);
-    expect(screen.getByText('QuizUp')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'QuizUp' })).toBeTruthy();
     expect(screen.queryByText(/Powered by/)).toBeNull();
   });
 });

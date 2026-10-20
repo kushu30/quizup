@@ -273,3 +273,38 @@ describe('useProctor', () => {
     }
   });
 });
+
+describe('useProctor without a full screen requirement', () => {
+  it('never asks for full screen and never reports leaving it', () => {
+    vi.useFakeTimers();
+    visibility = 'visible';
+    fullscreenElement = null;
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => visibility,
+    });
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    const sent: ProctorEventPayload[] = [];
+    const { result, unmount } = renderHook(() =>
+      useProctor({
+        enabled: true,
+        connected: true,
+        requireFullscreen: false,
+        send: (event) => sent.push(event),
+        now: () => 1_800_000_000_000,
+      }),
+    );
+    expect(result.current.fullscreenLost).toBe(false);
+    act(() => setFullscreen(true));
+    act(() => setFullscreen(false));
+    expect(sent.some((event) => event.type === 'fullscreen_exit')).toBe(false);
+    expect(result.current.fullscreenLost).toBe(false);
+    act(() => setVisibility('hidden'));
+    expect(sent.map((event) => event.type)).toEqual(['tab_switch']);
+    unmount();
+    vi.useRealTimers();
+  });
+});

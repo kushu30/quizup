@@ -1,5 +1,6 @@
 import type {
   Branding,
+  ClientHints,
   ExamStudentView,
   JoinInfo,
   LeaderboardEntry,
@@ -18,6 +19,7 @@ import { QuestionTimer } from '../components/QuestionTimer';
 import { FeedbackForm } from '../components/FeedbackForm';
 import { StudentIntro } from '../components/StudentIntro';
 import { Button, Notice, buttonClasses } from '../components/ui';
+import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
 import { createQuizSocket, type QuizSocket } from '../lib/socket';
@@ -44,6 +46,7 @@ interface PlayState {
   mode: 'live' | 'exam';
   exam: ExamStudentView | null;
   adaptive: boolean;
+  proctored: boolean;
   quizTitle: string;
   branding: Branding | null;
 }
@@ -66,6 +69,7 @@ const INITIAL_STATE: PlayState = {
   mode: 'live',
   exam: null,
   adaptive: false,
+  proctored: false,
   quizTitle: '',
   branding: null,
 };
@@ -110,6 +114,43 @@ const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
     'That access token is not valid. Check it with your host, who can issue a new one.',
   access_token_required: 'This quiz is for invited students. Enter your access token.',
 };
+
+function readClientHints(): { client?: ClientHints } {
+  const { width, height } = window.screen;
+  if (!(width > 0) || !(height > 0)) {
+    return {};
+  }
+  return {
+    client: {
+      screenWidth: Math.round(width),
+      screenHeight: Math.round(height),
+      touch: navigator.maxTouchPoints > 0,
+    },
+  };
+}
+
+function LiveProctor({
+  socket,
+  active,
+  connected,
+}: {
+  socket: QuizSocket;
+  active: boolean;
+  connected: boolean;
+}) {
+  useProctor({
+    enabled: active,
+    requireFullscreen: false,
+    connected,
+    send: (event) => socket.emit('proctor:event', event, () => undefined),
+  });
+  return (
+    <Notice tone="warning">
+      This session is proctored. Switching tabs, copying and similar actions are recorded for your
+      host.
+    </Notice>
+  );
+}
 
 const RETRY_JOIN_AFTER_MS = 2000;
 const RETRYABLE_JOIN_ERRORS: SocketErrorCode[] = ['rate_limited', 'server_error'];
@@ -175,9 +216,10 @@ export function Play() {
           }));
           return;
         }
+        const client = readClientHints();
         const payload = accessToken
-          ? { joinCode, accessToken }
-          : { joinCode, displayName, rejoinToken: stored?.rejoinToken };
+          ? { joinCode, accessToken, ...client }
+          : { joinCode, displayName, rejoinToken: stored?.rejoinToken, ...client };
         quizSocket.emit('room:join', payload, (ack) => {
           if (!ack.ok) {
             if (joinedOnce.current && RETRYABLE_JOIN_ERRORS.includes(ack.error)) {
@@ -228,6 +270,7 @@ export function Play() {
           mode: room.mode,
           exam: room.exam,
           adaptive: room.adaptive,
+          proctored: room.proctored,
           quizTitle: room.quizTitle,
           branding: room.branding,
         }));
@@ -404,6 +447,7 @@ export function Play() {
         displayName={state.displayName}
         offsetMs={offsetMs}
         connected={state.connected}
+        proctored={state.proctored}
         onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
       />
     );
@@ -412,6 +456,13 @@ export function Play() {
   const header = (
     <>
       {!state.connected && <ConnectionBanner />}
+      {state.proctored && state.status !== 'ended' && socket && (
+        <LiveProctor
+          socket={socket}
+          active={state.status === 'running'}
+          connected={state.connected}
+        />
+      )}
       <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
         <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
         {state.standing && (
