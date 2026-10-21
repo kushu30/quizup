@@ -1,6 +1,6 @@
 import type { ParticipantPresence } from '@quizup/shared';
 import { useId, useState } from 'react';
-import { useInShell } from './app/shellContext';
+import { useModernLook } from './app/shellContext';
 
 interface StudentRosterProps {
   participants: ParticipantPresence[];
@@ -9,7 +9,7 @@ interface StudentRosterProps {
 }
 
 export function StudentRoster({ participants, size = 'compact', onLetBackIn }: StudentRosterProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   const headingId = useId();
   const connectedCount = participants.filter((participant) => participant.connected).length;
   const large = size === 'large';

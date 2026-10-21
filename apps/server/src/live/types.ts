@@ -8,6 +8,7 @@ import type {
   ServerToClientEvents,
   Session,
   SocketErrorCode,
+  DeliverySettings,
 } from '@quizup/shared';
 
 export interface LiveQuestion {
@@ -19,6 +20,8 @@ export interface LiveQuestion {
   difficulty: Difficulty;
   eloRating: number;
   answersCount: number;
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 export interface NewParticipantInput {
@@ -198,6 +201,7 @@ export interface SessionAnalyticsSource {
     id: string;
     stem: string;
     options: string[];
+    correctIndex: number;
     topic: string;
     difficulty: Difficulty;
     answersCount?: number;
@@ -228,6 +232,7 @@ export interface ExamContext {
   hostId: string;
   durationMs: number;
   questions: LiveQuestion[];
+  delivery: DeliverySettings;
   resultsReleasedAtMs: number | null;
 }
 

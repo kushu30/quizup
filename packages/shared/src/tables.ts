@@ -51,6 +51,9 @@ export const questionSchema = z.object({
   elo_rating: z.number(),
   source: questionSourceSchema,
   approved: z.boolean(),
+  position: z.number().int(),
+  image_url: z.string().nullable().optional(),
+  image_alt: z.string().nullable().optional(),
 });
 export type Question = z.infer<typeof questionSchema>;
 

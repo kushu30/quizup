@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes } from 'react';
-import { useInShell } from '../app/shellContext';
+import { useModernLook } from '../app/shellContext';
 import { ctaDark, ctaLight, ctaPrimary, ctaQuiet, ctaSize, ctaSoft } from '../landing/cta';
 
 export type ButtonVariant = 'primary' | 'brand' | 'accent' | 'secondary' | 'ghost' | 'danger';
@@ -56,7 +56,7 @@ export function Button({
   className = '',
   ...rest
 }: ButtonProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   return (
     <button
       type={type}

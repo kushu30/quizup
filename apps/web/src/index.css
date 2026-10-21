@@ -175,6 +175,8 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+    /* Every rem size scales from here, so the whole site is a touch smaller than the 16px default. */
+    font-size: 14.5px;
   }
 
   body {

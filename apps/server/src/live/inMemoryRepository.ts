@@ -4,6 +4,7 @@ import {
   ELO_MIN_RATING,
   type DeviceInfo,
   initialQuestionRating,
+  questionImageOf,
   type Participant,
   type ProctorEventRecord,
   type Session,
@@ -32,7 +33,12 @@ interface StoredQuiz {
 }
 
 export type SeedQuestion = Pick<LiveQuestion, 'id' | 'stem' | 'options' | 'correctIndex'> &
-  Partial<Pick<LiveQuestion, 'topic' | 'difficulty' | 'eloRating' | 'answersCount'>> & {
+  Partial<
+    Pick<
+      LiveQuestion,
+      'topic' | 'difficulty' | 'eloRating' | 'answersCount' | 'imageUrl' | 'imageAlt'
+    >
+  > & {
     approved?: boolean;
   };
 
@@ -92,6 +98,7 @@ export class InMemoryLiveRepository implements LiveRepository {
           eloRating: question.eloRating ?? initialQuestionRating(difficulty),
           answersCount: question.answersCount ?? 0,
           approved: question.approved ?? true,
+          ...questionImageOf(question),
         };
       }),
     });
@@ -118,6 +125,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         difficulty: question.difficulty,
         eloRating: question.eloRating,
         answersCount: question.answersCount,
+        ...questionImageOf(question),
       }));
   }
 
@@ -359,6 +367,7 @@ export class InMemoryLiveRepository implements LiveRepository {
         id: question.id,
         stem: question.stem,
         options: question.options,
+        correctIndex: question.correctIndex,
         topic: question.topic,
         difficulty: question.difficulty,
         answersCount: question.answersCount,

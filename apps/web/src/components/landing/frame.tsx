@@ -24,7 +24,7 @@ export function Frame({
 }) {
   const rule = tone === 'night' ? NIGHT_RULE : RULE;
   // Beside the app sidebar the rails run full width, one sidebar gap in from each side.
-  const width = useInShell() ? 'mx-3' : `mx-auto ${wide ? 'max-w-[84rem]' : 'max-w-6xl'}`;
+  const width = useInShell() ? 'mx-3' : `mx-auto w-full ${wide ? 'max-w-[84rem]' : 'max-w-6xl'}`;
   const frame = (
     <div
       className={`relative sm:border-x ${width} ${flush ? '' : 'px-4 sm:px-10'} ${rule} ${className}`}

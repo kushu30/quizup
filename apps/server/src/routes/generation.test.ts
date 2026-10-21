@@ -56,6 +56,7 @@ describe('POST /quizzes/:quizId/generate-questions', () => {
         elo_rating: 1000,
         source: 'llm',
         approved: false,
+        position: 1,
       }));
     },
   };

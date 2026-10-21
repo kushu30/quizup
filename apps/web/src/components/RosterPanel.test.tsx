@@ -14,6 +14,8 @@ vi.mock('../lib/api', () => ({
     reissueRosterToken: vi.fn(),
     removeRosterEntry: vi.fn(),
     emailRosterTokens: vi.fn(),
+    listGroups: vi.fn(),
+    getGroup: vi.fn(),
   },
 }));
 vi.mock('../lib/download', () => ({ saveBlob: vi.fn() }));
@@ -64,6 +66,7 @@ function renderPanel() {
 
 beforeEach(() => {
   vi.mocked(api.getRoster).mockResolvedValue({ entries: [ASHA, BEN], emailEnabled: true });
+  vi.mocked(api.listGroups).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -372,5 +375,44 @@ describe('RosterPanel', () => {
       const region = await screen.findByRole('region', { name: 'Invited students' });
       expect(within(region).getByText(/1 of 2 joined/)).toBeTruthy();
     });
+  });
+
+  it('adds a saved group to the roster, skipping students already on the list', async () => {
+    vi.mocked(api.listGroups).mockResolvedValue([
+      { id: '99999999-9999-4999-8999-999999999999', name: 'Year 9A', memberCount: 3 },
+    ]);
+    vi.mocked(api.getGroup).mockResolvedValue({
+      id: '99999999-9999-4999-8999-999999999999',
+      name: 'Year 9A',
+      students: [
+        { displayName: 'asha rao', email: null },
+        { displayName: 'Chen Wei', email: 'chen@example.com' },
+        { displayName: 'Dev', email: null },
+      ],
+    });
+    const chen: RosterEntry = {
+      ...BEN,
+      id: '00000000-0000-4000-8000-000000000003',
+      displayName: 'Chen Wei',
+    };
+    vi.mocked(api.addRoster).mockResolvedValue({
+      entries: [ASHA, BEN, chen],
+      issued: [issued(chen, 'ZZZZZ-11111')],
+    });
+    renderPanel();
+    await screen.findByRole('region', { name: 'Invited students' });
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Add a saved group' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Year 9A (3)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add group' }));
+    await waitFor(() =>
+      expect(api.addRoster).toHaveBeenCalledWith(SESSION, [
+        { displayName: 'Chen Wei', email: 'chen@example.com' },
+        { displayName: 'Dev' },
+      ]),
+    );
+    expect(
+      await screen.findByText(/Added 2 students from Year 9A\. 1 already on the list\./),
+    ).toBeTruthy();
+    expect(await screen.findByText('ZZZZZ-11111')).toBeTruthy();
   });
 });

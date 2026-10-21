@@ -132,7 +132,7 @@ describe('Layout', () => {
     );
   });
 
-  it('uses the wide layout for the host tools, its own for login and the dashboard, and the focused one elsewhere', () => {
+  it('gives each kind of page its own layout', () => {
     const cases: [string, string][] = [
       ['/host', 'app'],
       ['/host/quizzes/1/history', 'app'],
@@ -141,7 +141,7 @@ describe('Layout', () => {
       ['/admin', 'app'],
       ['/', 'landing'],
       ['/join', 'auth'],
-      ['/play/ABC234', 'focused'],
+      ['/play/ABC234', 'play'],
       ['/login', 'auth'],
     ];
     for (const [path, expected] of cases) {

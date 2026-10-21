@@ -12,6 +12,7 @@ import {
   type Branding,
   type AccessMode,
   type AssessmentType,
+  type PoolRule,
   type Quiz,
 } from '@quizup/shared';
 import {
@@ -29,6 +30,8 @@ import { CsvImport } from '../components/CsvImport';
 import { GenerateQuestionsPanel } from '../components/GenerateQuestionsPanel';
 import { AccessModePicker } from '../components/AccessModePicker';
 import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
+import { DeliveryOptions, type ModuleCount } from '../components/DeliveryOptions';
+import { ResultsOptions } from '../components/ResultsOptions';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
@@ -82,6 +85,12 @@ export function QuizEditor() {
   const [title, setTitle] = useState('');
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('live');
   const [accessMode, setAccessMode] = useState<AccessMode>('open');
+  const [shuffleQuestions, setShuffleQuestions] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(false);
+  const [pools, setPools] = useState<PoolRule[]>([]);
+  const [showCorrectAnswers, setShowCorrectAnswers] = useState(true);
+  const [approvedModules, setApprovedModules] = useState<ModuleCount[]>([]);
+  const [modules, setModules] = useState<string[]>([]);
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
   const examMode = assessmentType === 'exam';
   const [message, setMessage] = useState<string | null>(null);
@@ -107,6 +116,10 @@ export function QuizEditor() {
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
           : String(DEFAULT_EXAM_DURATION_MINUTES),
+      shuffleQuestions: settings.success ? settings.data.shuffleQuestions : false,
+      shuffleOptions: settings.success ? settings.data.shuffleOptions : false,
+      pools: JSON.stringify(settings.success ? settings.data.pools : []),
+      showCorrectAnswers: settings.success ? (settings.data.showCorrectAnswers ?? true) : true,
     };
   }, [quiz]);
   const unsaved =
@@ -114,7 +127,11 @@ export function QuizEditor() {
     (title !== saved.title ||
       assessmentType !== saved.type ||
       accessMode !== saved.access ||
-      (assessmentType === 'exam' && durationMinutes !== saved.duration));
+      (assessmentType === 'exam' && durationMinutes !== saved.duration) ||
+      shuffleQuestions !== saved.shuffleQuestions ||
+      shuffleOptions !== saved.shuffleOptions ||
+      JSON.stringify(pools) !== saved.pools ||
+      showCorrectAnswers !== saved.showCorrectAnswers);
 
   const loadQuiz = useCallback(async () => {
     try {
@@ -124,6 +141,10 @@ export function QuizEditor() {
       const settings = quizSettingsSchema.safeParse(loaded.settings);
       setAssessmentType(settings.success ? assessmentTypeOf(settings.data) : 'live');
       setAccessMode(settings.success ? settings.data.accessMode : 'open');
+      setShuffleQuestions(settings.success ? settings.data.shuffleQuestions : false);
+      setShuffleOptions(settings.success ? settings.data.shuffleOptions : false);
+      setPools(settings.success ? settings.data.pools : []);
+      setShowCorrectAnswers(settings.success ? (settings.data.showCorrectAnswers ?? true) : true);
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
@@ -147,12 +168,40 @@ export function QuizEditor() {
       .then(([approved, pending]) => {
         if (!cancelled) {
           setCounts({ approved: approved.length, pending: pending.length });
+          const byModule = new Map<string, number>();
+          for (const question of approved) {
+            byModule.set(question.topic, (byModule.get(question.topic) ?? 0) + 1);
+          }
+          setApprovedModules(
+            [...byModule.entries()]
+              .map(([name, count]) => ({ name, count }))
+              .sort((first, second) => first.name.localeCompare(second.name)),
+          );
           setCountsLoaded(true);
         }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
           setMessage(describeError(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quizId, refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listTopics(quizId)
+      .then((names) => {
+        if (!cancelled) {
+          setModules(names);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModules([]);
         }
       });
     return () => {
@@ -195,6 +244,13 @@ export function QuizEditor() {
     }
   }
 
+  function handleAssessmentTypeChange(next: AssessmentType) {
+    setAssessmentType(next);
+    setShuffleQuestions(next === 'exam');
+    setShuffleOptions(next === 'exam');
+    setShowCorrectAnswers(next !== 'exam');
+  }
+
   async function handleSaveDetails(event: FormEvent) {
     event.preventDefault();
     await saveDetails();
@@ -211,6 +267,10 @@ export function QuizEditor() {
         durationMinutes: undefined,
         ...settingsForAssessmentType(assessmentType, Number(durationMinutes)),
         accessMode,
+        shuffleQuestions: assessmentType === 'adaptive' ? false : shuffleQuestions,
+        shuffleOptions: examMode ? shuffleOptions : false,
+        pools: assessmentType === 'adaptive' ? [] : pools,
+        showCorrectAnswers,
       },
     });
     if (!parsed.success) {
@@ -318,12 +378,31 @@ export function QuizEditor() {
         <div className="grid items-start gap-6 xl:grid-cols-2">
           <AssessmentTypePicker
             value={assessmentType}
-            onChange={setAssessmentType}
+            onChange={handleAssessmentTypeChange}
             durationMinutes={durationMinutes}
             onDurationChange={setDurationMinutes}
           />
-          <AccessModePicker value={accessMode} onChange={setAccessMode} />
+          <div className="space-y-5">
+            <AccessModePicker value={accessMode} onChange={setAccessMode} />
+            <ResultsOptions
+              assessmentType={assessmentType}
+              showCorrectAnswers={showCorrectAnswers}
+              onChange={setShowCorrectAnswers}
+            />
+          </div>
         </div>
+        {assessmentType !== 'adaptive' && (
+          <DeliveryOptions
+            assessmentType={assessmentType === 'exam' ? 'exam' : 'live'}
+            shuffleQuestions={shuffleQuestions}
+            shuffleOptions={shuffleOptions}
+            pools={pools}
+            modules={approvedModules}
+            onShuffleQuestionsChange={setShuffleQuestions}
+            onShuffleOptionsChange={setShuffleOptions}
+            onPoolsChange={setPools}
+          />
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className={`${ctaDark} ${ctaSize.md}`}>
             Save details
@@ -393,6 +472,7 @@ export function QuizEditor() {
         {addMethod === 'write' && (
           <QuestionForm
             submitLabel="Add question"
+            modules={modules}
             onSubmit={async (input) => {
               await api.createQuestion(quizId, input);
               refreshQuestions();
@@ -440,6 +520,7 @@ export function QuizEditor() {
     >
       <QuestionBank
         compact
+        ordered
         quizId={quizId}
         lockedApproval="pending"
         emptyMessage="Nothing waiting for review"
@@ -459,6 +540,7 @@ export function QuizEditor() {
     >
       <QuestionBank
         compact
+        ordered
         quizId={quizId}
         lockedApproval="approved"
         emptyMessage="No approved questions yet"

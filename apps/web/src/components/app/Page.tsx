@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Frame, RULE } from '../landing/frame';
 import { AppIcon, ICONS } from './icons';
+import { useInShell } from './shellContext';
 
 // The shape every app page shares, after the landing page: a header on the woven texture of
 // the hero, then the page itself on white, both inside the same dashed rails.
@@ -9,6 +10,11 @@ import { AppIcon, ICONS } from './icons';
 // Full-width bands (the header texture, the figures strips, the white body) run under the
 // floating sidebar to the left edge of the screen, so the page reads as one surface behind it.
 export const BLEED = 'lg:-ml-[16.5rem] lg:pl-[16.5rem]';
+
+// The same, but only where the sidebar is, so pages outside the app keep their own layout.
+function useBleed(): string {
+  return useInShell() ? BLEED : '';
+}
 
 export function PageHeader({
   title,
@@ -25,14 +31,22 @@ export function PageHeader({
   // Anything under the title row, such as a notice.
   children?: ReactNode;
 }) {
+  const bleed = useBleed();
+  // Beside the sidebar there is only room for the back link; otherwise the floating bar is above.
+  const inShell = useInShell();
+  const top = inShell ? 'pt-14 sm:pt-16' : back ? 'pt-36 sm:pt-40' : 'pt-28 sm:pt-32';
   return (
-    <div className={`texture-weave border-b ${RULE} ${BLEED}`}>
-      <Frame className="pt-14 pb-8 sm:pt-16">
+    <div className={`texture-weave border-b ${RULE} ${bleed}`}>
+      <Frame className={`pb-8 ${top}`}>
         {back && (
           <Link
             to={back.to}
             aria-label={`Back to ${back.label}`}
-            className="group absolute top-4 left-4 inline-flex h-8 max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-[0.7rem] pr-3 pl-2 text-sm text-night/55 transition-colors duration-200 ease-soft hover:bg-night/[0.05] hover:text-night sm:top-5 sm:left-8"
+            className={`group absolute top-4 left-4 inline-flex h-8 max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-[0.7rem] pr-3 pl-2 text-sm text-night/55 transition-colors duration-200 ease-soft hover:bg-night/[0.05] hover:text-night ${
+              inShell
+                ? 'top-4 left-4 sm:top-5 sm:left-8'
+                : 'top-[5.25rem] left-4 sm:top-24 sm:left-8'
+            }`}
           >
             <AppIcon
               size={15}
@@ -69,8 +83,9 @@ export function PageBody({
   children: ReactNode;
   className?: string;
 }) {
+  const bleed = useBleed();
   return (
-    <div className={`flex flex-1 flex-col bg-white ${BLEED}`}>
+    <div className={`flex flex-1 flex-col bg-white ${bleed}`}>
       <Frame flush className={`flex flex-1 flex-col pb-20 ${className}`}>
         {children}
       </Frame>

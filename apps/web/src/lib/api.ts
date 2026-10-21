@@ -2,6 +2,8 @@ import {
   analyticsSnapshotSchema,
   apiErrorSchema,
   approveQuestionsResultSchema,
+  questionMoveResultSchema,
+  type QuestionMoveResult,
   proctorTimelineResponseSchema,
   releaseResultsResponseSchema,
   csvImportResultSchema,
@@ -55,6 +57,13 @@ import {
   type RosterResponse,
   type RosterStudentInput,
   type SessionStartInput,
+  studentResultSchema,
+  type StudentResult,
+  groupDetailSchema,
+  groupListSchema,
+  type GroupDetail,
+  type GroupSaveInput,
+  type GroupSummary,
 } from '@quizup/shared';
 import { webEnv } from './env';
 import { supabase } from './supabase';
@@ -121,8 +130,8 @@ async function requestJson<Parsed>(
   return parser.parse(await response.json());
 }
 
-async function requestNoContent(path: string, method: string): Promise<void> {
-  await sendRequest(path, method);
+async function requestNoContent(path: string, method: string, body?: unknown): Promise<void> {
+  await sendRequest(path, method, body);
 }
 
 function buildQueryString(query: Record<string, string | number | undefined>): string {
@@ -158,6 +167,10 @@ export const api = {
     requestNoContent(`/questions/${questionId}`, 'DELETE'),
   generateQuestions: (quizId: string, input: GenerateQuestionsInput): Promise<Question[]> =>
     requestJson(`/quizzes/${quizId}/generate-questions`, 'POST', questionListSchema, input),
+  reorderQuestions: (quizId: string, questionIds: string[]): Promise<void> =>
+    requestNoContent(`/quizzes/${quizId}/questions/order`, 'POST', { questionIds }),
+  moveQuestions: (questionIds: string[], topic: string): Promise<QuestionMoveResult> =>
+    requestJson('/questions/move', 'POST', questionMoveResultSchema, { questionIds, topic }),
   approveQuestion: (questionId: string): Promise<Question> =>
     requestJson(`/questions/${questionId}/approve`, 'POST', questionSchema),
   unapproveQuestion: (questionId: string): Promise<Question> =>
@@ -179,6 +192,14 @@ export const api = {
   listQuizSessions: (quizId: string): Promise<QuizSessionHistoryRow[]> =>
     requestJson(`/quizzes/${quizId}/sessions`, 'GET', quizSessionHistorySchema),
   getMyResults: (): Promise<MyResultRow[]> => requestJson('/me/results', 'GET', myResultsSchema),
+  getMyResult: (sessionId: string): Promise<StudentResult> =>
+    requestJson(`/me/results/${sessionId}`, 'GET', studentResultSchema),
+  getStudentResult: (sessionId: string, participantId: string): Promise<StudentResult> =>
+    requestJson(
+      `/sessions/${sessionId}/participants/${participantId}/result`,
+      'GET',
+      studentResultSchema,
+    ),
   getQuizActivity: (): Promise<QuizActivity[]> =>
     requestJson('/me/quiz-activity', 'GET', quizActivityListSchema),
   getSessionFeedback: (sessionId: string): Promise<SessionFeedbackResponse> =>
@@ -224,6 +245,14 @@ export const api = {
       rosterEmailTestResultSchema,
       payload,
     ),
+  listGroups: (): Promise<GroupSummary[]> => requestJson('/groups', 'GET', groupListSchema),
+  getGroup: (groupId: string): Promise<GroupDetail> =>
+    requestJson(`/groups/${groupId}`, 'GET', groupDetailSchema),
+  createGroup: (input: GroupSaveInput): Promise<GroupDetail> =>
+    requestJson('/groups', 'POST', groupDetailSchema, input),
+  updateGroup: (groupId: string, input: GroupSaveInput): Promise<GroupDetail> =>
+    requestJson(`/groups/${groupId}`, 'PUT', groupDetailSchema, input),
+  deleteGroup: (groupId: string): Promise<void> => requestNoContent(`/groups/${groupId}`, 'DELETE'),
   notifyHostAccess: async (email: string): Promise<void> => {
     await requestJson('/admin/host-access/notify', 'POST', hostAccessSentSchema, { email });
   },

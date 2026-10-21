@@ -17,6 +17,7 @@ export interface ShellItem {
 
 export const SHELL_ICONS = {
   quizzes: <AppIcon>{ICONS.dashboard}</AppIcon>,
+  students: <AppIcon>{ICONS.people}</AppIcon>,
   questions: <AppIcon>{ICONS.library}</AppIcon>,
   results: <AppIcon>{ICONS.results}</AppIcon>,
   admin: <AppIcon>{ICONS.shield}</AppIcon>,

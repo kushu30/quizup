@@ -1,4 +1,4 @@
-import { useInShell } from './app/shellContext';
+import { useModernLook } from './app/shellContext';
 
 interface QuestionTimerProps {
   serverNowMs: number;
@@ -9,7 +9,7 @@ interface QuestionTimerProps {
 const URGENT_FRACTION = 0.25;
 
 export function QuestionTimer({ serverNowMs, startsAtServerMs, durationMs }: QuestionTimerProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   const untilStartMs = startsAtServerMs - serverNowMs;
   if (untilStartMs > 0) {
     return (
@@ -18,8 +18,10 @@ export function QuestionTimer({ serverNowMs, startsAtServerMs, durationMs }: Que
           Get ready
         </p>
         <p
-          className={`font-bold tabular-nums ${
-            modern ? 'font-geist-mono text-4xl tracking-tight' : 'text-display'
+          className={`tabular-nums ${
+            modern
+              ? 'font-geist-mono text-4xl font-medium tracking-tight'
+              : 'text-display font-bold'
           }`}
         >
           {Math.ceil(untilStartMs / 1000)}
@@ -37,8 +39,8 @@ export function QuestionTimer({ serverNowMs, startsAtServerMs, durationMs }: Que
     <div className="space-y-2">
       <p
         aria-hidden="true"
-        className={`text-center font-bold tabular-nums ${
-          modern ? 'font-geist-mono text-4xl tracking-tight' : 'text-hero'
+        className={`text-center tabular-nums ${
+          modern ? 'font-geist-mono text-4xl font-medium tracking-tight' : 'text-hero font-bold'
         } ${urgent ? (modern ? 'text-alert' : 'text-marker-ink') : ''}`}
       >
         {secondsLeft}

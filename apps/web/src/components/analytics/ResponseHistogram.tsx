@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useInShell } from '../app/shellContext';
+import { useModernLook } from '../app/shellContext';
 import { Tooltip } from '../ui/Tooltip';
 
 interface ResponseHistogramProps {
@@ -26,7 +26,7 @@ export function ResponseHistogram({
   sessionCounts,
   currentLabel,
 }: ResponseHistogramProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   const [scope, setScope] = useState<'current' | 'session'>('current');
   const counts = scope === 'current' ? currentCounts : sessionCounts;
   const total = counts.reduce((sum, count) => sum + count, 0);
@@ -71,7 +71,6 @@ export function ResponseHistogram({
         >
           {counts.map((count, index) => {
             // Denser dots for busier buckets, but never solid, so the bars keep their texture.
-            const level = count === 0 ? 0 : Math.max(1, Math.ceil((count / tallest) * 4));
             return (
               <Tooltip
                 key={BUCKET_LABELS[index]}
@@ -84,14 +83,9 @@ export function ResponseHistogram({
                     {count}
                   </span>
                   <div
-                    className="relative w-full"
+                    className="w-full rounded-t-[3px] bg-night/70 transition-colors duration-200 ease-soft group-hover/tip:bg-night"
                     style={{ height: `${(count / tallest) * 100}%`, minHeight: count > 0 ? 3 : 0 }}
-                  >
-                    <span className="absolute inset-x-0 top-0 h-0.5 bg-night/70" />
-                    <span
-                      className={`dither dither-${Math.max(level, 1)} absolute inset-0 text-night/70`}
-                    />
-                  </div>
+                  />
                 </div>
               </Tooltip>
             );

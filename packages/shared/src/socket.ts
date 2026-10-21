@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { accessModeSchema } from './adaptive.js';
 import { brandingSchema } from './branding.js';
 import { clientHintsSchema, deviceInfoSchema } from './deviceInfo.js';
+import { questionImagePayloadShape } from './questionImage.js';
 import type { FeedbackSubmitPayload } from './feedback.js';
 import type { AnalyticsSnapshot } from './analytics.js';
 import type {
@@ -111,6 +112,7 @@ export type ParticipantPresence = z.infer<typeof participantPresenceSchema>;
 export const questionShowPayloadSchema = z.object({
   questionId: z.string().uuid(),
   stem: z.string(),
+  ...questionImagePayloadShape,
   options: z.array(z.string()).length(QUESTION_OPTION_COUNT),
   startsAtServerMs: z.number(),
   durationMs: z.number().int().positive(),

@@ -12,3 +12,13 @@ export function useInShell(): boolean {
 export function usePageTop(): string {
   return useInShell() ? 'pt-8 sm:pt-10' : 'pt-32 sm:pt-36';
 }
+
+// The redesigned look of the shared building blocks (panels, tables, buttons, notices, fields).
+// The whole app turns it on from the layout; the sidebar shell is a separate thing.
+export const ModernLookContext = createContext(false);
+
+export function useModernLook(): boolean {
+  const modern = useContext(ModernLookContext);
+  const inShell = useContext(InShellContext);
+  return modern || inShell;
+}

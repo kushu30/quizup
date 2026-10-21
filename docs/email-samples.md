@@ -1,6 +1,6 @@
 # What QuizUp emails, and when
 
-These are the real messages, produced by the same code the server uses, filled with sample names. Each one is shown as plain text (what appears in mail apps that do not show formatting). The formatted version of each is in [docs/email-previews](email-previews/); open the .html files in a browser (they load the QuizUp logos from this repository, and real emails load them from your web app at /email/).
+These are the real messages, produced by the same code the server uses, filled with sample names. Each one is shown as plain text (what appears in mail apps that do not show formatting).
 
 QuizUp sends exactly two kinds of email, and only when a person presses a button. It never sends on its own, never emails a list of tokens to the host, and never sends anything unless email is set up (see "Email (tokens and host access)" in the README).
 
@@ -42,8 +42,6 @@ Create an account: https://quizup-khaki.vercel.app/login?mode=sign-up&email=asha
 Sent on behalf of Dayananda Sagar College of Engineering using QuizUp.
 ```
 
-Formatted version: [token-with-institution.html](email-previews/token-with-institution.html)
-
 ## 2. An invited student gets their access token (quiz without branding)
 
 **Sent when:** Same dialog; the quiz has no institution, so only the QuizUp logo is shown. This student already has a QuizUp account, so the mail asks them to sign in before joining instead of inviting them to create one.
@@ -71,8 +69,6 @@ Sign in: https://quizup-khaki.vercel.app/login?email=ben.cole%40example.com
 
 Sent by QuizUp.
 ```
-
-Formatted version: [token-no-institution.html](email-previews/token-no-institution.html)
 
 ## 3. A bright brand colour stays readable
 
@@ -102,8 +98,6 @@ Create an account: https://quizup-khaki.vercel.app/login?mode=sign-up&email=priy
 Sent on behalf of Lincoln High School using QuizUp.
 ```
 
-Formatted version: [token-bright-brand.html](email-previews/token-bright-brand.html)
-
 ## 4. The host wrote their own subject and message
 
 **Sent when:** In the dialog the host replaced the default wording using placeholders. Each student gets their own values.
@@ -130,8 +124,6 @@ This link and token are personal to you. Please do not share them. Each admits o
 Sent on behalf of Dayananda Sagar College of Engineering using QuizUp.
 ```
 
-Formatted version: [token-host-wording.html](email-previews/token-host-wording.html)
-
 ## 5. A new host, who has no account yet, is asked to create one
 
 **Sent when:** An admin adds meera.iyer@school.org to the host allowlist and QuizUp finds no account for that address. The button opens the sign-up page with the address filled in and locked; the new host chooses a name and a password and lands on the host dashboard. Creating the account is required to use host access.
@@ -155,8 +147,6 @@ If you were not expecting this, you can ignore this email.
 Questions: kushagra.shukla2005@gmail.com
 ```
 
-Formatted version: [host-access-new.html](email-previews/host-access-new.html)
-
 ## 6. An existing user who is given host access is asked to sign in
 
 **Sent when:** An admin adds arjun.mehta@school.org, who already has a QuizUp account (for example as a student). The account is upgraded to host straight away and the button opens sign-in with the address filled in. The admin can also press Email again next to an address.
@@ -179,8 +169,6 @@ If you were not expecting this, you can ignore this email.
 
 Questions: kushagra.shukla2005@gmail.com
 ```
-
-Formatted version: [host-access-existing.html](email-previews/host-access-existing.html)
 
 ## Edge cases
 

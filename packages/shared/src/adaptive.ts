@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { brandingSchema } from './branding.js';
+import { poolRulesSchema } from './delivery.js';
 
 export const DEFAULT_MAX_ADAPTIVE_ROUNDS = 10;
 export const MIN_ADAPTIVE_ROUNDS = 1;
@@ -26,6 +27,10 @@ const quizSettingsBaseSchema = z.object({
   adaptive: z.boolean().default(false),
   accessMode: accessModeSchema.default('open'),
   adaptiveRounds: z.number().int().min(MIN_ADAPTIVE_ROUNDS).max(MAX_ADAPTIVE_ROUNDS).optional(),
+  shuffleQuestions: z.boolean().optional(),
+  shuffleOptions: z.boolean().optional(),
+  pools: poolRulesSchema.default([]),
+  showCorrectAnswers: z.boolean().optional(),
   branding: brandingSchema.optional(),
 });
 
@@ -39,11 +44,35 @@ export const quizSettingsSchema = quizSettingsBaseSchema
       });
     }
   })
-  .transform((settings) =>
-    settings.mode === 'exam'
-      ? { ...settings, adaptive: false, adaptiveRounds: undefined }
-      : { ...settings, durationMinutes: undefined },
-  );
+  .transform((settings) => {
+    if (settings.mode === 'exam') {
+      return {
+        ...settings,
+        adaptive: false,
+        adaptiveRounds: undefined,
+        shuffleQuestions: settings.shuffleQuestions ?? true,
+        shuffleOptions: settings.shuffleOptions ?? true,
+        showCorrectAnswers: settings.showCorrectAnswers ?? false,
+      };
+    }
+    if (settings.adaptive) {
+      return {
+        ...settings,
+        durationMinutes: undefined,
+        shuffleQuestions: false,
+        shuffleOptions: false,
+        pools: [],
+        showCorrectAnswers: settings.showCorrectAnswers ?? true,
+      };
+    }
+    return {
+      ...settings,
+      durationMinutes: undefined,
+      shuffleQuestions: settings.shuffleQuestions ?? false,
+      shuffleOptions: false,
+      showCorrectAnswers: settings.showCorrectAnswers ?? true,
+    };
+  });
 export type QuizSettings = z.output<typeof quizSettingsSchema>;
 export type QuizSettingsInput = z.input<typeof quizSettingsSchema>;
 

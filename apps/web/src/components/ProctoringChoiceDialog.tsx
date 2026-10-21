@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { useInShell } from './app/shellContext';
+import { useModernLook } from './app/shellContext';
 import { ctaLight, ctaSize } from './landing/cta';
 import { Button } from './ui';
 
@@ -16,7 +16,7 @@ export function ProctoringChoiceDialog({
   onChoose,
   onCancel,
 }: ProctoringChoiceDialogProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   const titleId = useId();
   const bodyId = useId();
   const withoutRef = useRef<HTMLButtonElement>(null);

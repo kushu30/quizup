@@ -1,5 +1,5 @@
 import type { LeaderboardEntry } from '@quizup/shared';
-import { useInShell } from './app/shellContext';
+import { useModernLook } from './app/shellContext';
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
@@ -14,7 +14,7 @@ const PODIUM = [
 ];
 
 export function Leaderboard({ entries, highlightParticipantId }: LeaderboardProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   if (entries.length === 0) {
     return <p className={modern ? 'text-night/55' : 'text-muted'}>No scores yet</p>;
   }

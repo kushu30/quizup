@@ -10,11 +10,12 @@ import { SiteHeader, type NavItem } from './landing/SiteHeader';
 import { AppShell, SHELL_ICONS, type ShellItem } from './app/AppShell';
 import { Texture } from './landing/Texture';
 import { SystemStatus } from './SystemStatus';
-import { buttonClasses } from './ui';
+import { ModernLookContext } from './app/shellContext';
+import { ctaLight, ctaQuiet, ctaSize } from './landing/cta';
 
 const WIDE_PREFIXES = ['/host', '/sessions/', '/admin'];
 const AUTH_PATHS = ['/login'];
-const APP_PATHS = ['/host', '/host/questions', '/admin', '/me/results'];
+const APP_PATHS = ['/host', '/host/questions', '/host/groups', '/admin', '/me/results'];
 
 // The quiz editor is a workspace of its own: its sidebar replaces the site header and footer.
 // The pages under it, such as history, are not part of it.
@@ -27,7 +28,9 @@ function isSubPagePath(pathname: string): boolean {
   return (
     /^\/host\/quizzes\/[^/]+\/history$/.test(pathname) ||
     /^\/host\/sessions\/[^/]+$/.test(pathname) ||
-    /^\/sessions\/[^/]+\/summary$/.test(pathname)
+    /^\/sessions\/[^/]+\/summary$/.test(pathname) ||
+    /^\/sessions\/[^/]+\/students\/[^/]+$/.test(pathname) ||
+    /^\/me\/results\/[^/]+$/.test(pathname)
   );
 }
 
@@ -39,23 +42,24 @@ function isWidePath(pathname: string): boolean {
   return WIDE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
 }
 
-function desktopLinkClass({ isActive }: { isActive: boolean }) {
-  return `inline-flex h-16 items-center border-b-2 text-sm font-medium transition-colors ${
-    isActive ? 'border-board text-ink' : 'border-transparent text-muted hover:text-ink'
+function barLinkClass({ isActive }: { isActive: boolean }) {
+  return `inline-flex h-9 items-center rounded-[0.7rem] px-3 text-sm font-medium transition-colors duration-200 ease-soft ${
+    isActive ? 'bg-night/[0.06] text-night' : 'text-night/60 hover:bg-night/[0.04] hover:text-night'
   }`;
 }
 
-function mobileLinkClass({ isActive }: { isActive: boolean }) {
-  return `block rounded-md px-3 py-2.5 text-base font-medium ${
-    isActive ? 'bg-board-soft text-board' : 'text-ink hover:bg-paper'
-  }`;
+// Students taking a quiz or exam: the page is only theirs, so there is nothing to leave by.
+function isPlayPath(pathname: string): boolean {
+  return pathname.startsWith('/play/');
 }
 
 export function Layout() {
   return (
-    <BrandProvider>
-      <LayoutFrame />
-    </BrandProvider>
+    <ModernLookContext.Provider value>
+      <BrandProvider>
+        <LayoutFrame />
+      </BrandProvider>
+    </ModernLookContext.Provider>
   );
 }
 
@@ -73,19 +77,29 @@ function LayoutFrame() {
           ? 'workspace'
           : APP_PATHS.includes(location.pathname) || isSubPagePath(location.pathname)
             ? 'app'
-            : isWidePath(location.pathname)
-              ? 'wide'
-              : 'focused';
+            : isPlayPath(location.pathname)
+              ? 'play'
+              : isWidePath(location.pathname)
+                ? 'wide'
+                : 'focused';
   const { branding: brand, hero } = useBrand();
   const branded = hasVisibleBrand(brand);
   const focus = useFocus();
   // `modern` pages wear the redesigned chrome; `landing` is the one with the full marketing footer.
   const bare =
-    layout === 'landing' || layout === 'auth' || layout === 'app' || layout === 'workspace';
+    layout === 'landing' ||
+    layout === 'auth' ||
+    layout === 'app' ||
+    layout === 'workspace' ||
+    layout === 'play';
   const modern = bare && !branded;
   const landing = layout === 'landing' && modern;
   const workspace = layout === 'workspace' && modern;
-  const stacked = layout === 'auth' || layout === 'app' || layout === 'workspace';
+  const stacked =
+    layout === 'auth' || layout === 'app' || layout === 'workspace' || layout === 'play';
+  // The floating site header belongs to the pages that browse; students playing get a slim bar.
+  const floating = modern && !focus && layout !== 'play';
+  const slim = focus;
   // Hosts and admins work in the app shell, with a sidebar instead of the floating header.
   // Students keep the site header, since their results are the only page of theirs here.
   const shell =
@@ -95,10 +109,19 @@ function LayoutFrame() {
     setMenuOpen(false);
   }, [location.pathname]);
 
+  function isItemActive(item: NavItem, isActive: boolean): boolean {
+    return isActive && !(item.yieldsTo && location.pathname.startsWith(item.yieldsTo));
+  }
+
   const items: NavItem[] = [
     // Students join quizzes, signed in or not. Hosts and admins run them instead.
     ...(canHost ? [] : [{ to: '/join', label: 'Join a quiz' }]),
-    ...(canHost ? [{ to: '/host', label: 'Host' }] : []),
+    ...(canHost
+      ? [
+          { to: '/host', label: 'Host', yieldsTo: '/host/groups' },
+          { to: '/host/groups', label: 'Students' },
+        ]
+      : []),
     ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
     ...(session ? [{ to: '/me/results', label: 'My results' }] : []),
   ];
@@ -113,6 +136,12 @@ function LayoutFrame() {
         path.startsWith('/host/quizzes/') ||
         path.startsWith('/host/sessions/') ||
         path.startsWith('/sessions/'),
+    },
+    {
+      to: '/host/groups',
+      label: 'Students',
+      icon: SHELL_ICONS.students,
+      match: (path) => path === '/host/groups',
     },
     {
       to: '/host/questions',
@@ -166,9 +195,7 @@ function LayoutFrame() {
   return (
     <div
       data-brand={branded ? 'true' : undefined}
-      className={`flex min-h-screen flex-col ${
-        modern ? 'bg-canvas font-geist text-night' : 'bg-paper text-ink'
-      }`}
+      className="flex min-h-screen flex-col bg-canvas font-geist text-night"
       style={
         branded && brand.brandColor
           ? { backgroundColor: `color-mix(in srgb, ${brand.brandColor} 5%, #f7f8fa)` }
@@ -184,24 +211,24 @@ function LayoutFrame() {
       {!workspace && !shell && (
         <header
           className={
-            modern && !focus
+            floating
               ? 'sticky top-0 z-40 -mb-[4.25rem] h-[4.25rem] px-4 pt-3 sm:-mb-[4.5rem] sm:h-[4.5rem] sm:pt-4'
-              : 'border-b border-rule bg-surface'
+              : 'sticky top-0 z-40 border-b border-dashed border-night/15 bg-white/80 backdrop-blur-md'
           }
         >
           {branded && (
             <div
               data-testid="brand-stripe"
               aria-hidden="true"
-              className="h-1.5"
+              className="h-1"
               style={{ backgroundColor: brand.brandColor ?? '#1e5446' }}
             />
           )}
-          {focus ? (
-            <div className="mx-auto flex h-12 max-w-6xl items-center gap-2.5 px-4 text-base font-bold tracking-tight">
+          {slim ? (
+            <div className="mx-auto flex min-h-12 max-w-6xl items-center gap-2.5 px-4 py-1.5">
               {lockup}
             </div>
-          ) : modern ? (
+          ) : floating ? (
             <SiteHeader
               page={landing ? 'landing' : layout === 'app' ? 'app' : 'auth'}
               items={items}
@@ -213,19 +240,21 @@ function LayoutFrame() {
             />
           ) : (
             <>
-              <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4">
-                <Link
-                  to="/"
-                  className="flex min-w-0 items-center gap-2.5 rounded-md text-lg font-bold tracking-tight"
-                >
+              <div className="mx-auto flex min-h-14 max-w-6xl items-center justify-between gap-4 px-4 py-1.5">
+                <Link to="/" className="flex min-w-0 items-center gap-2.5 rounded-md">
                   {lockup}
                 </Link>
 
                 <nav aria-label="Primary" className="hidden flex-1 md:block">
-                  <ul className="flex items-center gap-7">
+                  <ul className="flex items-center justify-end gap-1">
                     {items.map((item) => (
                       <li key={item.to}>
-                        <NavLink to={item.to} className={desktopLinkClass}>
+                        <NavLink
+                          to={item.to}
+                          className={({ isActive }) =>
+                            barLinkClass({ isActive: isItemActive(item, isActive) })
+                          }
+                        >
                           {item.label}
                         </NavLink>
                       </li>
@@ -238,12 +267,12 @@ function LayoutFrame() {
                     <button
                       type="button"
                       onClick={() => void signOut()}
-                      className={buttonClasses('ghost', 'sm')}
+                      className={`${ctaQuiet} ${ctaSize.sm}`}
                     >
                       Sign out
                     </button>
                   ) : (
-                    <Link to="/login" className={buttonClasses('secondary', 'sm')}>
+                    <Link to="/login" className={`${ctaLight} ${ctaSize.sm}`}>
                       Log in
                     </Link>
                   )}
@@ -254,7 +283,7 @@ function LayoutFrame() {
                   aria-expanded={menuOpen}
                   aria-controls={menuId}
                   onClick={() => setMenuOpen((open) => !open)}
-                  className={`${buttonClasses('secondary', 'sm')} md:hidden`}
+                  className={`${ctaLight} ${ctaSize.sm} md:hidden`}
                 >
                   Menu
                 </button>
@@ -263,14 +292,16 @@ function LayoutFrame() {
               <div
                 id={menuId}
                 hidden={!menuOpen}
-                className="border-t border-rule px-4 pt-2 pb-4 md:hidden"
+                className="border-t border-dashed border-night/15 px-4 pt-2 pb-4 md:hidden"
               >
                 <ul className="space-y-1">
                   {items.map((item) => (
                     <li key={item.to}>
                       <NavLink
                         to={item.to}
-                        className={mobileLinkClass}
+                        className={({ isActive }) =>
+                          `${barLinkClass({ isActive: isItemActive(item, isActive) })} flex h-11 w-full`
+                        }
                         onClick={() => setMenuOpen(false)}
                       >
                         {item.label}
@@ -278,12 +309,12 @@ function LayoutFrame() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 border-t border-rule pt-3">
+                <div className="mt-3 border-t border-dashed border-night/15 pt-3">
                   {session ? (
                     <button
                       type="button"
                       onClick={() => void signOut()}
-                      className={`${buttonClasses('secondary', 'md')} w-full`}
+                      className={`${ctaLight} ${ctaSize.md} w-full`}
                     >
                       Sign out
                     </button>
@@ -291,7 +322,7 @@ function LayoutFrame() {
                     <Link
                       to="/login"
                       onClick={() => setMenuOpen(false)}
-                      className={`${buttonClasses('secondary', 'md')} w-full`}
+                      className={`${ctaLight} ${ctaSize.md} w-full`}
                     >
                       Log in
                     </Link>
@@ -316,27 +347,7 @@ function LayoutFrame() {
       )}
 
       {!focus && !shell && landing && <LandingFooter items={items} signedIn={Boolean(session)} />}
-      {!focus && modern && !landing && !workspace && !shell && <CompactFooter />}
-      {!focus && !modern && (
-        <footer className="border-t border-rule bg-surface">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-6">
-            <div className="space-y-2">
-              <QuizUpLogo size={22} />
-              <p className="text-sm text-muted">Free and open source. Host it yourself.</p>
-              <p className="text-sm text-muted">
-                Need host access? Email{' '}
-                <a
-                  href={HOST_ACCESS_MAILTO}
-                  className="font-medium text-board underline underline-offset-4"
-                >
-                  {HOST_ACCESS_CONTACT_EMAIL}
-                </a>
-              </p>
-            </div>
-            <SystemStatus />
-          </div>
-        </footer>
-      )}
+      {!focus && !landing && !workspace && !shell && layout !== 'play' && <CompactFooter />}
     </div>
   );
 }

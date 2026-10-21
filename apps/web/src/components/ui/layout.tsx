@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useInShell } from '../app/shellContext';
+import { useModernLook } from '../app/shellContext';
 
 export function PageHeader({
   title,
@@ -51,7 +51,7 @@ export function Panel({
 }) {
   const headingId = useId();
   const Heading = level === 2 ? 'h2' : 'h3';
-  const modern = useInShell();
+  const modern = useModernLook();
   const frame = (
     modern
       ? `rounded-2xl bg-white p-4 shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_1px_3px_rgba(17,16,20,0.05)] sm:p-5 ${className}`
@@ -95,7 +95,7 @@ const TABLE_STYLES =
   'relative overflow-x-auto rounded-lg border border-rule bg-surface [&_table]:w-full [&_table]:text-left [&_table]:text-sm [&_thead]:bg-paper [&_th]:px-3 [&_th]:py-2.5 [&_th]:font-medium [&_th]:text-muted [&_td]:px-3 [&_td]:py-2.5 [&_tbody_tr]:border-t [&_tbody_tr]:border-rule';
 
 export function TableFrame({ label, children }: { label?: string; children: ReactNode }) {
-  const styles = useInShell() ? MODERN_TABLE_STYLES : TABLE_STYLES;
+  const styles = useModernLook() ? MODERN_TABLE_STYLES : TABLE_STYLES;
   return label ? (
     <div role="region" aria-label={label} tabIndex={0} className={styles}>
       {children}

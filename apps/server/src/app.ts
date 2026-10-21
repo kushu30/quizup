@@ -20,6 +20,9 @@ import { createGenerationRouter } from './routes/generation.js';
 import { questionsRouter } from './routes/questions.js';
 import { quizzesRouter } from './routes/quizzes.js';
 import { createSessionsRouter } from './routes/sessions.js';
+import { supabaseGroupRepository, type GroupRepository } from './groups/groupRepository.js';
+import { createGroupsRouter } from './groups/groupsRouter.js';
+import { StudentResultService } from './results/studentResultService.js';
 import { createHistoryRouter } from './history/historyRouter.js';
 import { createJoinInfoRouter } from './joinInfo/joinInfoRouter.js';
 import { supabaseAccounts, type AccountDirectory } from './mail/accounts.js';
@@ -41,6 +44,7 @@ export interface AppDependencies {
   appUrl?: string;
   hostAllowlist?: HostAllowlistLookup;
   accounts?: AccountDirectory;
+  groupRepository?: GroupRepository;
 }
 
 export function createApp(dependencies: AppDependencies) {
@@ -75,7 +79,22 @@ export function createApp(dependencies: AppDependencies) {
     }),
   );
   app.use(createJoinInfoRouter({ engine: dependencies.engine }));
-  app.use(createHistoryRouter({ engine: dependencies.engine, verifier: dependencies.verifier }));
+  const analytics = new AnalyticsService(dependencies.engine);
+  const studentResults = new StudentResultService(dependencies.engine, analytics);
+  app.use(
+    createHistoryRouter({
+      engine: dependencies.engine,
+      verifier: dependencies.verifier,
+      studentResults,
+    }),
+  );
+  app.use(
+    '/groups',
+    createGroupsRouter({
+      verifier: dependencies.verifier,
+      repository: dependencies.groupRepository ?? supabaseGroupRepository,
+    }),
+  );
   app.use('/quizzes', quizzesRouter);
   app.use('/questions', questionsRouter);
   app.use(
@@ -93,7 +112,8 @@ export function createApp(dependencies: AppDependencies) {
     createSessionsRouter({
       engine: dependencies.engine,
       verifier: dependencies.verifier,
-      analytics: new AnalyticsService(dependencies.engine),
+      analytics,
+      studentResults,
       exam: dependencies.exam,
       mailer,
       appUrl,

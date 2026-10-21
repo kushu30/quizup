@@ -8,7 +8,8 @@ import {
   PROCTOR_COUNTED_TYPES,
   PROCTOR_FLUSH_INTERVAL_MS,
   PROCTOR_LATE_AFTER_MS,
-  buildExamOrders,
+  buildAttemptOrders,
+  perStudentQuestionCount,
   displayedToOriginalIndex,
   emptyProctorCounts,
   originalToDisplayedIndex,
@@ -27,6 +28,7 @@ import {
   type ProctorEventRecord,
   type ProctorParticipantTimeline,
   type ProctorRecordType,
+  questionImageOf,
 } from '@quizup/shared';
 import type { AnalyticsAccess } from '../analytics/analyticsService.js';
 import type { LiveEngine } from '../live/engine.js';
@@ -216,6 +218,7 @@ export class ExamService implements ExamHooks {
         {
           questionId,
           stem: question.stem,
+          ...questionImageOf(question),
           options: optionOrder.map((originalIndex) => question.options[originalIndex] ?? ''),
         },
       ];
@@ -248,7 +251,9 @@ export class ExamService implements ExamHooks {
           displayName: participant.displayName,
           status: !entry ? 'not_started' : submitted ? 'submitted' : 'in_progress',
           answered: entry?.answers.size ?? 0,
-          totalQuestions: context.questions.length,
+          totalQuestions: entry
+            ? entry.attempt.questionOrder.length
+            : perStudentQuestionCount(context.questions, context.delivery.pools),
           startedAtServerMs: entry?.attempt.startedAtMs ?? null,
           deadlineAtServerMs: entry?.attempt.deadlineAtMs ?? null,
           proctorEventCount: entry
@@ -334,10 +339,7 @@ export class ExamService implements ExamHooks {
 
     const startedAtMs = this.now();
     const shuffleSeed = this.randomSeed();
-    const orders = buildExamOrders(
-      shuffleSeed,
-      context.questions.map((question) => question.id),
-    );
+    const orders = buildAttemptOrders(shuffleSeed, context.questions, context.delivery);
     const stored = await this.repository.createExamAttempt({
       id: randomUUID(),
       sessionId: reference.sessionId,
@@ -588,7 +590,7 @@ export class ExamService implements ExamHooks {
       results: {
         score: correctCount * EXAM_POINTS_PER_QUESTION,
         correctCount,
-        total: context.questions.length,
+        total: entry.attempt.questionOrder.length,
         questions,
       },
     };

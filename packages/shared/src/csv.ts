@@ -91,7 +91,9 @@ export function parseQuestionsCsv(text: string): ParsedQuestionsCsv {
   }
 
   const headers = headerRecord.map((header) => header.trim().toLowerCase());
-  const missingColumns = QUESTION_CSV_COLUMNS.filter((column) => !headers.includes(column));
+  const missingColumns = QUESTION_CSV_COLUMNS.filter(
+    (column) => column !== 'topic' && !headers.includes(column),
+  );
   if (missingColumns.length > 0) {
     return {
       questions: [],

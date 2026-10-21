@@ -25,6 +25,7 @@ import { StudentRoster } from '../components/StudentRoster';
 import { BLEED, PageBody, PageHeader } from '../components/app/Page';
 import { AuthNotice } from '../components/landing/AuthField';
 import { ctaLight, ctaPrimary, ctaSize } from '../components/landing/cta';
+import { QuestionImage } from '../components/QuestionImage';
 import { Texture } from '../components/landing/Texture';
 import { Frame, RULE } from '../components/landing/frame';
 import { Button, PageLoader, Panel, Tooltip } from '../components/ui';
@@ -545,6 +546,11 @@ export function HostConsole() {
                 >
                   {question.stem}
                 </h2>
+                <QuestionImage
+                  imageUrl={question.imageUrl}
+                  imageAlt={question.imageAlt}
+                  className="mx-5 mt-3 max-h-48"
+                />
                 <ul className="grid gap-2 px-5 pt-4 pb-5 sm:grid-cols-2">
                   {question.options.map((option, optionIndex) => {
                     const optionCounts = room.lastResult?.optionCounts ?? null;
@@ -569,8 +575,8 @@ export function HostConsole() {
                         {room.lastResult && (
                           <span
                             aria-hidden="true"
-                            className={`dither dither-4 absolute bottom-0 left-0 h-1 transition-[width] duration-500 ease-soft ${
-                              isCorrect ? 'text-accent-600' : 'text-night/45'
+                            className={`absolute bottom-0 left-0 h-1 transition-[width] duration-500 ease-soft ${
+                              isCorrect ? 'bg-accent-500' : 'bg-night/30'
                             }`}
                             style={{ width: `${share}%` }}
                           />
@@ -878,7 +884,7 @@ function StageFoot({
             className="relative h-2 min-w-16 flex-1 overflow-hidden rounded-full bg-night/[0.06]"
           >
             <span
-              className="dither dither-4 absolute inset-y-0 left-0 text-night/60 transition-[width] duration-500 ease-soft"
+              className="absolute inset-y-0 left-0 rounded-full bg-night/70 transition-[width] duration-500 ease-soft"
               style={{ width: `${share * 100}%` }}
             />
           </div>

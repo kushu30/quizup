@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { createRequireAuth, getAuthUser, requireRole, type AccessTokenVerifier } from '../auth.js';
 import type { LiveEngine } from '../live/engine.js';
 import { asyncRoute, parseOrReject } from '../http.js';
+import type { StudentResultService } from '../results/studentResultService.js';
 
 const quizIdParamsSchema = z.object({ quizId: z.string().uuid() });
 
@@ -21,8 +22,9 @@ function newestFirst(first: QuizSessionHistoryRow, second: QuizSessionHistoryRow
 export function createHistoryRouter(dependencies: {
   engine: LiveEngine;
   verifier: AccessTokenVerifier;
+  studentResults: StudentResultService;
 }) {
-  const { engine, verifier } = dependencies;
+  const { engine, verifier, studentResults } = dependencies;
   const repository = engine.repository;
   const router = Router();
   const requireAuth = createRequireAuth(verifier);
@@ -82,6 +84,29 @@ export function createHistoryRouter(dependencies: {
             (first.endedAt ? Date.parse(first.endedAt) : Number.POSITIVE_INFINITY),
         );
       response.json(rows);
+    }),
+  );
+
+  router.get(
+    '/me/results/:sessionId',
+    requireAuth,
+    asyncRoute(async (request, response) => {
+      const params = parseOrReject(
+        z.object({ sessionId: z.string().uuid() }),
+        request.params,
+        response,
+      );
+      if (!params) {
+        return;
+      }
+      const access = await studentResults.forStudent(params.sessionId, getAuthUser(request));
+      if (access.kind === 'ok') {
+        response.json(access.value);
+      } else if (access.kind === 'not_ready') {
+        response.status(409).json({ error: access.reason });
+      } else {
+        response.status(404).json({ error: 'result_not_found' });
+      }
     }),
   );
 

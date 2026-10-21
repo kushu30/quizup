@@ -2,12 +2,15 @@ import { questionInputSchema, type QuestionInput } from '@quizup/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { AuthField, AuthNotice, AuthSelect, AuthTextArea } from './landing/AuthField';
 import { ctaDark, ctaLight, ctaSize } from './landing/cta';
+import { QuestionImageField } from './QuestionImageField';
 
 interface QuestionFormProps {
   initialValue?: QuestionInput;
   submitLabel: string;
   onSubmit: (input: QuestionInput) => Promise<void>;
   onCancel?: () => void;
+  // Modules that already exist in this quiz, offered as suggestions.
+  modules?: string[];
 }
 
 const EMPTY_QUESTION: QuestionInput = {
@@ -20,11 +23,18 @@ const EMPTY_QUESTION: QuestionInput = {
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
-export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: QuestionFormProps) {
+export function QuestionForm({
+  initialValue,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  modules = [],
+}: QuestionFormProps) {
   const [draft, setDraft] = useState<QuestionInput>(initialValue ?? EMPTY_QUESTION);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const radioName = useId();
+  const moduleListId = useId();
 
   function setOption(optionIndex: number, text: string) {
     setDraft((current) => ({
@@ -45,7 +55,7 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
     try {
       await onSubmit(parsed.data);
       if (!initialValue) {
-        setDraft(EMPTY_QUESTION);
+        setDraft({ ...EMPTY_QUESTION, topic: draft.topic });
       }
     } catch (error) {
       setErrors([error instanceof Error ? error.message : 'Could not save the question']);
@@ -57,12 +67,21 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <AuthField
-          label="Topic"
-          placeholder="For example, Fractions"
-          value={draft.topic}
-          onChange={(event) => setDraft({ ...draft, topic: event.target.value })}
-        />
+        <div>
+          <AuthField
+            label="Module (optional)"
+            list={moduleListId}
+            placeholder="For example, Module 1"
+            hint="Leave it empty to file the question under Unsorted. You can move questions later."
+            value={draft.topic}
+            onChange={(event) => setDraft({ ...draft, topic: event.target.value })}
+          />
+          <datalist id={moduleListId}>
+            {modules.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </div>
         <AuthSelect
           label="Difficulty"
           value={draft.difficulty}
@@ -82,6 +101,13 @@ export function QuestionForm({ initialValue, submitLabel, onSubmit, onCancel }: 
         placeholder="What would you like to ask?"
         value={draft.stem}
         onChange={(event) => setDraft({ ...draft, stem: event.target.value })}
+      />
+      <QuestionImageField
+        imageUrl={draft.image_url ?? null}
+        imageAlt={draft.image_alt ?? null}
+        onChange={({ imageUrl, imageAlt }) =>
+          setDraft({ ...draft, image_url: imageUrl, image_alt: imageAlt })
+        }
       />
       <fieldset>
         <legend className="text-sm font-medium text-night">Options</legend>

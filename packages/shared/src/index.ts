@@ -32,3 +32,7 @@ export * from './emailTemplate.js';
 export * from './brandColor.js';
 export * from './samples.js';
 export * from './mailFailure.js';
+export * from './questionImage.js';
+export * from './delivery.js';
+export * from './groups.js';
+export * from './studentResult.js';

@@ -65,4 +65,22 @@ describe('MyResultsPage', () => {
     renderPage();
     expect(await screen.findByText(/while signed in, your results appear here/)).toBeTruthy();
   });
+
+  it('links a finished result to its details, but not an unreleased exam', async () => {
+    vi.mocked(api.getMyResults).mockResolvedValue([
+      live,
+      {
+        ...live,
+        sessionId: '55555555-5555-4555-8555-555555555555',
+        quizTitle: 'Midterm',
+        mode: 'exam',
+        resultsHidden: true,
+      },
+    ]);
+    renderPage();
+    const link = await screen.findByRole('link', { name: /Fractions review/ });
+    expect(link.getAttribute('href')).toBe(`/me/results/${live.sessionId}`);
+    expect(screen.queryByRole('link', { name: /Midterm/ })).toBeNull();
+    expect(screen.getByText('Midterm')).toBeTruthy();
+  });
 });

@@ -26,6 +26,8 @@ import { SOURCE_URL, scrollToSection } from './sections';
 export interface NavItem {
   to: string;
   label: string;
+  // A more specific item owns the paths under this prefix, so this one is not marked current there.
+  yieldsTo?: string;
 }
 
 type Tone = 'sky' | 'violet' | 'amber' | 'rose' | 'teal' | 'lime';
@@ -206,6 +208,9 @@ export function SiteHeader({
   setMenuOpen,
 }: SiteHeaderProps) {
   const location = useLocation();
+  function itemActive(item: NavItem, isActive: boolean): boolean {
+    return isActive && !(item.yieldsTo && location.pathname.startsWith(item.yieldsTo));
+  }
   const rootRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLAnchorElement>(null);
   const centreRef = useRef<HTMLUListElement>(null);
@@ -423,7 +428,10 @@ export function SiteHeader({
               {tabs &&
                 workspace.map((item) => (
                   <li key={item.to}>
-                    <NavLink to={item.to} className={({ isActive }) => linkClass(isActive)}>
+                    <NavLink
+                      to={item.to}
+                      className={({ isActive }) => linkClass(itemActive(item, isActive))}
+                    >
                       {item.label}
                     </NavLink>
                   </li>
@@ -553,7 +561,9 @@ export function SiteHeader({
                 onClick={() => setMenuOpen(() => false)}
                 className={({ isActive }) =>
                   `block rounded-[0.8rem] px-4 py-3 text-base font-medium transition-colors duration-200 ease-soft ${
-                    isActive ? 'bg-white/10 text-white' : 'text-white/75 hover:bg-white/5'
+                    itemActive(item, isActive)
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/75 hover:bg-white/5'
                   }`
                 }
               >

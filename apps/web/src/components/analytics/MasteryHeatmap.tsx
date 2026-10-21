@@ -1,7 +1,7 @@
 import type { AnalyticsTopic } from '@quizup/shared';
 import { memo, useMemo, useState } from 'react';
 import { useStableRows } from '../../lib/stableRows';
-import { useInShell } from '../app/shellContext';
+import { useModernLook } from '../app/shellContext';
 import { Dropdown } from '../ui/Dropdown';
 import { TableFrame } from '../ui';
 
@@ -38,9 +38,17 @@ function masteryClasses(mastery: number | null): string {
   return SEQUENTIAL_CLASSES[bin] as string;
 }
 
-// The same five steps, as dither density: sparse dots for low mastery up to near solid.
+// The same five steps as one blue getting deeper: pale for low mastery up to solid.
+const LEVEL_FILLS = [
+  'bg-night/[0.07]',
+  'bg-night/[0.18]',
+  'bg-night/[0.38]',
+  'bg-night/[0.62]',
+  'bg-night/90',
+];
+
 function masteryLevel(mastery: number): number {
-  return Math.min(Math.floor(mastery * 5), 4) + 1;
+  return Math.min(Math.floor(mastery * 5), 4);
 }
 
 const HeatmapRowView = memo(function HeatmapRowView({
@@ -77,14 +85,18 @@ const HeatmapRowView = memo(function HeatmapRowView({
             {modern && mastery !== null && (
               <span
                 aria-hidden="true"
-                className={`dither dither-${masteryLevel(mastery)} absolute inset-0 text-night/55`}
+                className={`absolute inset-0 ${LEVEL_FILLS[masteryLevel(mastery)]}`}
               />
             )}
             <span
               className={
                 modern
                   ? `relative inline-block rounded px-1 text-[11px] ${
-                      mastery === null ? 'text-night/30' : 'bg-white/90 text-night'
+                      mastery === null
+                        ? 'text-night/30'
+                        : masteryLevel(mastery) >= 3
+                          ? 'text-white'
+                          : 'text-night'
                     }`
                   : undefined
               }
@@ -99,7 +111,7 @@ const HeatmapRowView = memo(function HeatmapRowView({
 });
 
 export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
-  const modern = useInShell();
+  const modern = useModernLook();
   const [sortBy, setSortBy] = useState<'score' | 'name'>('score');
   const stableRows = useStableRows(rows, (row) => row.participantId);
   const stableTopics = useStableRows(topics, (topic) => topic.key);
@@ -173,14 +185,8 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
       {modern ? (
         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-night/50">
           <span>Low</span>
-          {[1, 2, 3, 4, 5].map((level) => (
-            <span
-              key={level}
-              aria-hidden="true"
-              className="relative h-3.5 w-7 overflow-hidden rounded-[3px] bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.12)]"
-            >
-              <span className={`dither dither-${level} absolute inset-0 text-night/55`} />
-            </span>
+          {LEVEL_FILLS.map((fill) => (
+            <span key={fill} aria-hidden="true" className={`h-3.5 w-7 rounded-[3px] ${fill}`} />
           ))}
           <span>High</span>
           <span className="ml-2">– no data</span>

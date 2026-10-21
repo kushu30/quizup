@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useInShell } from '../app/shellContext';
+import { useModernLook } from '../app/shellContext';
 
 export type BadgeTone = 'neutral' | 'brand' | 'success' | 'warning' | 'danger';
 
@@ -28,7 +28,7 @@ export function Badge({
   children: ReactNode;
   title?: string;
 }) {
-  const modern = useInShell();
+  const modern = useModernLook();
   return (
     <span
       title={title}
@@ -68,7 +68,7 @@ export function Notice({
   children: ReactNode;
   className?: string;
 }) {
-  const modern = useInShell();
+  const modern = useModernLook();
   return (
     <div
       role={tone === 'danger' ? 'alert' : 'status'}

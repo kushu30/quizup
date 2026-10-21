@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
-import { useInShell } from './app/shellContext';
+import { useModernLook } from './app/shellContext';
 import { ctaDanger, ctaLight, ctaPrimary, ctaSize } from './landing/cta';
 
 interface ConfirmDialogProps {
@@ -27,7 +27,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const inShell = useInShell();
+  const inShell = useModernLook();
   const modern = modernProp ?? inShell;
   const titleId = useId();
   const bodyId = useId();

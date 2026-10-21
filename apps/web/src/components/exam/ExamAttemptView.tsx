@@ -5,7 +5,10 @@ import { useProctor } from '../../hooks/useProctor';
 import { useServerNow } from '../../hooks/useServerNow';
 import type { QuizSocket } from '../../lib/socket';
 import { ConnectionBanner } from '../ConnectionBanner';
-import { Button, Notice, buttonClasses } from '../ui';
+import { QuestionImage } from '../QuestionImage';
+import { ctaLight, ctaPrimary, ctaSize } from '../landing/cta';
+import { CARD, PlayStage } from '../play/PlayStage';
+import { Notice } from '../ui';
 
 interface ExamAttemptViewProps {
   socket: QuizSocket;
@@ -23,12 +26,12 @@ const ANSWER_RETRY_MS = 3000;
 const PENDING_NOTICE_AFTER_MS = 3000;
 
 const CLOCK_STYLES = {
-  calm: 'bg-board text-white',
-  soon: 'bg-marker text-ink',
+  calm: 'bg-night text-white',
+  soon: 'bg-amber-400 text-night',
   urgent: 'bg-alert text-white',
 } as const;
 
-const BAR_STYLES = { calm: 'bg-board', soon: 'bg-marker', urgent: 'bg-alert' } as const;
+const BAR_STYLES = { calm: 'bg-night/70', soon: 'bg-amber-400', urgent: 'bg-alert' } as const;
 
 export function ExamAttemptView({
   socket,
@@ -199,54 +202,53 @@ export function ExamAttemptView({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <PlayStage width="lg">
       {proctored && proctor.fullscreenLost && (
         <div
           role="alertdialog"
           aria-modal="true"
           aria-label="Full screen required"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/85 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-night/60 p-4 backdrop-blur-[2px]"
         >
-          <div className="max-w-sm space-y-4 rounded-lg bg-surface p-6 text-center">
-            <p className="text-xl font-semibold">Return to full screen</p>
-            <p className="text-muted">
+          <div className={`${CARD} max-w-sm animate-pop space-y-4 p-6 text-center`}>
+            <p className="text-xl font-medium tracking-tight">Return to full screen</p>
+            <p className="text-night/60">
               The exam is still running. Time left:{' '}
-              <span className="font-semibold text-ink tabular-nums">
+              <span className="font-geist-mono font-medium text-night tabular-nums">
                 {formatClock(remainingMs)}
               </span>
             </p>
-            <Button
-              variant="brand"
-              size="lg"
-              className="w-full"
+            <button
+              type="button"
+              className={`${ctaPrimary} ${ctaSize.lg} w-full`}
               onClick={() => void proctor.requestFullscreen()}
             >
               Go full screen
-            </Button>
+            </button>
           </div>
         </div>
       )}
 
-      <div className="sticky top-0 z-10 -mx-4 border-b border-rule bg-paper/95 px-4 pt-3 backdrop-blur">
-        <div className="flex items-center justify-between gap-4 pb-3">
+      <div className={`${CARD} sticky top-14 z-30 overflow-hidden`}>
+        <div className="flex items-center justify-between gap-4 px-3 py-3 sm:px-4">
           <div
             role="timer"
             aria-label="Time left"
             data-urgency={urgency}
-            className={`flex min-w-0 flex-col rounded-lg px-4 py-2 sm:flex-row sm:items-baseline sm:gap-3 ${CLOCK_STYLES[urgency]}`}
+            className={`flex min-w-0 flex-col rounded-xl px-4 py-2 transition-colors duration-500 ease-soft sm:flex-row sm:items-baseline sm:gap-3 ${CLOCK_STYLES[urgency]}`}
           >
-            <span className="text-hero leading-none font-bold tabular-nums">
+            <span className="font-geist-mono text-3xl leading-none font-medium tabular-nums">
               {formatClock(remainingMs)}
             </span>
             <span className="text-sm font-medium">{clockLabel}</span>
           </div>
-          <p className="text-right text-sm font-medium text-muted tabular-nums">
+          <p className="text-right text-sm font-medium text-night/60 tabular-nums">
             {answeredCount} of {view.questions.length} answered
           </p>
         </div>
-        <div aria-hidden="true" className="-mx-4 h-1.5 bg-rule">
+        <div aria-hidden="true" className="h-1 bg-night/[0.07]">
           <div
-            className={`h-full ${BAR_STYLES[urgency]}`}
+            className={`h-full transition-[width] duration-1000 ease-linear ${BAR_STYLES[urgency]}`}
             style={{ width: `${remainingShare * 100}%` }}
           />
         </div>
@@ -264,13 +266,13 @@ export function ExamAttemptView({
         </ConnectionBanner>
       )}
       {pendingCount > 0 && (!connected || stuck) && (
-        <p role="status" className="text-sm font-medium text-muted">
+        <p role="status" className="text-sm font-medium text-night/60">
           {pendingCount} {pendingCount === 1 ? 'answer' : 'answers'} waiting to send
         </p>
       )}
       {timeIsUp && <Notice tone="warning">Time is up. Submitting your exam...</Notice>}
 
-      <nav aria-label="Questions" className="flex flex-wrap gap-2">
+      <nav aria-label="Questions" className={`${CARD} flex flex-wrap gap-2 p-3`}>
         {view.questions.map((item, index) => {
           const answered = answers[item.questionId] !== undefined;
           const current = index === currentIndex;
@@ -281,12 +283,12 @@ export function ExamAttemptView({
               onClick={() => setCurrentIndex(index)}
               aria-current={current}
               aria-label={`Question ${index + 1}${answered ? ', answered' : ''}`}
-              className={`h-10 w-10 rounded-md border text-sm font-semibold tabular-nums ${
+              className={`h-10 w-10 rounded-xl font-geist-mono text-sm font-medium tabular-nums transition-[background-color,box-shadow,color] duration-200 ease-soft ${
                 current
-                  ? 'border-ink bg-ink text-white'
+                  ? 'bg-night text-white'
                   : answered
-                    ? 'border-board bg-board-soft text-board'
-                    : 'border-rule-strong bg-surface text-ink hover:bg-paper'
+                    ? 'bg-accent-50 text-accent-800 shadow-[inset_0_0_0_1px_var(--color-accent-200)]'
+                    : 'bg-white text-night/70 shadow-[0_0_0_1px_rgba(17,16,20,0.14)] hover:shadow-[0_0_0_1px_rgba(17,16,20,0.35)]'
               }`}
             >
               {index + 1}
@@ -296,12 +298,15 @@ export function ExamAttemptView({
       </nav>
 
       {question && (
-        <section className="space-y-4">
-          <h1 className="text-xl font-semibold break-words sm:text-2xl">
-            <span className="mr-2 text-muted">{currentIndex + 1}.</span>
-            {question.stem}
-          </h1>
-          <div className="grid gap-3" role="radiogroup" aria-label="Answer options">
+        <section className="space-y-3">
+          <div className={`${CARD} space-y-4 p-5 sm:p-6`}>
+            <h1 className="text-xl leading-snug font-medium tracking-tight break-words [overflow-wrap:anywhere] sm:text-2xl">
+              <span className="mr-2 font-geist-mono text-night/35">{currentIndex + 1}.</span>
+              {question.stem}
+            </h1>
+            <QuestionImage imageUrl={question.imageUrl} imageAlt={question.imageAlt} />
+          </div>
+          <div className="grid gap-2.5" role="radiogroup" aria-label="Answer options">
             {question.options.map((option, optionIndex) => {
               const checked = answers[question.questionId] === optionIndex;
               return (
@@ -312,21 +317,21 @@ export function ExamAttemptView({
                   aria-checked={checked}
                   disabled={timeIsUp || submitting}
                   onClick={() => chooseOption(question.questionId, optionIndex)}
-                  className={`flex items-center gap-4 rounded-lg border-2 px-4 py-3.5 text-left text-base break-words disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`flex items-center gap-4 rounded-2xl px-4 py-3.5 text-left text-base break-words transition-[background-color,box-shadow,color] duration-200 ease-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-night disabled:cursor-not-allowed disabled:opacity-60 ${
                     checked
-                      ? 'border-board bg-board-soft'
-                      : 'border-rule bg-surface hover:border-rule-strong'
+                      ? 'bg-night text-white shadow-[0_0_0_1px_rgba(17,16,20,1)]'
+                      : 'bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.12),0_1px_3px_rgba(17,16,20,0.05)] hover:shadow-[0_0_0_1.5px_rgba(17,16,20,0.45)]'
                   }`}
                 >
                   <span
                     aria-hidden="true"
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold ${
-                      checked ? 'bg-board text-white' : 'bg-paper text-muted'
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-geist-mono text-sm font-medium ${
+                      checked ? 'bg-white/15 text-white' : 'bg-night/[0.06] text-night/60'
                     }`}
                   >
                     {OPTION_LETTERS[optionIndex]}
                   </span>
-                  <span className="min-w-0">{option}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{option}</span>
                 </button>
               );
             })}
@@ -337,20 +342,22 @@ export function ExamAttemptView({
       {message && <Notice tone="danger">{message}</Notice>}
 
       <div className="flex justify-between gap-2">
-        <Button
-          variant="secondary"
+        <button
+          type="button"
+          className={`${ctaLight} ${ctaSize.md}`}
           disabled={currentIndex === 0}
           onClick={() => setCurrentIndex((index) => Math.max(index - 1, 0))}
         >
           Previous
-        </Button>
-        <Button
-          variant="secondary"
+        </button>
+        <button
+          type="button"
+          className={`${ctaLight} ${ctaSize.md}`}
           disabled={currentIndex >= view.questions.length - 1}
           onClick={() => setCurrentIndex((index) => index + 1)}
         >
           Next
-        </Button>
+        </button>
       </div>
 
       <button
@@ -358,18 +365,18 @@ export function ExamAttemptView({
         type="button"
         disabled={submitting || timeIsUp || !connected}
         onClick={() => setConfirmOpen(true)}
-        className={`${buttonClasses('brand', 'lg')} w-full`}
+        className={`${ctaPrimary} ${ctaSize.lg} w-full`}
       >
         {submitting ? 'Submitting...' : 'Submit exam'}
       </button>
       {!connected && (
-        <p className="text-center text-sm text-muted">
+        <p className="text-center text-sm text-night/55">
           You can submit once you are back online. Your answers are kept.
         </p>
       )}
 
       {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
+        <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-night/50 p-4 backdrop-blur-[2px]">
           <div
             role="dialog"
             aria-modal="true"
@@ -381,27 +388,37 @@ export function ExamAttemptView({
                 closeConfirm();
               }
             }}
-            className="w-full max-w-sm space-y-4 rounded-lg bg-surface p-6"
+            className={`${CARD} w-full max-w-sm animate-pop space-y-4 p-6 shadow-[0_24px_60px_-20px_rgba(17,16,20,0.45)]`}
           >
-            <h2 id={confirmTitleId} className="text-xl font-semibold">
+            <h2 id={confirmTitleId} className="text-[1.375rem] font-medium tracking-tight">
               Submit your exam?
             </h2>
-            <p id={confirmBodyId} className="text-muted">
+            <p id={confirmBodyId} className="leading-relaxed text-night/60">
               {unansweredCount > 0
                 ? `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}. You cannot change answers after submitting.`
                 : 'You cannot change answers after submitting.'}
             </p>
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" autoFocus onClick={closeConfirm}>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <button
+                type="button"
+                className={`${ctaLight} ${ctaSize.md}`}
+                autoFocus
+                onClick={closeConfirm}
+              >
                 Keep working
-              </Button>
-              <Button variant="brand" disabled={submitting} onClick={submit}>
+              </button>
+              <button
+                type="button"
+                className={`${ctaPrimary} ${ctaSize.md}`}
+                disabled={submitting}
+                onClick={submit}
+              >
                 Submit now
-              </Button>
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </PlayStage>
   );
 }
