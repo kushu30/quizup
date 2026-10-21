@@ -90,7 +90,43 @@ afterEach(() => {
 });
 
 describe('QuizEditor', () => {
-  it('groups the editor into named sections', async () => {
+  it('walks a new quiz through the steps and ends on a review of everything', async () => {
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    const steps = screen.getByRole('navigation', { name: 'Editor steps' });
+    expect(
+      within(steps)
+        .getByRole('button', { name: /^Details/ })
+        .getAttribute('aria-current'),
+    ).toBe('step');
+    expect(screen.queryByRole('region', { name: 'Branding' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('region', { name: 'Branding' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /^Add questions$/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    expect(await screen.findByRole('region', { name: /^Add questions$/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Review quiz' }));
+    expect(await screen.findByRole('region', { name: /^Details and mode$/ })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Branding' })).toBeTruthy();
+  });
+
+  it('saves unsaved details before moving on from the first step', async () => {
+    renderEditor();
+    fireEvent.change(await screen.findByLabelText('Quiz title'), { target: { value: 'Decimals' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('region', { name: 'Branding' })).toBeTruthy();
+  });
+
+  it('opens a quiz that already has questions on its review', async () => {
+    mockQuestions([approvedQuestion]);
+    renderEditor();
+    expect(await screen.findByRole('region', { name: /^Approved questions/ })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Branding' })).toBeTruthy();
+  });
+
+  it('groups the review into named sections', async () => {
+    mockQuestions([approvedQuestion]);
     renderEditor();
     await screen.findByDisplayValue('Fractions');
     for (const name of [
@@ -191,6 +227,8 @@ describe('QuizEditor', () => {
       settings: { mode: 'exam', durationMinutes: 40, adaptive: false },
     });
     renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    fireEvent.click(screen.getByRole('button', { name: /^Branding/ }));
     const branding = await screen.findByRole('region', { name: 'Branding' });
     fireEvent.change(within(branding).getByLabelText('Institution name'), {
       target: { value: 'Lincoln High' },
@@ -235,6 +273,12 @@ describe('QuizEditor', () => {
   it('suggests this quiz’s modules when writing a question', async () => {
     vi.mocked(api.listTopics).mockResolvedValue(['Module 1', 'Module 2']);
     renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Editor steps' })).getByRole('button', {
+        name: /^Questions/,
+      }),
+    );
     const field = await screen.findByLabelText('Module (optional)');
     const list = document.getElementById(field.getAttribute('list') ?? '');
     expect(

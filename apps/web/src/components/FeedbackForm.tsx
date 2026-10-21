@@ -1,6 +1,8 @@
 import { FEEDBACK_COMMENT_MAX, type FeedbackSubmitPayload } from '@quizup/shared';
 import { useId, useRef, useState, type FormEvent } from 'react';
-import { Button, Notice, TextAreaField } from './ui';
+import { ctaPrimary, ctaSize } from './landing/cta';
+import { CARD } from './play/PlayStage';
+import { Notice, TextAreaField } from './ui';
 
 const RATING_WORDS = ['very poor', 'poor', 'okay', 'good', 'excellent'];
 
@@ -51,11 +53,11 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
 
   if (sent) {
     return (
-      <div className="rounded-lg border border-rule bg-surface p-6 text-center">
-        <p role="status" className="text-lg font-semibold">
+      <div className={`${CARD} p-6 text-center`}>
+        <p role="status" className="text-lg font-medium">
           Thanks for your feedback.
         </p>
-        <p className="mt-1 text-sm text-muted">Your host will see it without your name.</p>
+        <p className="mt-1 text-sm text-night/55">Your host will see it without your name.</p>
       </div>
     );
   }
@@ -64,13 +66,13 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
     <form
       onSubmit={(event) => void handleSubmit(event)}
       noValidate
-      className="space-y-5 rounded-lg border border-rule bg-surface p-6"
+      className={`${CARD} space-y-5 p-5 sm:p-6`}
     >
       <div className="space-y-3">
-        <h2 id={headingId} className="text-xl font-semibold">
+        <h2 id={headingId} className="text-lg font-medium tracking-tight">
           How was this assessment?
         </h2>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-night/55">
           This is anonymous. Your host will not see your name with your answer.
         </p>
         <div role="radiogroup" aria-labelledby={headingId} className="flex gap-2">
@@ -93,10 +95,10 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
                 />
                 <span
                   aria-hidden="true"
-                  className={`flex h-11 w-11 items-center justify-center rounded-md border-2 text-2xl leading-none peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-board ${
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl leading-none transition-[background-color,box-shadow,color,transform] duration-200 ease-soft peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-night active:scale-95 ${
                     filled
-                      ? 'border-marker bg-marker-soft text-marker-ink'
-                      : 'border-rule text-rule-strong'
+                      ? 'bg-amber-50 text-amber-500 shadow-[0_0_0_1.5px_var(--color-amber-400)]'
+                      : 'bg-white text-night/20 shadow-[0_0_0_1px_rgba(17,16,20,0.14)] hover:text-night/40'
                   }`}
                 >
                   ★
@@ -105,7 +107,7 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
             );
           })}
         </div>
-        <p className="min-h-5 text-sm text-muted">
+        <p className="min-h-5 text-sm text-night/55">
           {rating ? `${rating} out of 5, ${RATING_WORDS[rating - 1]}` : ''}
         </p>
         {ratingError && <p className="text-sm font-medium text-alert">{ratingError}</p>}
@@ -118,9 +120,9 @@ export function FeedbackForm({ submit }: FeedbackFormProps) {
         onChange={(event) => setComment(event.target.value)}
       />
       {sendError && <Notice tone="danger">{sendError}</Notice>}
-      <Button type="submit" variant="brand" disabled={sending}>
+      <button type="submit" disabled={sending} className={`${ctaPrimary} ${ctaSize.md}`}>
         Send feedback
-      </Button>
+      </button>
     </form>
   );
 }

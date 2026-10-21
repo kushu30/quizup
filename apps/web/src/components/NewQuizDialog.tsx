@@ -1,6 +1,7 @@
 import { quizCreateSchema } from '@quizup/shared';
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Button, Notice, TextField } from './ui';
+import { AuthField, AuthNotice } from './landing/AuthField';
+import { ctaLight, ctaPrimary, ctaSize } from './landing/cta';
 
 interface NewQuizDialogProps {
   onSubmit: (title: string) => Promise<string | null>;
@@ -44,39 +45,44 @@ export function NewQuizDialog({ onSubmit, onCancel }: NewQuizDialogProps) {
   }
 
   return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
+    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-night/50 p-4 backdrop-blur-[2px]">
       <div
         ref={rootRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={handleKeyDown}
-        className="animate-pop w-full max-w-md rounded-xl bg-surface p-6 shadow-xl"
+        className="animate-pop w-full max-w-md rounded-2xl bg-white p-6 font-geist text-night shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_24px_60px_-20px_rgba(17,16,20,0.45)]"
       >
-        <form onSubmit={(event) => void handleSubmit(event)} noValidate className="space-y-4">
-          <div className="space-y-1">
-            <h2 id={titleId} className="text-xl font-semibold">
+        <form onSubmit={(event) => void handleSubmit(event)} noValidate className="space-y-5">
+          <div className="space-y-1.5">
+            <h2 id={titleId} className="text-[1.375rem] font-medium tracking-tight">
               Name your quiz
             </h2>
-            <p className="text-sm text-muted">
+            <p className="text-[0.9375rem] leading-relaxed text-night/55">
               Students see this title. You can change it later in the quiz editor.
             </p>
           </div>
-          <TextField
+          <AuthField
             label="Quiz title"
             placeholder="For example, Fractions review"
             value={title}
             error={titleError}
             onChange={(event) => setTitle(event.target.value)}
           />
-          {failure && <Notice tone="danger">{failure}</Notice>}
+          {failure && <AuthNotice tone="danger">{failure}</AuthNotice>}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Button variant="secondary" disabled={busy} onClick={onCancel}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onCancel}
+              className={`${ctaLight} ${ctaSize.md}`}
+            >
               Cancel
-            </Button>
-            <Button type="submit" variant="brand" disabled={busy}>
+            </button>
+            <button type="submit" disabled={busy} className={`${ctaPrimary} ${ctaSize.md}`}>
               Create quiz
-            </Button>
+            </button>
           </div>
         </form>
       </div>

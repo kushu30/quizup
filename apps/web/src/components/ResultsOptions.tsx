@@ -13,8 +13,8 @@ export function ResultsOptions({
   onChange,
 }: ResultsOptionsProps) {
   return (
-    <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Results</legend>
+    <fieldset className="space-y-2">
+      <legend className="mb-2 text-sm font-medium text-night">Results</legend>
       <Switch
         title="Show correct answers to students"
         checked={showCorrectAnswers}

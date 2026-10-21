@@ -76,9 +76,25 @@ describe('Layout', () => {
 
   it('marks the current section as the current page', () => {
     setAuth({ session: {}, canHost: true });
-    renderAt('/host/quizzes/abc');
-    const hostLink = screen.getAllByRole('link', { name: 'Host' })[0];
+    renderAt('/host/sessions/abc');
+    const hostLink = screen.getAllByRole('link', { name: 'Quizzes' })[0];
     expect(hostLink?.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('gives the quiz editor the whole screen, without the site header or footer', () => {
+    setAuth({ session: {}, canHost: true });
+    renderAt('/host/quizzes/abc');
+    expect(screen.getByRole('main').getAttribute('data-layout')).toBe('workspace');
+    expect(screen.queryByRole('banner')).toBeNull();
+    expect(screen.queryByRole('contentinfo')).toBeNull();
+  });
+
+  it('takes hosts back to the landing page from the logo in the app sidebar', () => {
+    setAuth({ session: {}, canHost: true });
+    renderAt('/host');
+    for (const link of screen.getAllByRole('link', { name: 'QuizUp home' })) {
+      expect(link.getAttribute('href')).toBe('/');
+    }
   });
 
   it('signs out from the header', () => {
@@ -111,19 +127,22 @@ describe('Layout', () => {
       (link) => link.textContent === 'Join a quiz',
     ) as HTMLElement;
     fireEvent.click(joinLink);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
   });
 
-  it('uses the wide layout for host, summary and admin pages and the focused one elsewhere', () => {
+  it('gives each kind of page its own layout', () => {
     const cases: [string, string][] = [
-      ['/host', 'wide'],
-      ['/host/sessions/1', 'wide'],
-      ['/sessions/1/summary', 'wide'],
-      ['/admin', 'wide'],
+      ['/host', 'app'],
+      ['/host/quizzes/1/history', 'app'],
+      ['/host/sessions/1', 'app'],
+      ['/sessions/1/summary', 'app'],
+      ['/admin', 'app'],
       ['/', 'landing'],
-      ['/join', 'focused'],
-      ['/play/ABC234', 'focused'],
-      ['/login', 'focused'],
+      ['/join', 'auth'],
+      ['/play/ABC234', 'play'],
+      ['/login', 'auth'],
     ];
     for (const [path, expected] of cases) {
       const { unmount } = renderAt(path);

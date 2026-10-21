@@ -11,21 +11,30 @@ describe('QuizUpLogo', () => {
     expect(logo.textContent).toBe('QuizUp');
   });
 
-  it('draws the four-squares mark with an amber check square', () => {
+  it('draws the tile Q with a tail in the accent colour', () => {
     const { container } = render(<LogoMark size={48} />);
     const svg = container.querySelector('svg');
     expect(svg?.getAttribute('aria-hidden')).toBe('true');
     expect(svg?.getAttribute('width')).toBe('48');
-    expect(container.querySelectorAll('rect')).toHaveLength(4);
-    expect(container.querySelector('rect[fill="#e9b949"]')).toBeTruthy();
-    expect(container.querySelector('path')).toBeTruthy();
+    expect(container.querySelector('[data-part="tile"]')?.getAttribute('fill')).toBe('#111014');
+    expect(container.querySelector<SVGElement>('[data-part="tail"]')?.style.fill).toContain(
+      '--color-accent-500',
+    );
   });
 
-  it('puts Up in the brand green on light and in amber on dark', () => {
-    const { container, rerender } = render(<QuizUpLogo tone="color" />);
-    expect(container.querySelector('[data-part="up"]')?.className).toContain('text-board');
-    rerender(<QuizUpLogo tone="onDark" />);
-    expect(container.querySelector('[data-part="up"]')?.className).toContain('text-marker');
+  it('turns white with a lighter tail on dark backgrounds', () => {
+    const { container } = render(<LogoMark tone="onDark" />);
+    expect(container.querySelector('[data-part="tile"]')?.getAttribute('fill')).toBe('#ffffff');
+    expect(container.querySelector<SVGElement>('[data-part="tail"]')?.style.fill).toContain(
+      '--color-accent-400',
+    );
+  });
+
+  it('cuts the counter out instead of painting it, so it sits on any background', () => {
+    const { container } = render(<LogoMark />);
+    const tile = container.querySelector('[data-part="tile"]');
+    const maskId = tile?.getAttribute('mask')?.match(/url\(#(.+)\)/)?.[1];
+    expect(maskId && container.querySelector(`mask[id="${maskId}"]`)).toBeTruthy();
   });
 
   it('can be the mark alone', () => {
@@ -34,9 +43,13 @@ describe('QuizUpLogo', () => {
     expect(screen.getByRole('img', { name: 'QuizUp' })).toBeTruthy();
   });
 
-  it('draws a one-colour mark that knocks the check out of the filled square', () => {
-    const { container } = render(<LogoMark tone="mono" knock="#ffffff" />);
-    expect(container.querySelector('rect[fill="#e9b949"]')).toBeNull();
-    expect(container.querySelector('path')?.getAttribute('stroke')).toBe('#ffffff');
+  it('draws a one-colour mark in the current text colour', () => {
+    const { container } = render(<LogoMark tone="mono" />);
+    expect(container.querySelector('[data-part="tile"]')?.getAttribute('fill')).toBe(
+      'currentColor',
+    );
+    expect(
+      container.querySelector<SVGElement>('[data-part="tail"]')?.style.fill.toLowerCase(),
+    ).toBe('currentcolor');
   });
 });

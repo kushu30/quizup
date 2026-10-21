@@ -1,6 +1,7 @@
 import type { AnalyticsTopic } from '@quizup/shared';
 import { memo, useMemo, useState } from 'react';
 import { useStableRows } from '../../lib/stableRows';
+import { useModernLook } from '../app/shellContext';
 import { Dropdown } from '../ui/Dropdown';
 import { TableFrame } from '../ui';
 
@@ -37,12 +38,27 @@ function masteryClasses(mastery: number | null): string {
   return SEQUENTIAL_CLASSES[bin] as string;
 }
 
+// The same five steps as one blue getting deeper: pale for low mastery up to solid.
+const LEVEL_FILLS = [
+  'bg-night/[0.07]',
+  'bg-night/[0.18]',
+  'bg-night/[0.38]',
+  'bg-night/[0.62]',
+  'bg-night/90',
+];
+
+function masteryLevel(mastery: number): number {
+  return Math.min(Math.floor(mastery * 5), 4);
+}
+
 const HeatmapRowView = memo(function HeatmapRowView({
   row,
   topics,
+  modern,
 }: {
   row: HeatmapRow;
   topics: AnalyticsTopic[];
+  modern: boolean;
 }) {
   return (
     <tr>
@@ -60,9 +76,33 @@ const HeatmapRowView = memo(function HeatmapRowView({
             key={topic.key}
             title={label}
             aria-label={label}
-            className={`text-center font-medium tabular-nums ${masteryClasses(mastery)}`}
+            className={
+              modern
+                ? 'relative min-w-14 p-0 text-center font-medium tabular-nums'
+                : `text-center font-medium tabular-nums ${masteryClasses(mastery)}`
+            }
           >
-            {mastery === null ? '–' : mastery.toFixed(2)}
+            {modern && mastery !== null && (
+              <span
+                aria-hidden="true"
+                className={`absolute inset-0 ${LEVEL_FILLS[masteryLevel(mastery)]}`}
+              />
+            )}
+            <span
+              className={
+                modern
+                  ? `relative inline-block rounded px-1 text-[11px] ${
+                      mastery === null
+                        ? 'text-night/30'
+                        : masteryLevel(mastery) >= 3
+                          ? 'text-white'
+                          : 'text-night'
+                    }`
+                  : undefined
+              }
+            >
+              {mastery === null ? '–' : mastery.toFixed(2)}
+            </span>
           </td>
         );
       })}
@@ -71,6 +111,7 @@ const HeatmapRowView = memo(function HeatmapRowView({
 });
 
 export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
+  const modern = useModernLook();
   const [sortBy, setSortBy] = useState<'score' | 'name'>('score');
   const stableRows = useStableRows(rows, (row) => row.participantId);
   const stableTopics = useStableRows(topics, (topic) => topic.key);
@@ -91,9 +132,15 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <span className="text-muted">Mastery per topic, 0 (none) to 1 (full)</span>
-        <div className="flex items-center gap-2 font-medium">
+      <div
+        className={`flex flex-wrap items-center justify-between gap-3 ${modern ? '' : 'text-sm'}`}
+      >
+        <span className={modern ? 'text-xs text-night/55' : 'text-muted'}>
+          {modern ? 'Per topic, 0 (none) to 1 (full)' : 'Mastery per topic, 0 (none) to 1 (full)'}
+        </span>
+        <div
+          className={`flex items-center gap-2 ${modern ? 'text-xs text-night/55' : 'font-medium'}`}
+        >
           <span aria-hidden="true">Sort by</span>
           <Dropdown
             label="Sort by"
@@ -103,42 +150,61 @@ export function MasteryHeatmap({ topics, rows }: MasteryHeatmapProps) {
               { value: 'name', label: 'Name' },
             ]}
             onChange={(next) => setSortBy(next as 'score' | 'name')}
-            className="w-32"
-            triggerClassName="min-h-8 py-1 text-sm font-normal"
+            look={modern ? 'modern' : 'default'}
+            className={modern ? 'w-24' : 'w-32'}
+            triggerClassName={modern ? '!h-8 !text-xs' : 'min-h-8 py-1 text-sm font-normal'}
           />
         </div>
       </div>
-      <TableFrame label="Mastery heatmap table">
-        <table className="border-collapse">
-          <thead>
-            <tr>
-              <th scope="col">Student</th>
-              {stableTopics.map((topic) => (
-                <th key={topic.key} scope="col" className="text-center">
-                  {topic.label}
-                </th>
+      <div className={modern ? 'max-h-64 overflow-y-auto rounded-xl' : undefined}>
+        <TableFrame label="Mastery heatmap table">
+          <table className="border-collapse">
+            <thead>
+              <tr>
+                <th scope="col">Student</th>
+                {stableTopics.map((topic) => (
+                  <th key={topic.key} scope="col" className="text-center">
+                    {topic.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((row) => (
+                <HeatmapRowView
+                  key={row.participantId}
+                  row={row}
+                  topics={stableTopics}
+                  modern={modern}
+                />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map((row) => (
-              <HeatmapRowView key={row.participantId} row={row} topics={stableTopics} />
-            ))}
-          </tbody>
-        </table>
-      </TableFrame>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        <span>Low</span>
-        {SEQUENTIAL_CLASSES.map((classes) => (
-          <span
-            key={classes}
-            className={`h-4 w-8 rounded-sm border border-rule ${classes}`}
-            aria-hidden="true"
-          />
-        ))}
-        <span>High</span>
-        <span className={`ml-3 rounded-sm px-2 py-0.5 ${NO_DATA_CLASSES}`}>– no data</span>
+            </tbody>
+          </table>
+        </TableFrame>
       </div>
+      {modern ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-night/50">
+          <span>Low</span>
+          {LEVEL_FILLS.map((fill) => (
+            <span key={fill} aria-hidden="true" className={`h-3.5 w-7 rounded-[3px] ${fill}`} />
+          ))}
+          <span>High</span>
+          <span className="ml-2">– no data</span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span>Low</span>
+          {SEQUENTIAL_CLASSES.map((classes) => (
+            <span
+              key={classes}
+              className={`h-4 w-8 rounded-sm border border-rule ${classes}`}
+              aria-hidden="true"
+            />
+          ))}
+          <span>High</span>
+          <span className={`ml-3 rounded-sm px-2 py-0.5 ${NO_DATA_CLASSES}`}>– no data</span>
+        </div>
+      )}
     </div>
   );
 }

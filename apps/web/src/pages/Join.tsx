@@ -8,8 +8,10 @@ import {
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { BrandMark } from '../components/branding/BrandMark';
-import { Button, Notice, PageHeader, TextField, buttonClasses } from '../components/ui';
-import { usePageBrand } from '../lib/brandContext';
+import { AuthField, AuthNotice } from '../components/landing/AuthField';
+import { ctaPrimary, ctaSize, ctaSolid } from '../components/landing/cta';
+import { Frame } from '../components/landing/frame';
+import { hasVisibleBrand, usePageBrand } from '../lib/brandContext';
 import { readableTextOn } from '../lib/brandColor';
 import { useJoinInfo } from '../lib/useJoinInfo';
 
@@ -56,6 +58,8 @@ export function Join() {
   const color = info?.branding?.brandColor ?? DEFAULT_COLOR;
   const onColor = readableTextOn(color);
   const hasCustomColor = Boolean(info?.branding?.brandColor);
+  // A branded quiz keeps its institution's own header above the page, so less room is needed.
+  const branded = hasVisibleBrand(info?.branding ?? null);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -90,20 +94,22 @@ export function Join() {
 
   const form = (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
-      <TextField
+      <AuthField
         label="Join code"
+        look="code"
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
         autoFocus={!prefilledCode}
+        placeholder="K7M2QX"
         value={joinCode}
         error={errors.joinCode}
         onChange={(event) => setJoinCode(event.target.value)}
-        inputClassName="py-3 text-center text-title font-semibold tracking-[0.3em] uppercase tabular-nums"
       />
       {tokenMode ? (
-        <TextField
+        <AuthField
           label="Access token"
+          look="code"
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
@@ -112,89 +118,106 @@ export function Join() {
           error={errors.accessToken}
           hint="Your host gave you a personal token. It works only for you."
           onChange={(event) => setAccessToken(event.target.value.toUpperCase())}
-          inputClassName="py-3 text-center text-title font-semibold tracking-[0.2em] tabular-nums"
         />
       ) : (
-        <TextField
+        <AuthField
           label="Display name"
           autoComplete="off"
           autoFocus={Boolean(prefilledCode)}
+          placeholder="The name others will see"
           value={displayName}
           error={errors.displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-          inputClassName="py-3 text-lg"
         />
       )}
       {ended && (
-        <Notice tone="warning">This quiz has ended. Ask your host for a new join code.</Notice>
+        <AuthNotice tone="warning">
+          This quiz has ended. Ask your host for a new join code.
+        </AuthNotice>
       )}
       {hasCustomColor ? (
         <button
           type="submit"
           disabled={ended}
-          className={`${buttonClasses('primary', 'lg')} w-full hover:opacity-90`}
+          className={`${ctaSolid} ${ctaSize.lg} w-full`}
           style={{ backgroundColor: color, color: onColor }}
         >
           Join
         </button>
       ) : (
-        <Button type="submit" size="lg" className="w-full" disabled={ended}>
+        <button type="submit" disabled={ended} className={`${ctaPrimary} ${ctaSize.lg} w-full`}>
           Join
-        </Button>
+        </button>
       )}
     </form>
   );
 
+  // The wrappers stay the same whether or not the quiz has been looked up, so the field being
+  // typed in keeps its place (and the cursor) when the quiz's details appear.
   return (
-    <div
-      className={
-        info
-          ? 'mx-auto max-w-xl overflow-hidden rounded-xl border border-rule bg-surface'
-          : 'mx-auto max-w-md'
-      }
-    >
-      {info && (
-        <div className="px-6 py-6 sm:px-8" style={{ backgroundColor: color, color: onColor }}>
-          <BrandMark
-            branding={info.branding}
-            size="lg"
-            tone={onColor === '#ffffff' ? 'dark' : 'light'}
-          />
-        </div>
-      )}
-      <div className={info ? 'space-y-6 px-6 py-7 sm:px-8' : undefined}>
-        {info ? (
-          <div className="space-y-3">
-            <span className="inline-block rounded-md bg-paper px-2 py-1 text-xs font-semibold text-muted">
-              {typeLine(info)}
-            </span>
-            <h1 className="text-title font-semibold tracking-tight break-words sm:text-hero">
-              {info.quizTitle}
-            </h1>
-            {info.branding?.welcomeMessage ? (
-              <p className="text-lg whitespace-pre-line text-muted">
-                {info.branding.welcomeMessage}
-              </p>
-            ) : (
-              <p className="text-lg text-muted">
-                {tokenMode ? 'Enter your access token to join.' : 'Enter your name to join.'}
-              </p>
+    <section className="flex flex-1 flex-col font-geist text-night">
+      <Frame
+        className={`flex w-full flex-1 flex-col items-center pb-20 ${
+          branded ? 'pt-12 sm:pt-16' : 'pt-32 sm:pt-36'
+        }`}
+      >
+        <div className="w-full max-w-md">
+          <div
+            className={
+              info
+                ? 'overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.07),0_16px_40px_-24px_rgba(17,16,20,0.35)]'
+                : undefined
+            }
+          >
+            {branded && info && (
+              <div className="px-6 py-6 sm:px-8" style={{ backgroundColor: color, color: onColor }}>
+                <BrandMark
+                  branding={info.branding}
+                  size="lg"
+                  tone={onColor === '#ffffff' ? 'dark' : 'light'}
+                />
+              </div>
             )}
-            {tokenMode && (
-              <p className="text-sm text-muted">
-                This is for invited students only. You need the personal access token your host gave
-                you.
-              </p>
-            )}
+            <div className={info ? 'p-6 sm:p-8' : undefined}>
+              {info ? (
+                <div className="mb-8">
+                  <span className="inline-flex rounded-lg bg-night/[0.05] px-2.5 py-1 text-[0.8125rem] font-medium text-night/60">
+                    {typeLine(info)}
+                  </span>
+                  <h1 className="mt-4 text-[2rem] leading-[1.1] font-medium tracking-[-0.035em] break-words">
+                    {info.quizTitle}
+                  </h1>
+                  {info.branding?.welcomeMessage ? (
+                    <p className="mt-3 leading-relaxed whitespace-pre-line text-night/60">
+                      {info.branding.welcomeMessage}
+                    </p>
+                  ) : (
+                    <p className="mt-3 leading-relaxed text-night/60">
+                      {tokenMode ? 'Enter your access token to join.' : 'Enter your name to join.'}
+                    </p>
+                  )}
+                  {tokenMode && (
+                    <p className="mt-2 text-sm text-night/50">
+                      This is for invited students only. You need the personal access token your
+                      host gave you.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-8">
+                  <h1 className="text-[2rem] leading-[1.1] font-medium tracking-[-0.035em] sm:text-[2.25rem]">
+                    Join a quiz
+                  </h1>
+                  <p className="mt-3 text-[0.9375rem] leading-relaxed text-night/55">
+                    Enter the code your host shows on screen and the name others will see.
+                  </p>
+                </div>
+              )}
+              {form}
+            </div>
           </div>
-        ) : (
-          <PageHeader
-            title="Join a quiz"
-            description="Enter the code your host shows on screen and the name others will see."
-          />
-        )}
-        {form}
-      </div>
-    </div>
+        </div>
+      </Frame>
+    </section>
   );
 }

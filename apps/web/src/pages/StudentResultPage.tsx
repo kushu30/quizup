@@ -9,7 +9,8 @@ import {
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { StudentResultView } from '../components/StudentResultView';
-import { Notice, PageHeader, PageLoader, Panel, TableFrame } from '../components/ui';
+import { PageBody, PageHeader } from '../components/app/Page';
+import { Notice, PageLoader, Panel, TableFrame } from '../components/ui';
 import { api, describeError } from '../lib/api';
 import { formatDuration } from '../lib/formatDuration';
 
@@ -128,7 +129,7 @@ export function StudentResultPage() {
   }, [sessionId, participantId]);
 
   return (
-    <div className="space-y-6">
+    <section className="flex flex-1 flex-col">
       <PageHeader
         title={result?.displayName ?? 'Student result'}
         description={
@@ -136,27 +137,31 @@ export function StudentResultPage() {
             ? `${result.quizTitle}, ${result.mode === 'exam' ? 'timed exam' : 'live quiz'}`
             : undefined
         }
-        back={{ to: `/sessions/${sessionId}/summary`, label: 'Back to session summary' }}
+        back={{ to: `/sessions/${sessionId}/summary`, label: 'Session summary' }}
       />
-      {message && <Notice tone="danger">{message}</Notice>}
-      {!result && !message && <PageLoader label="Loading the result" />}
-      {result && <StudentResultView result={result} audience="host" />}
-      {participant && (
-        <>
-          <Proctoring participant={participant} timeline={timeline} />
-          <Panel title="Device">
-            {participant.devices.length === 0 ? (
-              <p className="text-muted">No device recorded.</p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {participant.devices.map((device, index) => (
-                  <li key={index}>{describeDevice(device)}</li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        </>
-      )}
-    </div>
+      <PageBody>
+        <div className="space-y-6 px-4 pt-6 pb-10 sm:px-10">
+          {message && <Notice tone="danger">{message}</Notice>}
+          {!result && !message && <PageLoader label="Loading the result" />}
+          {result && <StudentResultView result={result} audience="host" />}
+          {participant && (
+            <>
+              <Proctoring participant={participant} timeline={timeline} />
+              <Panel title="Device">
+                {participant.devices.length === 0 ? (
+                  <p className="text-muted">No device recorded.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {participant.devices.map((device, index) => (
+                      <li key={index}>{describeDevice(device)}</li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            </>
+          )}
+        </div>
+      </PageBody>
+    </section>
   );
 }

@@ -4,9 +4,11 @@ import { Badge, Notice, Panel, TableFrame } from './ui';
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-rule bg-surface p-4">
-      <dt className="text-sm text-muted">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
+    <div className="px-4 py-4 sm:px-5">
+      <dt className="text-sm text-night/55">{label}</dt>
+      <dd className="mt-1 font-geist-mono text-xl font-medium tracking-tight tabular-nums sm:text-2xl">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -19,8 +21,8 @@ interface StudentResultViewProps {
 
 export function StudentResultView({ result, audience }: StudentResultViewProps) {
   return (
-    <div className="space-y-6">
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="space-y-4">
+      <dl className="grid grid-cols-2 divide-night/15 overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_1px_3px_rgba(17,16,20,0.05)] lg:grid-cols-4 [&>*]:border-dashed [&>*]:border-night/15 [&>:nth-child(2n)]:border-l [&>:nth-child(n+3)]:border-t lg:[&>:nth-child(n+3)]:border-t-0 lg:[&>:not(:first-child)]:border-l">
         <Stat label="Score" value={result.score.toLocaleString()} />
         <Stat
           label="Rank"
@@ -83,13 +85,15 @@ export function StudentResultView({ result, audience }: StudentResultViewProps) 
 
       <Panel title="Question by question">
         {result.questions.length === 0 ? (
-          <p className="text-muted">No questions were recorded for this attempt.</p>
+          <p className="text-night/55">No questions were recorded for this attempt.</p>
         ) : (
-          <ol className="space-y-5">
+          <ol className="-mx-4 divide-y divide-dashed divide-night/15 sm:-mx-5">
             {result.questions.map((question, index) => (
-              <li key={question.questionId} className="space-y-2">
+              <li key={question.questionId} className="space-y-2.5 px-4 py-5 sm:px-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-muted">Question {index + 1}</span>
+                  <span className="font-geist-mono text-xs text-night/45">
+                    Question {index + 1}
+                  </span>
                   <Badge tone="neutral">{question.module}</Badge>
                   {question.chosenIndex === null ? (
                     <Badge tone="warning">Not answered</Badge>
@@ -99,35 +103,35 @@ export function StudentResultView({ result, audience }: StudentResultViewProps) 
                     <Badge tone="danger">Incorrect</Badge>
                   ) : null}
                   {question.responseMs !== null && (
-                    <span className="text-sm text-muted">
+                    <span className="font-geist-mono text-xs text-night/50">
                       {formatDuration(question.responseMs)}
                     </span>
                   )}
                 </div>
-                <p className="font-medium break-words">{question.stem}</p>
-                <ul className="space-y-1">
+                <p className="font-medium break-words [overflow-wrap:anywhere]">{question.stem}</p>
+                <ul className="space-y-1.5">
                   {question.options.map((option, optionIndex) => {
                     const chosen = question.chosenIndex === optionIndex;
                     const correctOption = question.correctIndex === optionIndex;
                     return (
                       <li
                         key={optionIndex}
-                        className={`rounded-md border px-3 py-2 text-sm ${
+                        className={`rounded-xl px-3 py-2 text-sm ${
                           correctOption
-                            ? 'border-board bg-board-soft'
+                            ? 'bg-accent-50 shadow-[inset_0_0_0_1px_var(--color-accent-300)]'
                             : chosen
-                              ? 'border-rule-strong bg-paper'
-                              : 'border-rule'
+                              ? 'bg-night/[0.04] shadow-[inset_0_0_0_1px_rgba(17,16,20,0.3)]'
+                              : 'shadow-[inset_0_0_0_1px_rgba(17,16,20,0.1)]'
                         }`}
                       >
-                        <span className="break-words">{option}</span>
+                        <span className="break-words [overflow-wrap:anywhere]">{option}</span>
                         {chosen && (
-                          <span className="ml-2 font-semibold">
+                          <span className="ml-2 font-medium">
                             {audience === 'student' ? 'Your answer' : 'Chosen'}
                           </span>
                         )}
                         {correctOption && (
-                          <span className="ml-2 font-semibold text-board">Correct answer</span>
+                          <span className="ml-2 font-medium text-accent-700">Correct answer</span>
                         )}
                       </li>
                     );

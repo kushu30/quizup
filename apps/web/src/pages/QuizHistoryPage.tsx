@@ -1,7 +1,12 @@
-import type { Quiz, QuizSessionHistoryRow } from '@quizup/shared';
+import type { AssessmentType, Quiz, QuizSessionHistoryRow } from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Notice, PageHeader, SkeletonList, TableFrame, buttonClasses } from '../components/ui';
+import { BLEED, PageBody, PageHeader } from '../components/app/Page';
+import { AppIcon, ICONS } from '../components/app/icons';
+import { AuthNotice } from '../components/landing/AuthField';
+import { ctaLight, ctaSize, ctaSoft } from '../components/landing/cta';
+import { Frame, RULE } from '../components/landing/frame';
+import { QuizTypeIcon } from '../components/quizMeta';
 import { api, describeError } from '../lib/api';
 
 const STATUS_LABELS: Record<QuizSessionHistoryRow['status'], string> = {
@@ -9,6 +14,13 @@ const STATUS_LABELS: Record<QuizSessionHistoryRow['status'], string> = {
   running: 'Running',
   ended: 'Ended',
 };
+
+function typeOf(row: QuizSessionHistoryRow): AssessmentType {
+  if (row.mode === 'exam') {
+    return 'exam';
+  }
+  return row.adaptive ? 'adaptive' : 'live';
+}
 
 function typeLabel(row: QuizSessionHistoryRow): string {
   if (row.mode === 'exam') {
@@ -48,96 +60,215 @@ export function QuizHistoryPage() {
     };
   }, [quizId]);
 
+  const ran = rows ?? [];
+  const scored = ran.filter((row) => row.averageScore !== null);
+  const rated = ran.filter((row) => row.averageRating !== null && row.feedbackCount > 0);
+  const ratingVotes = rated.reduce((sum, row) => sum + row.feedbackCount, 0);
+  const stats = [
+    { label: 'Sessions', value: String(ran.length) },
+    {
+      label: 'Students reached',
+      value: ran.reduce((sum, row) => sum + row.participantCount, 0).toLocaleString(),
+    },
+    {
+      label: 'Average score',
+      value: scored.length
+        ? Math.round(
+            scored.reduce((sum, row) => sum + (row.averageScore ?? 0), 0) / scored.length,
+          ).toLocaleString()
+        : '–',
+    },
+    {
+      label: 'Rating',
+      value: ratingVotes
+        ? (
+            rated.reduce((sum, row) => sum + (row.averageRating ?? 0) * row.feedbackCount, 0) /
+            ratingVotes
+          ).toFixed(1)
+        : '–',
+    },
+  ];
+
   return (
-    <div>
+    <section className="flex flex-1 flex-col">
       <PageHeader
+        back={{ to: `/host/quizzes/${quizId}`, label: quiz?.title ?? 'Quiz' }}
         title={quiz?.title ?? 'History'}
         description="Every time this quiz was run, with results, feedback and exports."
-        back={{ to: `/host/quizzes/${quizId}`, label: 'Back to quiz' }}
-      />
-      {message && <Notice tone="danger">{message}</Notice>}
-      {!rows && !message && (
-        <>
-          <span role="status" className="sr-only">
-            Loading...
-          </span>
-          <SkeletonList rows={3} />
-        </>
-      )}
-      {rows && rows.length === 0 && (
-        <p className="rounded-lg border border-dashed border-rule-strong px-5 py-10 text-center text-muted">
-          This quiz has not been run yet. Start a session from the quiz page and it will appear
-          here.
-        </p>
-      )}
-      {rows && rows.length > 0 && (
-        <TableFrame label="Sessions of this quiz">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Started</th>
-                <th scope="col">Type</th>
-                <th scope="col">Status</th>
-                <th scope="col" className="text-right">
-                  Students
-                </th>
-                <th scope="col" className="text-right">
-                  Average score
-                </th>
-                <th scope="col">Feedback</th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.sessionId}>
-                  <td className="whitespace-nowrap">{formatWhen(row.startedAt)}</td>
-                  <td className="whitespace-nowrap">{typeLabel(row)}</td>
-                  <td>{STATUS_LABELS[row.status]}</td>
-                  <td className="text-right tabular-nums">{row.participantCount}</td>
-                  <td className="text-right">
-                    {row.averageScore === null ? '-' : row.averageScore.toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    {row.averageRating === null ? (
-                      <span className="text-muted">-</span>
-                    ) : (
-                      <span>
-                        <span className="text-marker-ink" aria-hidden="true">
-                          ★{' '}
-                        </span>
-                        {row.averageRating.toFixed(1)}{' '}
-                        <span className="text-muted">({row.feedbackCount})</span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-right whitespace-nowrap">
-                    {row.status === 'ended' ? (
-                      <Link
-                        to={`/sessions/${row.sessionId}/summary`}
-                        className={buttonClasses('secondary', 'sm')}
-                      >
-                        Open summary
-                        <span className="sr-only"> for {formatWhen(row.startedAt)}</span>
-                      </Link>
-                    ) : (
-                      <Link
-                        to={`/host/sessions/${row.sessionId}`}
-                        className={buttonClasses('brand', 'sm')}
-                      >
-                        Open console
-                        <span className="sr-only"> for code {row.joinCode}</span>
-                      </Link>
-                    )}
-                  </td>
-                </tr>
+        actions={
+          <Link
+            to={`/host/quizzes/${quizId}`}
+            className={`${ctaLight} ${ctaSize.md} self-start lg:self-auto`}
+          >
+            Edit quiz
+          </Link>
+        }
+      >
+        {message && (
+          <AuthNotice tone="danger" className="mt-6">
+            {message}
+          </AuthNotice>
+        )}
+      </PageHeader>
+
+      <section aria-label="Overview" className={`border-b ${RULE} ${BLEED}`}>
+        <Frame flush>
+          <dl className="grid grid-cols-2 md:grid-cols-4">
+            {stats.map((stat, index) => (
+              <div
+                key={stat.label}
+                className={`px-4 py-5 sm:px-6 ${RULE} ${index % 2 ? 'border-l' : ''} ${
+                  index > 1 ? 'border-t md:border-t-0' : ''
+                } ${index === 2 ? 'md:border-l' : ''}`}
+              >
+                <dt className="text-sm text-night/55">{stat.label}</dt>
+                <dd className="mt-1 font-geist-mono text-[1.625rem] font-medium tracking-tight text-night tabular-nums">
+                  {rows ? stat.value : '–'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Frame>
+      </section>
+
+      <PageBody>
+        {!rows && !message && (
+          <>
+            <span role="status" className="sr-only">
+              Loading...
+            </span>
+            <div aria-hidden="true" className="divide-y divide-dashed divide-night/15">
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="flex items-center gap-4 px-4 py-5 sm:px-10">
+                  <div className="h-5 w-5 shrink-0 animate-shimmer rounded-md bg-night/[0.06]" />
+                  <div className="h-4 flex-1 animate-shimmer rounded bg-night/[0.06]" />
+                  <div className="h-8 w-28 animate-shimmer rounded-[0.7rem] bg-night/[0.06]" />
+                </div>
               ))}
-            </tbody>
-          </table>
-        </TableFrame>
-      )}
-    </div>
+            </div>
+          </>
+        )}
+        {rows && rows.length === 0 && (
+          <div className="flex flex-col items-center gap-5 px-4 py-20 text-center sm:px-10">
+            <AppIcon size={28} className="text-night/30">
+              {ICONS.history}
+            </AppIcon>
+            <p className="max-w-sm leading-relaxed text-night/55">
+              This quiz has not been run yet. Start a session from the quiz page and it will appear
+              here.
+            </p>
+          </div>
+        )}
+        {rows && rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table aria-label="Sessions of this quiz" className="w-full min-w-[52rem] text-left">
+              <thead>
+                <tr className={`border-b text-xs font-medium text-night/45 ${RULE}`}>
+                  <th scope="col" className={`${CELL} pl-4 sm:pl-10`}>
+                    Started
+                  </th>
+                  <th scope="col" className={CELL}>
+                    Type
+                  </th>
+                  <th scope="col" className={CELL}>
+                    Status
+                  </th>
+                  <th scope="col" className={`${CELL} text-right`}>
+                    Students
+                  </th>
+                  <th scope="col" className={`${CELL} text-right`}>
+                    Average score
+                  </th>
+                  <th scope="col" className={CELL}>
+                    Feedback
+                  </th>
+                  <th scope="col" className={`${CELL} pr-4 sm:pr-10`}>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dashed divide-night/15 text-[0.9375rem]">
+                {rows.map((row) => (
+                  <tr
+                    key={row.sessionId}
+                    className="transition-colors duration-200 ease-soft hover:bg-canvas"
+                  >
+                    <td className={`${ROW_CELL} pl-4 whitespace-nowrap text-night sm:pl-10`}>
+                      {formatWhen(row.startedAt)}
+                    </td>
+                    <td className={`${ROW_CELL} whitespace-nowrap text-night/70`}>
+                      <span className="inline-flex items-center gap-2 align-middle">
+                        <QuizTypeIcon type={typeOf(row)} size={18} />
+                        {typeLabel(row)}
+                      </span>
+                    </td>
+                    <td className={ROW_CELL}>
+                      <StatusBadge status={row.status} />
+                    </td>
+                    <td className={`${ROW_CELL} text-right text-night/80 tabular-nums`}>
+                      {row.participantCount}
+                    </td>
+                    <td className={`${ROW_CELL} text-right text-night/80 tabular-nums`}>
+                      {row.averageScore === null ? (
+                        <span className="text-night/35">–</span>
+                      ) : (
+                        row.averageScore.toLocaleString()
+                      )}
+                    </td>
+                    <td className={`${ROW_CELL} whitespace-nowrap`}>
+                      {row.averageRating === null ? (
+                        <span className="text-night/35">–</span>
+                      ) : (
+                        <span className="text-night/80 tabular-nums">
+                          <span className="text-amber-500" aria-hidden="true">
+                            ★{' '}
+                          </span>
+                          {row.averageRating.toFixed(1)}{' '}
+                          <span className="text-night/40">({row.feedbackCount})</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className={`${ROW_CELL} pr-4 text-right whitespace-nowrap sm:pr-10`}>
+                      {row.status === 'ended' ? (
+                        <Link
+                          to={`/sessions/${row.sessionId}/summary`}
+                          className={`${ctaLight} ${ctaSize.sm}`}
+                        >
+                          Open summary
+                          <span className="sr-only"> for {formatWhen(row.startedAt)}</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          to={`/host/sessions/${row.sessionId}`}
+                          className={`${ctaSoft} ${ctaSize.sm}`}
+                        >
+                          Open console
+                          <span className="sr-only"> for code {row.joinCode}</span>
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </PageBody>
+    </section>
+  );
+}
+
+const CELL = 'px-3 py-3 font-medium';
+const ROW_CELL = 'px-3 py-4';
+
+function StatusBadge({ status }: { status: QuizSessionHistoryRow['status'] }) {
+  if (status === 'ended') {
+    return <span className="text-night/55">{STATUS_LABELS.ended}</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-800 shadow-[inset_0_0_0_1px_var(--color-accent-200)]">
+      <span aria-hidden="true" className="h-1.5 w-1.5 animate-live rounded-full bg-accent-500" />
+      {STATUS_LABELS[status]}
+    </span>
   );
 }

@@ -14,6 +14,10 @@ interface DropdownProps {
   disabled?: boolean;
   className?: string;
   triggerClassName?: string;
+  // The redesigned look. Pages that have not been redesigned keep the original one.
+  look?: 'default' | 'modern';
+  // In the modern look: a compact control for toolbars, or a form-sized one.
+  size?: 'md' | 'lg';
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
 }
@@ -27,6 +31,8 @@ export function Dropdown({
   disabled = false,
   className = '',
   triggerClassName = '',
+  look = 'default',
+  size = 'md',
   'aria-describedby': describedBy,
   'aria-invalid': invalid,
 }: DropdownProps) {
@@ -37,6 +43,7 @@ export function Dropdown({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const modern = look === 'modern';
   const [active, setActive] = useState(0);
   const selectedIndex = options.findIndex((option) => option.value === value);
   const selected = options[selectedIndex];
@@ -148,15 +155,19 @@ export function Dropdown({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleKeyDown}
-        className={`group flex w-full items-center justify-between gap-3 rounded-md border border-rule-strong bg-surface px-3 py-2 text-left text-base text-ink transition-colors hover:border-board focus:border-board disabled:cursor-not-allowed disabled:bg-paper disabled:text-muted aria-[invalid=true]:border-alert ${triggerClassName}`.trim()}
+        className={`group flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed ${
+          modern
+            ? `${size === 'lg' ? 'h-12 rounded-xl px-4 text-base' : 'h-10 rounded-[0.8rem] px-3.5 text-[0.9375rem]'} bg-white text-night shadow-[0_0_0_1px_rgba(17,16,20,0.12)] transition-shadow duration-200 ease-soft hover:shadow-[0_0_0_1px_rgba(17,16,20,0.25)] focus:shadow-[0_0_0_2px_var(--color-accent-500)] focus:outline-none disabled:text-night/40`
+            : 'rounded-md border border-rule-strong bg-surface px-3 py-2 text-base text-ink transition-colors hover:border-board focus:border-board disabled:bg-paper disabled:text-muted aria-[invalid=true]:border-alert'
+        } ${triggerClassName}`.trim()}
       >
         <span className="min-w-0 truncate">{selected?.label ?? ''}</span>
         <svg
           aria-hidden="true"
           viewBox="0 0 12 12"
-          className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 ${
-            open ? 'rotate-180' : ''
-          }`}
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
+            modern ? 'text-night/40 ease-soft' : 'text-muted'
+          } ${open ? 'rotate-180' : ''}`}
         >
           <path
             d="M2.5 4.5 6 8l3.5-3.5"
@@ -174,7 +185,11 @@ export function Dropdown({
           role="listbox"
           aria-label={label}
           onMouseDown={(event) => event.preventDefault()}
-          className="animate-pop absolute z-30 mt-1.5 max-h-64 w-full min-w-40 overflow-auto rounded-lg border border-rule bg-surface p-1 shadow-lg"
+          className={`animate-pop absolute z-30 mt-1.5 max-h-64 w-full min-w-40 overflow-auto p-1 ${
+            modern
+              ? 'rounded-xl bg-white font-geist shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_16px_32px_-12px_rgba(17,16,20,0.25)]'
+              : 'rounded-lg border border-rule bg-surface shadow-lg'
+          }`}
         >
           {options.map((option, index) => {
             const isSelected = index === selectedIndex;
@@ -186,16 +201,22 @@ export function Dropdown({
                 aria-selected={isSelected}
                 onMouseEnter={() => setActive(index)}
                 onClick={() => choose(index)}
-                className={`flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-base ${
-                  index === active ? 'bg-board-soft text-ink' : 'text-ink'
-                } ${isSelected ? 'font-semibold' : ''}`}
+                className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 ${
+                  modern
+                    ? `rounded-lg text-[0.9375rem] text-night transition-colors duration-150 ${
+                        index === active ? 'bg-night/[0.05]' : ''
+                      } ${isSelected ? 'font-medium' : ''}`
+                    : `rounded-md text-base ${index === active ? 'bg-board-soft text-ink' : 'text-ink'} ${
+                        isSelected ? 'font-semibold' : ''
+                      }`
+                }`}
               >
                 <span className="min-w-0 truncate">{option.label}</span>
                 {isSelected && (
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 12 12"
-                    className="h-3.5 w-3.5 shrink-0 text-board"
+                    className={`h-3.5 w-3.5 shrink-0 ${modern ? 'text-accent-600' : 'text-board'}`}
                   >
                     <path
                       d="M2.5 6.5 5 9l4.5-5.5"

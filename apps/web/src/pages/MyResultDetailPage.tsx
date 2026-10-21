@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { RequireRole } from '../components/RequireRole';
 import { StudentResultView } from '../components/StudentResultView';
-import { Notice, PageHeader, PageLoader } from '../components/ui';
+import { PageBody, PageHeader } from '../components/app/Page';
+import { Notice, PageLoader } from '../components/ui';
 import { ApiError, api, describeError } from '../lib/api';
 
 const NOT_READY_TEXT: Record<string, string> = {
@@ -43,7 +44,7 @@ function MyResultDetailContent() {
   }, [sessionId]);
 
   return (
-    <div>
+    <section className="flex flex-1 flex-col">
       <PageHeader
         title={result?.quizTitle ?? 'Your result'}
         description={
@@ -51,12 +52,16 @@ function MyResultDetailContent() {
             ? `${result.mode === 'exam' ? 'Timed exam' : 'Quiz'} result for ${result.displayName}`
             : undefined
         }
-        back={{ to: '/me/results', label: 'Back to my results' }}
+        back={{ to: '/me/results', label: 'My results' }}
       />
-      {message && <Notice tone="info">{message}</Notice>}
-      {!result && !message && <PageLoader label="Loading your result" />}
-      {result && <StudentResultView result={result} audience="student" />}
-    </div>
+      <PageBody>
+        <div className="space-y-4 px-4 pt-6 pb-10 sm:px-10">
+          {message && <Notice tone="info">{message}</Notice>}
+          {!result && !message && <PageLoader label="Loading your result" />}
+          {result && <StudentResultView result={result} audience="student" />}
+        </div>
+      </PageBody>
+    </section>
   );
 }
 

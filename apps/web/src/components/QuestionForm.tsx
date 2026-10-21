@@ -1,13 +1,15 @@
 import { questionInputSchema, type QuestionInput } from '@quizup/shared';
 import { useId, useState, type FormEvent } from 'react';
+import { AuthField, AuthNotice, AuthSelect, AuthTextArea } from './landing/AuthField';
+import { ctaDark, ctaLight, ctaSize } from './landing/cta';
 import { QuestionImageField } from './QuestionImageField';
-import { Button, Notice, SelectField, TextAreaField, TextField } from './ui';
 
 interface QuestionFormProps {
   initialValue?: QuestionInput;
   submitLabel: string;
   onSubmit: (input: QuestionInput) => Promise<void>;
   onCancel?: () => void;
+  // Modules that already exist in this quiz, offered as suggestions.
   modules?: string[];
 }
 
@@ -66,7 +68,7 @@ export function QuestionForm({
     <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <TextField
+          <AuthField
             label="Module (optional)"
             list={moduleListId}
             placeholder="For example, Module 1"
@@ -80,24 +82,23 @@ export function QuestionForm({
             ))}
           </datalist>
         </div>
-        <SelectField
+        <AuthSelect
           label="Difficulty"
           value={draft.difficulty}
-          onChange={(event) =>
-            setDraft({
-              ...draft,
-              difficulty: event.target.value as QuestionInput['difficulty'],
-            })
+          options={[
+            { value: 'easy', label: 'Easy' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'hard', label: 'Hard' },
+          ]}
+          onChange={(next) =>
+            setDraft({ ...draft, difficulty: next as QuestionInput['difficulty'] })
           }
-        >
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </SelectField>
+        />
       </div>
-      <TextAreaField
+      <AuthTextArea
         label="Question"
         rows={2}
+        placeholder="What would you like to ask?"
         value={draft.stem}
         onChange={(event) => setDraft({ ...draft, stem: event.target.value })}
       />
@@ -108,44 +109,56 @@ export function QuestionForm({
           setDraft({ ...draft, image_url: imageUrl, image_alt: imageAlt })
         }
       />
-      <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-medium">Options</legend>
-        <p className="-mt-1 mb-2 text-sm text-muted">
+      <fieldset>
+        <legend className="text-sm font-medium text-night">Options</legend>
+        <p className="mt-1 mb-3 text-sm text-night/50">
           Select the circle next to the correct answer.
         </p>
-        {draft.options.map((option, optionIndex) => {
-          const correct = draft.correct_index === optionIndex;
-          return (
-            <div
-              key={OPTION_LETTERS[optionIndex]}
-              className={`flex items-center gap-3 rounded-md border px-3 py-1.5 ${
-                correct ? 'border-success/50 bg-success-soft' : 'border-rule bg-surface'
-              }`}
-            >
-              <input
-                type="radio"
-                name={radioName}
-                className="h-4 w-4 shrink-0 accent-success"
-                aria-label={`Option ${OPTION_LETTERS[optionIndex]} is correct`}
-                checked={correct}
-                onChange={() => setDraft({ ...draft, correct_index: optionIndex })}
-              />
-              <span aria-hidden="true" className="w-4 text-sm font-semibold text-muted">
-                {OPTION_LETTERS[optionIndex]}
-              </span>
-              <input
-                aria-label={`Option ${OPTION_LETTERS[optionIndex]}`}
-                className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1.5 text-base outline-offset-0 placeholder:text-muted/70"
-                placeholder={`Answer ${OPTION_LETTERS[optionIndex]}`}
-                value={option}
-                onChange={(event) => setOption(optionIndex, event.target.value)}
-              />
-            </div>
-          );
-        })}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {draft.options.map((option, optionIndex) => {
+            const correct = draft.correct_index === optionIndex;
+            return (
+              <div
+                key={OPTION_LETTERS[optionIndex]}
+                className={`flex items-center gap-3 rounded-xl px-3 transition-[background-color,box-shadow] duration-200 ease-soft focus-within:shadow-[0_0_0_2px_var(--color-accent-500)] ${
+                  correct
+                    ? 'bg-accent-50 shadow-[0_0_0_1px_var(--color-accent-300)]'
+                    : 'bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.12)]'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={radioName}
+                  className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-accent-600)]"
+                  aria-label={`Option ${OPTION_LETTERS[optionIndex]} is correct`}
+                  checked={correct}
+                  onChange={() => setDraft({ ...draft, correct_index: optionIndex })}
+                />
+                <span
+                  aria-hidden="true"
+                  className={`w-4 font-geist-mono text-xs font-medium ${
+                    correct ? 'text-accent-700' : 'text-night/40'
+                  }`}
+                >
+                  {OPTION_LETTERS[optionIndex]}
+                </span>
+                <input
+                  aria-label={`Option ${OPTION_LETTERS[optionIndex]}`}
+                  className="h-10 min-w-0 flex-1 bg-transparent text-[0.9375rem] text-night placeholder:text-night/35 focus:outline-none"
+                  placeholder={`Answer ${OPTION_LETTERS[optionIndex]}`}
+                  value={option}
+                  onChange={(event) => setOption(optionIndex, event.target.value)}
+                />
+                {correct && (
+                  <span className="shrink-0 text-xs font-medium text-accent-700">Correct</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </fieldset>
       {errors.length > 0 && (
-        <Notice tone="danger">
+        <AuthNotice tone="danger">
           {errors.length === 1 ? (
             errors[0]
           ) : (
@@ -155,16 +168,16 @@ export function QuestionForm({
               ))}
             </ul>
           )}
-        </Notice>
+        </AuthNotice>
       )}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={submitting} className={`${ctaDark} ${ctaSize.md}`}>
           {submitLabel}
-        </Button>
+        </button>
         {onCancel && (
-          <Button variant="secondary" onClick={onCancel}>
+          <button type="button" onClick={onCancel} className={`${ctaLight} ${ctaSize.md}`}>
             Cancel
-          </Button>
+          </button>
         )}
       </div>
     </form>

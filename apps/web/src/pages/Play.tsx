@@ -19,7 +19,11 @@ import { QuestionTimer } from '../components/QuestionTimer';
 import { FeedbackForm } from '../components/FeedbackForm';
 import { StudentIntro } from '../components/StudentIntro';
 import { QuestionImage } from '../components/QuestionImage';
-import { Button, Notice, PageLoader, buttonClasses } from '../components/ui';
+import { AppIcon, ICONS } from '../components/app/icons';
+import { ctaPrimary, ctaSize } from '../components/landing/cta';
+import { Texture } from '../components/landing/Texture';
+import { CARD, PlayStage, PlayerBar, WaitingDots } from '../components/play/PlayStage';
+import { Notice, PageLoader } from '../components/ui';
 import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
 import { useServerNow } from '../hooks/useServerNow';
@@ -75,12 +79,6 @@ const INITIAL_STATE: PlayState = {
   branding: null,
 };
 
-const OPTION_STYLES = [
-  'bg-answer-a text-white',
-  'bg-answer-b text-white',
-  'bg-answer-c text-ink',
-  'bg-answer-d text-white',
-];
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
 const JOIN_ERROR_MESSAGES: Record<SocketErrorCode, string> = {
@@ -376,41 +374,50 @@ export function Play() {
 
   if (state.replaced) {
     return (
-      <div className="mx-auto max-w-md space-y-5 text-center">
-        <Notice tone="warning">
-          This quiz is open on another device, so this one was disconnected. Only one device can use
-          your place at a time.
-        </Notice>
-        <Button
-          size="lg"
-          onClick={() => {
-            setState((current) => ({ ...current, replaced: false }));
-            socket?.connect();
-          }}
-        >
-          Use this device
-        </Button>
-      </div>
+      <PlayStage width="sm">
+        <div className={`${CARD} space-y-5 p-6 text-center`}>
+          <Notice tone="warning">
+            This quiz is open on another device, so this one was disconnected. Only one device can
+            use your place at a time.
+          </Notice>
+          <button
+            type="button"
+            className={`${ctaPrimary} ${ctaSize.lg} w-full`}
+            onClick={() => {
+              setState((current) => ({ ...current, replaced: false }));
+              socket?.connect();
+            }}
+          >
+            Use this device
+          </button>
+        </div>
+      </PlayStage>
     );
   }
 
   if (state.joinError) {
     return (
-      <div className="mx-auto max-w-md space-y-5 text-center">
-        <Notice tone="danger">
-          {state.needsName
-            ? 'Enter your name to join this quiz.'
-            : JOIN_ERROR_MESSAGES[state.joinError]}
-        </Notice>
-        <Link to={`/join/${joinCode}`} className={buttonClasses('primary', 'lg')}>
-          Back to join
-        </Link>
-      </div>
+      <PlayStage width="sm">
+        <div className={`${CARD} space-y-5 p-6 text-center`}>
+          <Notice tone="danger">
+            {state.needsName
+              ? 'Enter your name to join this quiz.'
+              : JOIN_ERROR_MESSAGES[state.joinError]}
+          </Notice>
+          <Link to={`/join/${joinCode}`} className={`${ctaPrimary} ${ctaSize.lg} w-full`}>
+            Back to join
+          </Link>
+        </div>
+      </PlayStage>
     );
   }
 
   if (!state.participantId || !synced) {
-    return <PageLoader label="Connecting..." />;
+    return (
+      <PlayStage width="sm">
+        <PageLoader label="Connecting..." />
+      </PlayStage>
+    );
   }
 
   if (
@@ -460,60 +467,64 @@ export function Play() {
           connected={state.connected}
         />
       )}
-      <div className="flex items-center justify-between gap-3 border-b border-rule pb-3 text-sm">
-        <span className="min-w-0 truncate font-semibold">{state.displayName}</span>
-        {state.standing && (
-          <span className="shrink-0 text-muted">
-            Rank {state.standing.rank}, {state.standing.score.toLocaleString()} points
-          </span>
-        )}
-      </div>
+      <PlayerBar name={state.displayName} standing={state.standing} />
     </>
   );
 
   if (state.status === 'ended') {
     return (
-      <div className="mx-auto max-w-md space-y-6">
+      <PlayStage width="sm">
         {header}
-        <div className="space-y-2 text-center">
-          <h1 className="text-title font-semibold tracking-tight">Final results</h1>
+        <div className={`${CARD} px-6 py-8 text-center`}>
+          <h1 className="text-[1.75rem] font-medium tracking-[-0.03em]">Final results</h1>
           {state.standing && (
-            <p className="text-lg text-muted">
-              You finished{' '}
-              <strong className="font-semibold text-ink tabular-nums">
+            <>
+              <p className="mt-5 font-geist-mono text-6xl font-medium tracking-tight tabular-nums">
                 #{state.standing.rank}
-              </strong>{' '}
-              with{' '}
-              <strong className="font-semibold text-ink tabular-nums">
-                {state.standing.score.toLocaleString()}
-              </strong>{' '}
-              points
-            </p>
+              </p>
+              <p className="mt-3 text-night/60">
+                You finished{' '}
+                <strong className="font-medium text-night tabular-nums">
+                  #{state.standing.rank}
+                </strong>{' '}
+                with{' '}
+                <strong className="font-medium text-night tabular-nums">
+                  {state.standing.score.toLocaleString()}
+                </strong>{' '}
+                points
+              </p>
+            </>
           )}
         </div>
         <Leaderboard entries={state.leaderboard} highlightParticipantId={state.participantId} />
         {socket && (
           <FeedbackForm submit={(payload) => socket.emitWithAck('feedback:submit', payload)} />
         )}
-      </div>
+      </PlayStage>
     );
   }
 
   if (state.status === 'lobby' || !state.question) {
     return (
-      <div className="mx-auto max-w-md space-y-6">
+      <PlayStage width="sm">
         {header}
-        <div className="space-y-3 py-8 text-center">
-          <h1 className="text-title font-semibold tracking-tight">You are in</h1>
-          <p className="text-lg text-muted">Waiting for the host to start the quiz.</p>
-          <p className="text-sm text-muted">
+        <div className={`${CARD} relative overflow-hidden px-6 pt-10 pb-16 text-center`}>
+          <h1 className="text-[1.75rem] font-medium tracking-[-0.03em]">You are in</h1>
+          <p className="mt-2 text-night/60">Waiting for the host to start the quiz.</p>
+          <div className="mt-5 flex justify-center">
+            <WaitingDots />
+          </div>
+          <p className="mt-6 text-sm text-night/55">
             Join code{' '}
-            <span className="rounded bg-board-soft px-2 py-1 font-semibold tracking-[0.2em] text-board tabular-nums">
+            <span className="ml-1 rounded-lg bg-night/[0.05] px-2.5 py-1 font-geist-mono font-medium tracking-[0.2em] text-night tabular-nums">
               {joinCode}
             </span>
           </p>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-14">
+            <Texture field="rise" color="var(--color-accent-400)" opacity={0.28} cell={3} />
+          </div>
         </div>
-      </div>
+      </PlayStage>
     );
   }
 
@@ -521,32 +532,57 @@ export function Play() {
     const you = state.result.you;
     const outcome =
       you?.chosenIndex === null || you === null ? 'timeout' : you.correct ? 'correct' : 'wrong';
-    const outcomeStyle =
-      outcome === 'correct' ? 'bg-success' : outcome === 'wrong' ? 'bg-alert' : 'bg-ink';
+    const tone = {
+      correct: 'bg-accent-50 text-accent-900 shadow-[0_0_0_1.5px_var(--color-accent-500)]',
+      wrong: 'bg-alert-soft text-alert shadow-[0_0_0_1.5px_rgba(180,35,24,0.4)]',
+      timeout: 'bg-white text-night shadow-[0_0_0_1px_rgba(17,16,20,0.12)]',
+    }[outcome];
     return (
-      <div className="mx-auto max-w-md space-y-5">
+      <PlayStage width="sm">
         {header}
-        <div role="status" className={`rounded-lg p-6 text-center text-white ${outcomeStyle}`}>
-          <p className="text-title font-semibold">
+        <div role="status" className={`rounded-2xl px-6 py-7 text-center ${tone}`}>
+          <span
+            aria-hidden="true"
+            className={`mx-auto flex h-11 w-11 items-center justify-center rounded-full ${
+              outcome === 'correct'
+                ? 'bg-accent-500 text-white'
+                : outcome === 'wrong'
+                  ? 'bg-alert text-white'
+                  : 'bg-night/10 text-night/60'
+            }`}
+          >
+            <AppIcon size={22}>
+              {outcome === 'correct'
+                ? ICONS.check
+                : outcome === 'wrong'
+                  ? ICONS.close
+                  : ICONS.clock}
+            </AppIcon>
+          </span>
+          <p className="mt-3 text-[1.5rem] font-medium tracking-[-0.02em]">
             {outcome === 'timeout' ? "Time's up" : outcome === 'correct' ? 'Correct' : 'Not quite'}
           </p>
-          <p className="mt-2 text-xl tabular-nums">+{you?.pointsAwarded ?? 0} points</p>
+          <p className="mt-1 font-geist-mono text-xl tabular-nums">
+            +{you?.pointsAwarded ?? 0} points
+          </p>
           {you && (
-            <p className="mt-1 text-white/85">
+            <p className="mt-1 text-sm opacity-75">
               {you.totalPoints.toLocaleString()} total, rank {you.rank}
             </p>
           )}
         </div>
-        <p className="text-center text-sm text-muted">
+        <p className={`${CARD} px-4 py-3 text-center text-sm text-night/60`}>
           Correct answer:{' '}
-          <span className="font-semibold text-ink">
+          <span className="font-medium text-night">
             {OPTION_LETTERS[state.result.correctIndex]}.{' '}
             {state.question.options[state.result.correctIndex]}
           </span>
         </p>
         <Leaderboard entries={state.leaderboard} highlightParticipantId={state.participantId} />
-        <p className="text-center text-sm text-muted">Waiting for the next question...</p>
-      </div>
+        <p className="flex items-center justify-center gap-3 text-sm text-night/55">
+          Waiting for the next question <WaitingDots />
+        </p>
+      </PlayStage>
     );
   }
 
@@ -555,17 +591,23 @@ export function Play() {
   const locked = state.answered || hasEnded;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <PlayStage width="lg">
       {header}
-      <QuestionTimer
-        serverNowMs={serverNowMs}
-        startsAtServerMs={state.question.startsAtServerMs}
-        durationMs={state.question.durationMs}
-      />
+      <div className={`${CARD} p-5 sm:p-6`}>
+        <QuestionTimer
+          serverNowMs={serverNowMs}
+          startsAtServerMs={state.question.startsAtServerMs}
+          durationMs={state.question.durationMs}
+        />
+      </div>
       {hasStarted && (
         <>
-          <h1 className="text-xl font-semibold break-words sm:text-2xl">{state.question.stem}</h1>
-          <QuestionImage imageUrl={state.question.imageUrl} imageAlt={state.question.imageAlt} />
+          <div className={`${CARD} space-y-4 p-5 sm:p-6`}>
+            <h1 className="text-xl leading-snug font-medium tracking-tight break-words [overflow-wrap:anywhere] sm:text-2xl">
+              {state.question.stem}
+            </h1>
+            <QuestionImage imageUrl={state.question.imageUrl} imageAlt={state.question.imageAlt} />
+          </div>
           <div role="group" aria-label="Answers" className="grid gap-3 sm:grid-cols-2">
             {state.question.options.map((option, optionIndex) => {
               const chosen = state.chosenIndex === optionIndex;
@@ -576,17 +618,23 @@ export function Play() {
                   disabled={locked}
                   aria-pressed={chosen}
                   onClick={() => submitAnswer(optionIndex)}
-                  className={`flex min-h-20 w-full items-center gap-4 rounded-lg px-4 py-4 text-left text-lg font-semibold break-words transition hover:brightness-110 disabled:cursor-not-allowed disabled:hover:brightness-100 ${
-                    OPTION_STYLES[optionIndex]
-                  } ${chosen ? 'ring-4 ring-ink ring-offset-2 ring-offset-paper' : locked ? 'opacity-45' : ''}`}
+                  className={`flex min-h-[4.5rem] w-full items-center gap-4 rounded-2xl px-4 py-3.5 text-left text-[1.0625rem] font-medium break-words transition-[background-color,box-shadow,color,transform] duration-200 ease-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-night enabled:active:scale-[0.98] disabled:cursor-not-allowed ${
+                    chosen
+                      ? 'bg-night text-white shadow-[0_0_0_1px_rgba(17,16,20,1)]'
+                      : locked
+                        ? 'bg-white/60 text-night/45 shadow-[0_0_0_1px_rgba(17,16,20,0.08)]'
+                        : 'bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.12),0_1px_3px_rgba(17,16,20,0.05)] hover:shadow-[0_0_0_1.5px_rgba(17,16,20,0.45)]'
+                  }`}
                 >
                   <span
                     aria-hidden="true"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/25 text-base font-bold"
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-geist-mono text-sm font-medium ${
+                      chosen ? 'bg-white/15 text-white' : 'bg-night/[0.06] text-night/60'
+                    }`}
                   >
                     {OPTION_LETTERS[optionIndex]}
                   </span>
-                  <span className="min-w-0">{option}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{option}</span>
                 </button>
               );
             })}
@@ -594,16 +642,16 @@ export function Play() {
         </>
       )}
       {state.answered && (
-        <p role="status" className="text-center font-medium text-muted">
+        <p role="status" className="text-center text-sm font-medium text-night/60">
           Answer locked. Waiting for the others...
         </p>
       )}
       {!state.answered && hasEnded && (
-        <p role="status" className="text-center font-medium text-muted">
+        <p role="status" className="text-center text-sm font-medium text-night/60">
           Time&apos;s up
         </p>
       )}
       {answerError && <Notice tone="danger">{answerError}</Notice>}
-    </div>
+    </PlayStage>
   );
 }

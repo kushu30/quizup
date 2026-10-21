@@ -1,4 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
+import { useModernLook } from '../app/shellContext';
+import { ctaDark, ctaLight, ctaPrimary, ctaQuiet, ctaSize, ctaSoft } from '../landing/cta';
 
 export type ButtonVariant = 'primary' | 'brand' | 'accent' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -21,6 +23,23 @@ const SIZES: Record<ButtonSize, string> = {
   lg: 'min-h-12 px-6 text-base',
 };
 
+// Inside the app shell the same variants take the redesigned buttons.
+const MODERN_VARIANTS: Record<ButtonVariant, string> = {
+  primary: ctaDark,
+  brand: ctaPrimary,
+  accent: ctaSoft,
+  secondary: ctaLight,
+  ghost: ctaQuiet,
+  danger: `${ctaLight} !text-alert hover:!bg-alert-soft`,
+};
+
+export function modernButtonClasses(
+  variant: ButtonVariant = 'primary',
+  size: ButtonSize = 'md',
+): string {
+  return `${MODERN_VARIANTS[variant]} ${ctaSize[size]}`;
+}
+
 export function buttonClasses(variant: ButtonVariant = 'primary', size: ButtonSize = 'md'): string {
   return `${BASE} ${VARIANTS[variant]} ${SIZES[size]}`;
 }
@@ -37,10 +56,11 @@ export function Button({
   className = '',
   ...rest
 }: ButtonProps) {
+  const modern = useModernLook();
   return (
     <button
       type={type}
-      className={`${buttonClasses(variant, size)} ${className}`.trim()}
+      className={`${modern ? modernButtonClasses(variant, size) : buttonClasses(variant, size)} ${className}`.trim()}
       {...rest}
     />
   );

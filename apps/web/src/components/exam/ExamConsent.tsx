@@ -1,5 +1,7 @@
 import { EXAM_CONSENT_TEXT } from '@quizup/shared';
-import { Button, Notice } from '../ui';
+import { ctaLight, ctaPrimary, ctaSize } from '../landing/cta';
+import { CARD, PlayStage } from '../play/PlayStage';
+import { Notice } from '../ui';
 
 interface ExamConsentProps {
   durationMinutes: number;
@@ -12,11 +14,17 @@ interface ExamConsentProps {
 
 function Section({ heading, items }: { heading: string; items: readonly string[] }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-base font-semibold">{heading}</h2>
-      <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink marker:text-muted">
+    <section className="space-y-2.5">
+      <h2 className="text-sm font-medium">{heading}</h2>
+      <ul className="space-y-2">
         {items.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={item} className="flex gap-3 text-[0.9375rem] leading-relaxed">
+            <span
+              aria-hidden="true"
+              className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-night/30"
+            />
+            <span className="text-night/75">{item}</span>
+          </li>
         ))}
       </ul>
     </section>
@@ -32,50 +40,64 @@ export function ExamConsent({
   onDecline,
 }: ExamConsentProps) {
   return (
-    <div className="mx-auto max-w-2xl space-y-6 rounded-lg border border-rule bg-surface p-6 sm:p-8">
-      <div className="space-y-2">
-        <h1 className="text-title font-semibold tracking-tight">{EXAM_CONSENT_TEXT.title}</h1>
-        <p className="text-muted">
-          You have <strong className="font-semibold text-ink">{durationMinutes} minutes</strong>.
-          The timer starts when you accept.
-        </p>
-      </div>
-      {proctored ? (
-        <>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <Section
-              heading={EXAM_CONSENT_TEXT.monitoredHeading}
-              items={EXAM_CONSENT_TEXT.monitored}
-            />
-            <Section
-              heading={EXAM_CONSENT_TEXT.notCollectedHeading}
-              items={EXAM_CONSENT_TEXT.notCollected}
-            />
-          </div>
-          <div className="border-t border-rule pt-5">
-            <Section
-              heading={EXAM_CONSENT_TEXT.statementsHeading}
-              items={EXAM_CONSENT_TEXT.statements}
-            />
-          </div>
-        </>
-      ) : (
-        <div className="border-t border-rule pt-5">
-          <Section
-            heading="This exam is not proctored"
-            items={['Nothing about your browsing is recorded.']}
-          />
+    <PlayStage width="lg">
+      <div className={`${CARD} space-y-6 p-6 sm:p-8`}>
+        <div className="space-y-2">
+          <h1 className="text-[1.875rem] leading-tight font-medium tracking-[-0.03em]">
+            {EXAM_CONSENT_TEXT.title}
+          </h1>
+          <p className="text-night/60">
+            You have <strong className="font-medium text-night">{durationMinutes} minutes</strong>.
+            The timer starts when you accept.
+          </p>
         </div>
-      )}
-      {error && <Notice tone="danger">{error}</Notice>}
-      <div className="flex flex-col gap-3 sm:flex-row-reverse">
-        <Button variant="brand" size="lg" disabled={busy} onClick={onAccept} className="sm:flex-1">
-          {EXAM_CONSENT_TEXT.acceptLabel}
-        </Button>
-        <Button variant="secondary" size="lg" disabled={busy} onClick={onDecline}>
-          {EXAM_CONSENT_TEXT.declineLabel}
-        </Button>
+        {proctored ? (
+          <>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Section
+                heading={EXAM_CONSENT_TEXT.monitoredHeading}
+                items={EXAM_CONSENT_TEXT.monitored}
+              />
+              <Section
+                heading={EXAM_CONSENT_TEXT.notCollectedHeading}
+                items={EXAM_CONSENT_TEXT.notCollected}
+              />
+            </div>
+            <div className="border-t border-dashed border-night/15 pt-5">
+              <Section
+                heading={EXAM_CONSENT_TEXT.statementsHeading}
+                items={EXAM_CONSENT_TEXT.statements}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="border-t border-dashed border-night/15 pt-5">
+            <Section
+              heading="This exam is not proctored"
+              items={['Nothing about your browsing is recorded.']}
+            />
+          </div>
+        )}
+        {error && <Notice tone="danger">{error}</Notice>}
+        <div className="flex flex-col gap-3 sm:flex-row-reverse">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onAccept}
+            className={`${ctaPrimary} ${ctaSize.lg} sm:flex-1`}
+          >
+            {EXAM_CONSENT_TEXT.acceptLabel}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDecline}
+            className={`${ctaLight} ${ctaSize.lg}`}
+          >
+            {EXAM_CONSENT_TEXT.declineLabel}
+          </button>
+        </div>
       </div>
-    </div>
+    </PlayStage>
   );
 }
