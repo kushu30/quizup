@@ -1,6 +1,7 @@
 import { useId, useState, type ChangeEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Button, Notice } from '../ui';
+import { AuthNotice } from '../landing/AuthField';
+import { ctaQuietDanger, ctaSize } from '../landing/cta';
 
 const MAX_LOGO_BYTES = 1024 * 1024;
 const EXTENSION_BY_TYPE: Record<string, string> = {
@@ -63,15 +64,15 @@ export function LogoUpload({ hostId, quizId, value, onChange }: LogoUploadProps)
 
   return (
     <div className="space-y-2">
-      <label htmlFor={inputId} className="block text-sm font-medium">
+      <label htmlFor={inputId} className="block text-sm font-medium text-night">
         Logo
       </label>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-rule bg-paper">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.1)]">
           {value ? (
             <img src={value} alt="Current logo" className="h-full w-full object-contain" />
           ) : (
-            <span className="text-xs text-muted">No logo</span>
+            <span className="text-xs text-night/40">No logo</span>
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-2">
@@ -83,9 +84,9 @@ export function LogoUpload({ hostId, quizId, value, onChange }: LogoUploadProps)
             aria-invalid={fieldError ? true : undefined}
             aria-describedby={fieldError ? `${hintId} ${errorId}` : hintId}
             onChange={(event) => void handleChosen(event)}
-            className="block w-full text-sm text-muted file:mr-3 file:min-h-9 file:cursor-pointer file:rounded-md file:border file:border-rule-strong file:bg-surface file:px-3 file:text-sm file:font-semibold file:text-ink hover:file:bg-paper disabled:opacity-50"
+            className="block w-full text-sm text-night/55 file:mr-3 file:h-9 file:cursor-pointer file:rounded-[0.7rem] file:border-0 file:bg-night file:px-3.5 file:text-sm file:font-medium file:text-white file:transition-[filter] hover:file:brightness-125 disabled:opacity-50"
           />
-          <p id={hintId} className="text-sm text-muted">
+          <p id={hintId} className="text-sm text-night/50">
             PNG, JPEG or WebP, up to 1 MB. A square logo looks best.
           </p>
           {fieldError && (
@@ -94,18 +95,22 @@ export function LogoUpload({ hostId, quizId, value, onChange }: LogoUploadProps)
             </p>
           )}
           {uploading && (
-            <p role="status" className="text-sm text-muted">
+            <p role="status" className="text-sm text-night/55">
               Uploading...
             </p>
           )}
           {value && (
-            <Button variant="ghost" size="sm" onClick={() => onChange(undefined)}>
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className={`${ctaQuietDanger} ${ctaSize.sm} -ml-3.5`}
+            >
               Remove logo
-            </Button>
+            </button>
           )}
         </div>
       </div>
-      {uploadError && <Notice tone="danger">{uploadError}</Notice>}
+      {uploadError && <AuthNotice tone="danger">{uploadError}</AuthNotice>}
     </div>
   );
 }

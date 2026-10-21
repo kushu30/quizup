@@ -1,17 +1,13 @@
+import { PageBody, PageHeader } from '../components/app/Page';
 import { QuestionBank } from '../components/QuestionBank';
-import { PageHeader, Panel } from '../components/ui';
 
 export function QuestionBankPage() {
   return (
-    <div>
-      <PageHeader
-        title="Question bank"
-        description="Every question across your quizzes."
-        back={{ to: '/host', label: 'Back to dashboard' }}
-      />
-      <Panel>
-        <QuestionBank />
-      </Panel>
-    </div>
+    <section className="flex flex-1 flex-col">
+      <PageHeader title="Question bank" description="Every question across your quizzes." />
+      <PageBody className="pt-6">
+        <QuestionBank edge />
+      </PageBody>
+    </section>
   );
 }

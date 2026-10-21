@@ -1,4 +1,6 @@
 @import '@fontsource-variable/schibsted-grotesk/wght.css';
+@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
 @import 'tailwindcss';
 
 @theme {
@@ -26,6 +28,16 @@
   --color-answer-c: #e9b949;
   --color-answer-d: #1f7a4d;
 
+  /* Landing redesign: off-white canvas, near-black and one accent (below). */
+  --font-geist: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-canvas: #fafafa;
+  --color-hairline: #e7e7ea;
+  --color-hairline-strong: #d4d4d8;
+  --color-night: #111014;
+  --color-night-soft: #1c1b21;
+
   --text-title: 1.75rem;
   --text-title--line-height: 2.25rem;
   --text-hero: 2.75rem;
@@ -37,6 +49,44 @@
   --animate-pop: pop 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-tile: tile 1.2s ease-in-out infinite;
   --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+
+  --animate-icon-cycle: icon-cycle 1.8s linear infinite;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-rise-in: rise-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-live: live 1.8s ease-out infinite;
+
+  @keyframes icon-cycle {
+    0%,
+    100% {
+      fill: var(--color-accent-500);
+    }
+    33% {
+      fill: #1d5fa8;
+    }
+    66% {
+      fill: #1f7a4d;
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes live {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-300) 60%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent-300) 0%, transparent);
+    }
+  }
 
   @keyframes fade-in {
     from {
@@ -81,6 +131,43 @@
   }
 }
 
+/* Landing accent. Every accent use reads --color-accent-*, so trying another colour is a
+   one-line change: point the accent block at --color-violet-* or --color-fern-*. */
+@theme static {
+  --color-violet-50: #f6f4ff;
+  --color-violet-100: #ece8ff;
+  --color-violet-200: #ddd5ff;
+  --color-violet-300: #c4b6ff;
+  --color-violet-400: #a08cfa;
+  --color-violet-500: #7d64f0;
+  --color-violet-600: #5b3fd9;
+  --color-violet-700: #4a31b8;
+  --color-violet-800: #392690;
+  --color-violet-900: #271b63;
+
+  --color-fern-50: #f1f8f2;
+  --color-fern-100: #e1f1e4;
+  --color-fern-200: #c3e3ca;
+  --color-fern-300: #97cea4;
+  --color-fern-400: #62b277;
+  --color-fern-500: #3a9455;
+  --color-fern-600: #2a7843;
+  --color-fern-700: #235f37;
+  --color-fern-800: #1e4c2e;
+  --color-fern-900: #163a23;
+
+  --color-accent-50: var(--color-fern-50);
+  --color-accent-100: var(--color-fern-100);
+  --color-accent-200: var(--color-fern-200);
+  --color-accent-300: var(--color-fern-300);
+  --color-accent-400: var(--color-fern-400);
+  --color-accent-500: var(--color-fern-500);
+  --color-accent-600: var(--color-fern-600);
+  --color-accent-700: var(--color-fern-700);
+  --color-accent-800: var(--color-fern-800);
+  --color-accent-900: var(--color-fern-900);
+}
+
 @layer base {
   :root {
     color-scheme: light;
@@ -109,6 +196,17 @@
   }
 }
 
+@layer components {
+  /* A fine woven texture: two faint diagonal weaves and a little grain. */
+  .texture-weave {
+    background-color: var(--color-canvas);
+    background-image:
+      repeating-linear-gradient(135deg, rgba(17, 16, 20, 0.022) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(45deg, rgba(17, 16, 20, 0.014) 0 1px, transparent 1px 7px),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -127,4 +225,33 @@
   .animate-shimmer {
     animation: none;
   }
+}
+
+/* Ordered-dither fills for graphs: tint with a text colour, pick a density with .dither-1 (sparse)
+   to .dither-5 (solid). The pattern is a 4x4 Bayer tile drawn at 2x, so the dots stay crisp. */
+.dither {
+  background-color: currentColor;
+  mask-size: 8px 8px;
+  -webkit-mask-size: 8px 8px;
+  image-rendering: pixelated;
+}
+.dither-1 {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3C/svg%3E");
+}
+.dither-2 {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3C/svg%3E");
+}
+.dither-3 {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
+}
+.dither-4 {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='1' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='3' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='3' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='1' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='3' y='0' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='3' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
+}
+.dither-5 {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='1' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='3' y='0' width='1' height='1'/%3E%3Crect x='0' y='1' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='2' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='1' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='3' y='2' width='1' height='1'/%3E%3Crect x='0' y='3' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='2' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='1' height='1'/%3E%3Crect x='1' y='0' width='1' height='1'/%3E%3Crect x='2' y='0' width='1' height='1'/%3E%3Crect x='3' y='0' width='1' height='1'/%3E%3Crect x='0' y='1' width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3Crect x='2' y='1' width='1' height='1'/%3E%3Crect x='3' y='1' width='1' height='1'/%3E%3Crect x='0' y='2' width='1' height='1'/%3E%3Crect x='1' y='2' width='1' height='1'/%3E%3Crect x='2' y='2' width='1' height='1'/%3E%3Crect x='3' y='2' width='1' height='1'/%3E%3Crect x='0' y='3' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='2' y='3' width='1' height='1'/%3E%3Crect x='3' y='3' width='1' height='1'/%3E%3C/svg%3E");
 }

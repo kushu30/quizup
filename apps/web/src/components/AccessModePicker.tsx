@@ -1,5 +1,6 @@
 import type { AccessMode } from '@quizup/shared';
 import { useId } from 'react';
+import { ChoiceCard } from './landing/ChoiceCard';
 
 interface AccessModePickerProps {
   value: AccessMode;
@@ -26,36 +27,21 @@ export function AccessModePicker({ value, onChange }: AccessModePickerProps) {
 
   return (
     <div className="space-y-3">
-      <p id={labelId} className="text-sm font-medium">
+      <p id={labelId} className="text-sm font-medium text-night">
         Who can join
       </p>
       <div role="radiogroup" aria-labelledby={labelId} className="grid gap-2">
-        {OPTIONS.map((option) => {
-          const checked = value === option.mode;
-          return (
-            <label
-              key={option.mode}
-              className={`flex cursor-pointer items-start gap-3 rounded-md border-2 p-3 ${
-                checked
-                  ? 'border-board bg-board-soft'
-                  : 'border-rule bg-surface hover:border-rule-strong'
-              }`}
-            >
-              <input
-                type="radio"
-                name={name}
-                value={option.mode}
-                checked={checked}
-                onChange={() => onChange(option.mode)}
-                className="mt-1 h-4 w-4 shrink-0 accent-board"
-              />
-              <span className="min-w-0">
-                <span className="block font-semibold">{option.title}</span>
-                <span className="block text-sm text-muted">{option.summary}</span>
-              </span>
-            </label>
-          );
-        })}
+        {OPTIONS.map((option) => (
+          <ChoiceCard
+            key={option.mode}
+            name={name}
+            value={option.mode}
+            checked={value === option.mode}
+            onChange={() => onChange(option.mode)}
+            title={option.title}
+            summary={option.summary}
+          />
+        ))}
       </div>
     </div>
   );

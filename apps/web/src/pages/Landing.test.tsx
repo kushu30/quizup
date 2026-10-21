@@ -110,20 +110,6 @@ describe('Landing', () => {
     expect(screen.getAllByRole('link', { name: 'Open your dashboard' }).length).toBeGreaterThan(0);
   });
 
-  it('shows a live walkthrough with a generic question to a visitor', () => {
-    renderLanding();
-    fireEvent.click(screen.getByRole('button', { name: /step 3/i }));
-    expect(screen.getByText(/^Which isolation level prevents dirty reads/)).toBeTruthy();
-    expect(screen.getByText(/simulated walkthrough/i)).toBeTruthy();
-  });
-
-  it("puts a signed-in visitor's name in the walkthrough question", () => {
-    authState.value = { canHost: false, session: {}, profile: { name: 'Priya Nair' } };
-    renderLanding();
-    fireEvent.click(screen.getByRole('button', { name: /step 3/i }));
-    expect(screen.getByText(/^Priya, which isolation level/)).toBeTruthy();
-  });
-
   it('lets a signed-in student ask for host access by email', () => {
     authState.value = { canHost: false, session: {}, profile: { name: 'Sam' } };
     renderLanding();

@@ -10,7 +10,7 @@ interface BrandMarkProps {
   tone?: 'light' | 'dark';
 }
 
-function initialsOf(name: string): string {
+export function initialsOf(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)

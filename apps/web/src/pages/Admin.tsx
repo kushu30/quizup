@@ -1,8 +1,12 @@
 import { emailSchema, hostAllowlistSchema, type HostAllowlistEntry } from '@quizup/shared';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { AuthNotice } from '../components/landing/AuthField';
+import { ctaPrimary, ctaQuiet, ctaQuietDanger, ctaSize } from '../components/landing/cta';
+import { PageBody, PageHeader } from '../components/app/Page';
+import { AppIcon, ICONS } from '../components/app/icons';
 import { RequireRole } from '../components/RequireRole';
-import { Button, Notice, PageHeader, TextField } from '../components/ui';
 import { api, describeError } from '../lib/api';
+import { useAutoDismiss } from '../lib/useAutoDismiss';
 import { supabase } from '../lib/supabase';
 
 function HostAllowlistManager() {
@@ -13,6 +17,10 @@ function HostAllowlistManager() {
   const [mailNotice, setMailNotice] = useState<{ tone: 'info' | 'warning'; text: string } | null>(
     null,
   );
+  const messageFading = useAutoDismiss(message, () => setMessage(null));
+  const mailFading = useAutoDismiss(mailNotice, () => setMailNotice(null), 6000);
+  const emailId = useId();
+  const emailErrorId = `${emailId}-error`;
 
   const loadEntries = useCallback(async () => {
     const { data, error } = await supabase
@@ -74,72 +82,116 @@ function HostAllowlistManager() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <section className="flex flex-1 flex-col">
       <PageHeader
-        title="Host allowlist"
-        description="People with these email addresses become hosts when they sign in. Everyone else gets a student account."
-      />
-      <form
-        onSubmit={(event) => void handleAdd(event)}
-        noValidate
-        className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start"
+        title="Host access"
+        description="These people become hosts when they sign in. Everyone else gets a student account."
+        actions={
+          <form onSubmit={(event) => void handleAdd(event)} noValidate className="w-full lg:w-auto">
+            <div className="flex items-center gap-2">
+              <label htmlFor={emailId} className="sr-only">
+                Host email
+              </label>
+              <input
+                id={emailId}
+                type="email"
+                autoComplete="off"
+                placeholder="host@example.com"
+                value={newEmail}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? emailErrorId : undefined}
+                onChange={(event) => setNewEmail(event.target.value)}
+                className="h-10 min-w-0 flex-1 rounded-[0.8rem] bg-white px-4 text-[0.9375rem] text-night shadow-[0_0_0_1px_rgba(17,16,20,0.12)] transition-shadow duration-200 ease-soft placeholder:text-night/40 hover:shadow-[0_0_0_1px_rgba(17,16,20,0.25)] focus:shadow-[0_0_0_2px_var(--color-accent-500)] focus:outline-none aria-[invalid=true]:shadow-[0_0_0_2px_var(--color-alert)] lg:w-72 lg:flex-none"
+              />
+              <button type="submit" className={`${ctaPrimary} ${ctaSize.md}`}>
+                Add host
+              </button>
+            </div>
+            {emailError && (
+              <p id={emailErrorId} className="mt-2 text-sm font-medium text-alert">
+                {emailError}
+              </p>
+            )}
+          </form>
+        }
       >
-        <TextField
-          label="Host email"
-          type="email"
-          autoComplete="off"
-          className="flex-1"
-          placeholder="host@example.com"
-          value={newEmail}
-          error={emailError}
-          onChange={(event) => setNewEmail(event.target.value)}
-        />
-        <Button type="submit" className="sm:mt-6">
-          Add host
-        </Button>
-      </form>
-      {message && (
-        <Notice tone="danger" className="mb-6">
-          {message}
-        </Notice>
-      )}
-      {mailNotice && (
-        <Notice tone={mailNotice.tone} className="mb-6">
-          {mailNotice.text}
-        </Notice>
-      )}
-      {entries.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-rule-strong px-5 py-8 text-center text-muted">
-          No hosts yet. Add an email address above.
-        </p>
-      ) : (
-        <ul className="divide-y divide-rule rounded-lg border border-rule bg-surface">
-          {entries.map((entry) => (
-            <li key={entry.email} className="flex items-center justify-between gap-3 px-5 py-3">
-              <span className="min-w-0 break-all">{entry.email}</span>
-              <span className="flex shrink-0 gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-label={`Email ${entry.email} again`}
-                  onClick={() => void sendHostEmail(entry.email, false)}
-                >
-                  Email again
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  aria-label={`Remove ${entry.email}`}
-                  onClick={() => void handleRemove(entry.email)}
-                >
-                  Remove
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        {(message || mailNotice) && (
+          <div className="mt-8 space-y-3">
+            {message && (
+              <AuthNotice tone="danger" fading={messageFading} onDismiss={() => setMessage(null)}>
+                {message}
+              </AuthNotice>
+            )}
+            {mailNotice && (
+              <AuthNotice
+                tone={mailNotice.tone}
+                fading={mailFading}
+                onDismiss={() => setMailNotice(null)}
+              >
+                {mailNotice.text}
+              </AuthNotice>
+            )}
+          </div>
+        )}
+      </PageHeader>
+      <PageBody>
+        {entries.length === 0 ? (
+          <div className="flex flex-col items-center gap-5 px-4 py-20 text-center sm:px-10">
+            <AppIcon size={28} className="text-night/30">
+              {ICONS.people}
+            </AppIcon>
+            <p className="max-w-sm leading-relaxed text-night/55">
+              No hosts yet. Add an email address above.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-dashed divide-night/15">
+            {entries.map((entry) => (
+              <li
+                key={entry.email}
+                className="flex flex-col gap-4 px-4 py-5 transition-colors duration-300 ease-soft hover:bg-canvas sm:flex-row sm:items-center sm:justify-between sm:px-10"
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-night/[0.05] text-[0.9375rem] font-medium text-night/60 uppercase"
+                  >
+                    {entry.email.charAt(0)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium break-all">{entry.email}</p>
+                    <p className="mt-0.5 text-sm text-night/50">
+                      Added{' '}
+                      {new Date(entry.created_at).toLocaleDateString(undefined, {
+                        dateStyle: 'medium',
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <div className="ml-[2.625rem] flex shrink-0 items-center gap-1.5 sm:ml-0">
+                  <button
+                    type="button"
+                    aria-label={`Email ${entry.email} again`}
+                    onClick={() => void sendHostEmail(entry.email, false)}
+                    className={`${ctaQuiet} ${ctaSize.sm}`}
+                  >
+                    Email again
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${entry.email}`}
+                    onClick={() => void handleRemove(entry.email)}
+                    className={`${ctaQuietDanger} ${ctaSize.sm}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PageBody>
+    </section>
   );
 }
 

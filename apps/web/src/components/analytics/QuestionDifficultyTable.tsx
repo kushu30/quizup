@@ -27,7 +27,7 @@ const QuestionRow = memo(function QuestionRow({
   return (
     <tr>
       <td className="text-muted tabular-nums">{question.round}</td>
-      <td className="max-w-xs truncate font-medium" title={question.stem}>
+      <td className="max-w-[10rem] truncate font-medium" title={question.stem}>
         {question.stem}
       </td>
       <td>{question.topic}</td>

@@ -1,5 +1,6 @@
 import type { ParticipantPresence } from '@quizup/shared';
 import { useId, useState } from 'react';
+import { useInShell } from './app/shellContext';
 
 interface StudentRosterProps {
   participants: ParticipantPresence[];
@@ -8,6 +9,7 @@ interface StudentRosterProps {
 }
 
 export function StudentRoster({ participants, size = 'compact', onLetBackIn }: StudentRosterProps) {
+  const modern = useInShell();
   const headingId = useId();
   const connectedCount = participants.filter((participant) => participant.connected).length;
   const large = size === 'large';
@@ -36,7 +38,11 @@ export function StudentRoster({ participants, size = 'compact', onLetBackIn }: S
         type="button"
         aria-label={`Let ${participant.displayName} back in`}
         onClick={() => void letBackIn(participant.participantId)}
-        className="shrink-0 rounded border border-rule-strong bg-surface px-2 py-0.5 text-xs font-medium text-ink hover:bg-paper"
+        className={`shrink-0 text-xs font-medium ${
+          modern
+            ? 'rounded-lg bg-white px-2 py-1 text-night shadow-[0_0_0_1px_rgba(17,16,20,0.14)] transition-shadow duration-200 ease-soft hover:shadow-[0_0_0_1px_rgba(17,16,20,0.3)]'
+            : 'rounded border border-rule-strong bg-surface px-2 py-0.5 text-ink hover:bg-paper'
+        }`}
       >
         Let back in
       </button>
@@ -46,14 +52,30 @@ export function StudentRoster({ participants, size = 'compact', onLetBackIn }: S
   return (
     <section
       aria-labelledby={headingId}
-      className={large ? 'space-y-4' : 'rounded-lg border border-rule bg-surface p-4'}
+      className={
+        large
+          ? 'space-y-4'
+          : modern
+            ? 'rounded-2xl bg-white p-5 shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_1px_3px_rgba(17,16,20,0.05)]'
+            : 'rounded-lg border border-rule bg-surface p-4'
+      }
     >
       <h2
         id={headingId}
-        className={`flex flex-wrap items-baseline font-semibold ${large ? 'gap-x-3 text-xl' : 'gap-x-2 text-sm'}`}
+        className={`flex flex-wrap items-baseline ${modern ? 'font-medium tracking-tight' : 'font-semibold'} ${
+          large
+            ? `gap-x-3 ${modern ? 'text-lg' : 'text-xl'}`
+            : modern
+              ? 'gap-x-2 text-[0.9375rem]'
+              : 'gap-x-2 text-sm'
+        }`}
       >
         Students
-        <span className={`font-normal text-muted tabular-nums ${large ? 'text-base' : ''}`}>
+        <span
+          className={`font-normal tabular-nums ${modern ? 'text-night/50' : 'text-muted'} ${
+            large ? 'text-base' : ''
+          }`}
+        >
           {connectedCount} connected of {participants.length}
         </span>
       </h2>
@@ -61,7 +83,11 @@ export function StudentRoster({ participants, size = 'compact', onLetBackIn }: S
         <p
           className={
             large
-              ? 'rounded-lg border border-dashed border-rule-strong px-5 py-10 text-center text-muted'
+              ? `px-5 py-10 text-center ${
+                  modern
+                    ? 'rounded-2xl border border-dashed border-night/20 text-night/55'
+                    : 'rounded-lg border border-dashed border-rule-strong text-muted'
+                }`
               : 'mt-2 text-sm text-muted'
           }
         >
@@ -72,16 +98,28 @@ export function StudentRoster({ participants, size = 'compact', onLetBackIn }: S
           {participants.map((participant) => (
             <li
               key={participant.participantId}
-              className={`flex min-w-0 items-center gap-2.5 rounded-md border px-3 py-2.5 ${
-                participant.connected
-                  ? 'border-rule bg-surface text-ink'
-                  : 'border-dashed border-rule bg-paper text-muted'
+              className={`flex min-w-0 items-center gap-2.5 px-3 py-2.5 ${
+                modern
+                  ? `rounded-xl ${
+                      participant.connected
+                        ? 'bg-white text-night shadow-[0_0_0_1px_rgba(17,16,20,0.09)]'
+                        : 'border border-dashed border-night/20 text-night/45'
+                    }`
+                  : `rounded-md border ${
+                      participant.connected
+                        ? 'border-rule bg-surface text-ink'
+                        : 'border-dashed border-rule bg-paper text-muted'
+                    }`
               }`}
             >
               <span
                 aria-hidden="true"
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  participant.connected ? 'bg-success' : 'bg-rule-strong'
+                  participant.connected
+                    ? modern
+                      ? 'bg-accent-500'
+                      : 'bg-success'
+                    : 'bg-rule-strong'
                 }`}
               />
               <span className="min-w-0 truncate font-medium">{participant.displayName}</span>
@@ -96,9 +134,13 @@ export function StudentRoster({ participants, size = 'compact', onLetBackIn }: S
             <li
               key={participant.participantId}
               title={participant.connected ? undefined : 'Disconnected'}
-              className={`max-w-full truncate rounded-md px-2 py-1 text-sm ${
+              className={`max-w-full truncate px-2 py-1 text-sm ${
+                modern ? 'rounded-lg' : 'rounded-md'
+              } ${
                 participant.connected
-                  ? 'bg-board-soft text-board'
+                  ? modern
+                    ? 'bg-night/[0.05] text-night/80'
+                    : 'bg-board-soft text-board'
                   : 'bg-paper text-muted line-through decoration-muted/50'
               }`}
             >

@@ -7,7 +7,8 @@ import {
 } from '@quizup/shared';
 import { useState, type FormEvent } from 'react';
 import { api, describeError } from '../lib/api';
-import { Button, Notice, SelectField, TextAreaField, TextField } from './ui';
+import { AuthField, AuthNotice, AuthSelect, AuthTextArea } from './landing/AuthField';
+import { ctaDark, ctaSize } from './landing/cta';
 
 interface GenerateQuestionsPanelProps {
   quizId: string;
@@ -50,26 +51,22 @@ export function GenerateQuestionsPanel({ quizId, onGenerated }: GenerateQuestion
   return (
     <form
       onSubmit={(event) => void handleSubmit(event)}
-      aria-labelledby="generate-questions-heading"
-      className="space-y-4"
+      aria-label="Generate with AI"
+      className="space-y-5"
     >
-      <div className="space-y-1">
-        <h3 id="generate-questions-heading" className="text-base font-semibold">
-          Generate with AI
-        </h3>
-        <p className="text-sm text-muted">
-          Questions are saved as pending. Review, edit and approve them before they can be used in a
-          live session.
-        </p>
-      </div>
-      <TextField
+      <p className="text-[0.9375rem] leading-relaxed text-night/60">
+        Questions are saved as pending. Review, edit and approve them before they can be used in a
+        live session.
+      </p>
+      <AuthField
         label="Topic"
         maxLength={GENERATION_TOPIC_MAX_LENGTH}
+        placeholder="For example, The water cycle"
         value={topic}
         onChange={(event) => setTopic(event.target.value)}
       />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField
+      <div className="grid gap-4 sm:grid-cols-2">
+        <AuthField
           label="Number of questions"
           type="number"
           min={1}
@@ -77,17 +74,18 @@ export function GenerateQuestionsPanel({ quizId, onGenerated }: GenerateQuestion
           value={count}
           onChange={(event) => setCount(Number(event.target.value))}
         />
-        <SelectField
+        <AuthSelect
           label="Difficulty"
           value={difficulty}
-          onChange={(event) => setDifficulty(event.target.value as Difficulty)}
-        >
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </SelectField>
+          options={[
+            { value: 'easy', label: 'Easy' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'hard', label: 'Hard' },
+          ]}
+          onChange={(next) => setDifficulty(next as Difficulty)}
+        />
       </div>
-      <TextAreaField
+      <AuthTextArea
         label="Passage (optional)"
         rows={5}
         hint={
@@ -99,11 +97,11 @@ export function GenerateQuestionsPanel({ quizId, onGenerated }: GenerateQuestion
         value={passage}
         onChange={(event) => setPassage(event.target.value)}
       />
-      {errorMessage && <Notice tone="danger">{errorMessage}</Notice>}
-      {successMessage && <Notice tone="success">{successMessage}</Notice>}
-      <Button type="submit" variant="secondary" disabled={generating}>
+      {errorMessage && <AuthNotice tone="danger">{errorMessage}</AuthNotice>}
+      {successMessage && <AuthNotice tone="info">{successMessage}</AuthNotice>}
+      <button type="submit" disabled={generating} className={`${ctaDark} ${ctaSize.md}`}>
         {generating ? 'Generating... this can take up to a minute' : 'Generate questions'}
-      </Button>
+      </button>
     </form>
   );
 }

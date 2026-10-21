@@ -4,7 +4,9 @@ import {
   type AssessmentType,
 } from '@quizup/shared';
 import { useId, useState } from 'react';
-import { TextField } from './ui';
+import { AuthField } from './landing/AuthField';
+import { ChoiceCard } from './landing/ChoiceCard';
+import { QuizTypeIcon } from './quizMeta';
 
 interface AssessmentTypePickerProps {
   value: AssessmentType;
@@ -44,56 +46,47 @@ export function AssessmentTypePicker({
 
   return (
     <div className="space-y-3">
-      <p id={labelId} className="text-sm font-medium">
+      <p id={labelId} className="text-sm font-medium text-night">
         Assessment type
       </p>
       <div role="radiogroup" aria-labelledby={labelId} className="grid gap-2">
-        {OPTIONS.map((option) => {
-          const checked = value === option.type;
-          return (
-            <div key={option.type} className="relative">
-              <label
-                className={`flex cursor-pointer items-start gap-3 rounded-md border-2 p-3 pr-11 ${
-                  checked
-                    ? 'border-board bg-board-soft'
-                    : 'border-rule bg-surface hover:border-rule-strong'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={name}
-                  value={option.type}
-                  checked={checked}
-                  onChange={() => onChange(option.type)}
-                  className="mt-1 h-4 w-4 shrink-0 accent-board"
-                />
-                <span className="min-w-0">
-                  <span className="block font-semibold">{option.title}</span>
-                  <span className="block text-sm text-muted">{option.summary}</span>
-                </span>
-              </label>
-              {option.type === 'adaptive' && (
+        {OPTIONS.map((option) => (
+          <ChoiceCard
+            key={option.type}
+            name={name}
+            value={option.type}
+            checked={value === option.type}
+            onChange={() => onChange(option.type)}
+            title={option.title}
+            summary={option.summary}
+            icon={<QuizTypeIcon type={option.type} />}
+            trailing={
+              option.type === 'adaptive' ? (
                 <button
                   type="button"
                   aria-label="How adaptive quizzes work"
                   aria-expanded={explainerOpen}
                   aria-controls={explainerId}
                   onClick={() => setExplainerOpen((open) => !open)}
-                  className="absolute top-3 right-3 flex h-6 w-6 items-center justify-center rounded-full border border-rule-strong bg-surface text-xs font-bold text-muted hover:text-ink"
+                  className={`flex h-6 w-6 items-center justify-center rounded-full font-geist-mono text-xs font-medium transition-colors duration-200 ease-soft ${
+                    explainerOpen
+                      ? 'bg-night text-white'
+                      : 'bg-night/[0.06] text-night/55 hover:bg-night/10 hover:text-night'
+                  }`}
                 >
                   i
                 </button>
-              )}
-            </div>
-          );
-        })}
+              ) : undefined
+            }
+          />
+        ))}
       </div>
       {explainerOpen && (
         <div
           id={explainerId}
-          className="rounded-md border border-marker/60 bg-marker-soft p-3 text-sm text-ink"
+          className="animate-fade-in rounded-xl bg-night/[0.03] p-4 text-sm leading-relaxed text-night/70 shadow-[inset_0_0_0_1px_rgba(17,16,20,0.06)]"
         >
-          <p className="font-semibold">How adaptive quizzes work</p>
+          <p className="font-medium text-night">How adaptive quizzes work</p>
           <p className="mt-1">
             Every student has a rating. Their rating goes up when they answer correctly and down
             when they miss. Each next question is picked close to that rating, so strong students
@@ -102,7 +95,7 @@ export function AssessmentTypePicker({
         </div>
       )}
       {value === 'exam' && (
-        <TextField
+        <AuthField
           label="Exam length in minutes"
           type="number"
           min={EXAM_MIN_DURATION_MINUTES}
