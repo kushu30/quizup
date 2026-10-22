@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LogoMark } from '../components/brand/QuizUpLogo';
 import { ctaLight, ctaPrimary, ctaSize } from '../components/landing/cta';
 import {
   IconBrand,
@@ -11,18 +10,14 @@ import {
   IconToken,
   PlainIcon,
 } from '../components/landing/icons';
+import { HeroDemo } from '../components/landing/HeroDemo';
 import { Frame, RULE } from '../components/landing/frame';
 import { scrollToSection } from '../components/landing/sections';
+import { CodeShot, EditorShot, SummaryShot } from '../components/landing/Shots';
 import { Texture } from '../components/landing/Texture';
 import { Notice } from '../components/ui';
 import { useAuth } from '../lib/AuthContext';
 import { HOST_ACCESS_MAILTO } from '../lib/contact';
-
-// The hero media slot. Put a product recording or a dashboard screenshot in apps/web/public
-// (for example public/landing/hero.mp4 with a poster image) and point this at it. Until then
-// the slot shows a quiet placeholder.
-const HERO_MEDIA: { kind: 'video' | 'image'; src: string; poster?: string; alt: string } | null =
-  null;
 
 const FACTS = [
   { title: 'No student accounts', body: 'A code and a name is enough' },
@@ -73,26 +68,30 @@ const MODES = [
   },
 ];
 
-// Each step has a slot for a product screenshot. Put the image in apps/web/public and set
-// `src` (for example '/landing/editor.png'); until then the slot shows a quiet tinted canvas.
+// Each step shows a product screenshot. Set `src` (an image in apps/web/public, for example
+// '/landing/editor.png') to use a real one; until then `render` draws a small stand-in.
 const STEPS: {
   title: string;
   body: string;
-  shot: { src?: string; alt: string; tint: string };
+  shot: { src?: string; render?: ReactNode; alt: string; tint: string };
 }[] = [
   {
     title: 'Build your questions',
-    shot: { alt: 'The quiz editor', tint: 'bg-sky-50' },
+    shot: { render: <EditorShot />, alt: 'The quiz editor', tint: 'bg-sky-50' },
     body: 'Write them, import a spreadsheet, or review AI drafts before anything reaches students.',
   },
   {
     title: 'Share the code',
-    shot: { alt: 'The join code and QR code on the host screen', tint: 'bg-violet-50' },
+    shot: {
+      render: <CodeShot />,
+      alt: 'The join code and QR code on the host screen',
+      tint: 'bg-violet-50',
+    },
     body: 'Show the six-letter code or QR code, or send the link to your class group.',
   },
   {
     title: 'Run it and follow up',
-    shot: { alt: 'The session summary', tint: 'bg-amber-50' },
+    shot: { render: <SummaryShot />, alt: 'The session summary', tint: 'bg-amber-50' },
     body: 'Watch answers come in, see who needs help, then open the summary, history and exports.',
   },
 ];
@@ -250,7 +249,7 @@ export function Landing() {
 
         <Frame double className="pt-14 sm:pt-20">
           <div className="relative z-10">
-            <HeroMedia />
+            <HeroDemo />
           </div>
           <Ground color="#47a3ff" className="-mt-24 sm:-mt-32" />
         </Frame>
@@ -506,7 +505,7 @@ function Shot({
   shot,
   className,
 }: {
-  shot: { src?: string; alt: string; tint: string };
+  shot: { src?: string; render?: ReactNode; alt: string; tint: string };
   className: string;
 }) {
   return shot.src ? (
@@ -517,41 +516,12 @@ function Shot({
     />
   ) : (
     <div
-      aria-hidden="true"
-      className={`w-full rounded-xl bg-[radial-gradient(rgba(17,16,20,0.09)_1px,transparent_1px)] [background-size:14px_14px] shadow-[inset_0_0_0_1px_rgba(17,16,20,0.05)] ${shot.tint} ${className}`}
-    />
-  );
-}
-
-function HeroMedia() {
-  return (
-    <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(17,16,20,0.08),0_24px_48px_-32px_rgba(17,16,20,0.35)]">
-      <div className="relative aspect-[16/10] bg-gradient-to-b from-sky-50 to-white">
-        {HERO_MEDIA?.kind === 'video' ? (
-          <video
-            src={HERO_MEDIA.src}
-            poster={HERO_MEDIA.poster}
-            aria-label={HERO_MEDIA.alt}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : HERO_MEDIA?.kind === 'image' ? (
-          <img
-            src={HERO_MEDIA.src}
-            alt={HERO_MEDIA.alt}
-            className="absolute inset-0 h-full w-full object-cover object-top"
-          />
-        ) : (
-          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
-            <Texture field="glow" color="#47a3ff" opacity={0.45} />
-            <span className="relative rounded-[1.75rem] bg-white p-5 shadow-[0_0_0_1px_rgba(17,16,20,0.08)]">
-              <LogoMark size={56} />
-            </span>
-          </div>
-        )}
+      role="img"
+      aria-label={shot.alt}
+      className={`w-full overflow-hidden rounded-xl bg-[radial-gradient(rgba(17,16,20,0.09)_1px,transparent_1px)] [background-size:14px_14px] px-4 pt-6 shadow-[inset_0_0_0_1px_rgba(17,16,20,0.05)] sm:px-8 ${shot.tint} ${className}`}
+    >
+      <div aria-hidden="true" className="mx-auto max-w-xl">
+        {shot.render}
       </div>
     </div>
   );

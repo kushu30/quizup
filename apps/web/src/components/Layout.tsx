@@ -5,6 +5,7 @@ import { HOST_ACCESS_CONTACT_EMAIL, HOST_ACCESS_MAILTO } from '../lib/contact';
 import { BrandProvider, hasVisibleBrand, useBrand, useFocus } from '../lib/brandContext';
 import { BrandMark } from './branding/BrandMark';
 import { QuizUpLogo } from './brand/QuizUpLogo';
+import { scrollToTop } from './landing/sections';
 import { LANDING_SECTIONS, SOURCE_URL } from './landing/sections';
 import { SiteHeader, type NavItem } from './landing/SiteHeader';
 import { AppShell, SHELL_ICONS, type ShellItem } from './app/AppShell';
@@ -241,7 +242,11 @@ function LayoutFrame() {
           ) : (
             <>
               <div className="mx-auto flex min-h-14 max-w-6xl items-center justify-between gap-4 px-4 py-1.5">
-                <Link to="/" className="flex min-w-0 items-center gap-2.5 rounded-md">
+                <Link
+                  to="/"
+                  onClick={scrollToTop}
+                  className="flex min-w-0 items-center gap-2.5 rounded-md"
+                >
                   {lockup}
                 </Link>
 

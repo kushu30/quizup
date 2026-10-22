@@ -21,7 +21,7 @@ import {
   IconTimer,
   IconToken,
 } from './icons';
-import { SOURCE_URL, scrollToSection } from './sections';
+import { SOURCE_URL, scrollToSection, scrollToTop } from './sections';
 
 export interface NavItem {
   to: string;
@@ -386,7 +386,12 @@ export function SiteHeader({
         onPointerLeave={(event) => hoverClose(event.pointerType)}
       >
         <div className="relative flex h-[3.25rem] items-center justify-between gap-6 p-1.5 pl-4">
-          <Link ref={logoRef} to="/" className="flex shrink-0 items-center rounded-lg">
+          <Link
+            ref={logoRef}
+            to="/"
+            onClick={scrollToTop}
+            className="flex shrink-0 items-center rounded-lg"
+          >
             <QuizUpLogo size={24} tone="onDark" />
           </Link>
 
