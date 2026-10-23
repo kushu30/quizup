@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdaptiveTable } from '../components/AdaptiveTable';
 import { CopyButton } from '../components/CopyButton';
-import { JoinQr } from '../components/JoinQr';
+import { JoinQrZoom } from '../components/JoinQrZoom';
 import { BrandMark } from '../components/branding/BrandMark';
 import { ExamProgressTable } from '../components/exam/ExamProgressTable';
 import { LiveProctorPanel } from '../components/exam/LiveProctorPanel';
@@ -755,7 +755,7 @@ export function HostConsole() {
                         {room.joinCode}
                       </p>
                       <div className="mx-auto mt-3 w-44 overflow-hidden rounded-xl bg-white p-1">
-                        <JoinQr url={joinUrl} />
+                        <JoinQrZoom url={joinUrl} code={room.joinCode} />
                       </div>
                       <p className="mt-3 text-xs opacity-70">Scan, or open</p>
                       <p className="text-sm font-medium break-all select-all">
@@ -775,7 +775,7 @@ export function HostConsole() {
                     <>
                       <div className="flex items-center gap-4">
                         <div className="hidden w-[5.5rem] shrink-0 overflow-hidden rounded-lg bg-white p-0.5 lg:block">
-                          <JoinQr url={joinUrl} />
+                          <JoinQrZoom url={joinUrl} code={room.joinCode} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs opacity-70">Join code</p>
