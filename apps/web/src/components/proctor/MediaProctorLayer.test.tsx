@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MediaProctorLayer } from './MediaProctorLayer';
 
 const hook = vi.hoisted(() => ({ options: null as null | Record<string, unknown> }));
+const store = vi.hoisted(() => ({ releaseMedia: vi.fn() }));
+vi.mock('../../lib/proctorMedia/mediaStreamStore', () => ({ releaseMedia: store.releaseMedia }));
 vi.mock('../../hooks/useMediaProctor', () => ({
   useMediaProctor: (options: Record<string, unknown>) => {
     hook.options = options;
@@ -46,6 +48,7 @@ function mount(
     proctorMic: boolean;
     proctorFlagLimit: number | null;
     active: boolean;
+    connected: boolean;
   }> = {},
 ) {
   return render(
@@ -57,6 +60,7 @@ function mount(
         proctorFlagLimit: overrides.proctorFlagLimit ?? null,
       }}
       active={overrides.active ?? true}
+      connected={overrides.connected ?? true}
       now={() => nowMs}
     />,
   );
@@ -70,6 +74,7 @@ beforeEach(() => {
   socket = fakeSocket();
   nowMs = 1_000_000;
   hook.options = null;
+  store.releaseMedia.mockClear();
 });
 afterEach(cleanup);
 
@@ -140,5 +145,60 @@ describe('MediaProctorLayer', () => {
     const { unmount } = mount({ proctorFlagLimit: 10 });
     unmount();
     expect(() => flag(1)).not.toThrow();
+  });
+
+  it('turns the camera and microphone off when it goes away', () => {
+    const { unmount } = mount();
+    expect(store.releaseMedia).not.toHaveBeenCalled();
+    unmount();
+    expect(store.releaseMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds flags raised while the connection is down and sends them, in order, when it is back', () => {
+    const { rerender } = mount({ connected: false });
+    const send = hook.options?.send as (event: ProctorEventPayload) => void;
+    const first = { type: 'face_missing', clientAt: 1 } as ProctorEventPayload;
+    const second = { type: 'loud_audio', clientAt: 2 } as ProctorEventPayload;
+    send(first);
+    send(second);
+    expect(socket.emitted).toEqual([]);
+    rerender(
+      <MediaProctorLayer
+        socket={socket as never}
+        room={{ proctorCamera: true, proctorMic: false, proctorFlagLimit: null }}
+        active
+        connected
+        now={() => nowMs}
+      />,
+    );
+    expect(socket.emitted.map((entry) => entry.payload)).toEqual([first, second]);
+    send({ type: 'face_missing', clientAt: 3 } as ProctorEventPayload);
+    expect(socket.emitted).toHaveLength(3);
+  });
+
+  it('keeps only the newest 200 flags while offline', () => {
+    const { rerender } = mount({ connected: false });
+    const send = hook.options?.send as (event: ProctorEventPayload) => void;
+    for (let index = 1; index <= 205; index += 1) {
+      send({ type: 'face_missing', clientAt: index } as ProctorEventPayload);
+    }
+    rerender(
+      <MediaProctorLayer
+        socket={socket as never}
+        room={{ proctorCamera: true, proctorMic: false, proctorFlagLimit: null }}
+        active
+        connected
+        now={() => nowMs}
+      />,
+    );
+    const times = socket.emitted.map((entry) => (entry.payload as { clientAt: number }).clientAt);
+    expect(times).toHaveLength(200);
+    expect(times[0]).toBe(6);
+    expect(times.at(-1)).toBe(205);
+  });
+
+  it('keeps room for a warning so the page does not jump when one appears', () => {
+    mount();
+    expect(screen.getByTestId('warning-slot').className).toMatch(/min-h-/);
   });
 });

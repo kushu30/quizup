@@ -32,6 +32,13 @@ import { AccessModePicker } from '../components/AccessModePicker';
 import { AssessmentTypePicker } from '../components/AssessmentTypePicker';
 import { DeliveryOptions, type ModuleCount } from '../components/DeliveryOptions';
 import { ResultsOptions } from '../components/ResultsOptions';
+import {
+  DEFAULT_PROCTOR_OPTIONS,
+  flagLimitFrom,
+  optionsFromSettings,
+  type ProctorOptionsValue,
+} from '../components/proctor/ProctorOptions';
+import { ProctoringFields } from '../components/proctor/ProctoringFields';
 import { BrandingForm } from '../components/branding/BrandingForm';
 import { QuestionBank } from '../components/QuestionBank';
 import { QuestionForm } from '../components/QuestionForm';
@@ -89,6 +96,9 @@ export function QuizEditor() {
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [pools, setPools] = useState<PoolRule[]>([]);
   const [showCorrectAnswers, setShowCorrectAnswers] = useState(true);
+  const [proctorOn, setProctorOn] = useState(false);
+  const [proctorOptions, setProctorOptions] =
+    useState<ProctorOptionsValue>(DEFAULT_PROCTOR_OPTIONS);
   const [approvedModules, setApprovedModules] = useState<ModuleCount[]>([]);
   const [modules, setModules] = useState<string[]>([]);
   const [durationMinutes, setDurationMinutes] = useState(String(DEFAULT_EXAM_DURATION_MINUTES));
@@ -145,6 +155,9 @@ export function QuizEditor() {
       setShuffleOptions(settings.success ? settings.data.shuffleOptions : false);
       setPools(settings.success ? settings.data.pools : []);
       setShowCorrectAnswers(settings.success ? (settings.data.showCorrectAnswers ?? true) : true);
+      const savedProctoring = settings.success ? settings.data.proctoring : undefined;
+      setProctorOn(savedProctoring?.enabled ?? false);
+      setProctorOptions(optionsFromSettings(savedProctoring));
       setDurationMinutes(
         settings.success && settings.data.durationMinutes !== undefined
           ? String(settings.data.durationMinutes)
@@ -271,6 +284,14 @@ export function QuizEditor() {
         shuffleOptions: examMode ? shuffleOptions : false,
         pools: assessmentType === 'adaptive' ? [] : pools,
         showCorrectAnswers,
+        proctoring: proctorOn
+          ? {
+              enabled: true,
+              camera: proctorOptions.camera,
+              mic: proctorOptions.mic,
+              flagLimit: flagLimitFrom(examMode ? 'exam' : 'live', proctorOptions) ?? null,
+            }
+          : { enabled: false, camera: false, mic: false, flagLimit: null },
       },
     });
     if (!parsed.success) {
@@ -390,6 +411,15 @@ export function QuizEditor() {
               onChange={setShowCorrectAnswers}
             />
           </div>
+        </div>
+        <div className="max-w-xl">
+          <ProctoringFields
+            kind={examMode ? 'exam' : 'live'}
+            enabled={proctorOn}
+            onEnabledChange={setProctorOn}
+            options={proctorOptions}
+            onOptionsChange={setProctorOptions}
+          />
         </div>
         {assessmentType !== 'adaptive' && (
           <DeliveryOptions
@@ -638,6 +668,10 @@ export function QuizEditor() {
                   />
                 </div>
               )}
+              <p className="text-sm text-white/55">
+                You confirm the proctoring choices on the next screen, when you{' '}
+                {examMode ? 'open the exam' : 'start the quiz'}.
+              </p>
               <button
                 type="button"
                 onClick={() => void handleStartLiveSession()}

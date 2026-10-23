@@ -3,25 +3,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { markIntroDone } from '../lib/introGate';
-import { markPrecheckDone } from '../lib/precheckGate';
 import { createQuizSocket } from '../lib/socket';
 import { Play } from './Play';
 
 vi.mock('../lib/socket', () => ({ createQuizSocket: vi.fn() }));
 
 const media = vi.hoisted(() => ({ layer: null as null | Record<string, unknown> }));
-vi.mock('../components/proctor/ProctorPrecheck', () => ({
-  ProctorPrecheck: (props: { camera: boolean; mic: boolean; onContinue: () => void }) => (
-    <div>
-      <p>
-        Precheck camera={String(props.camera)} mic={String(props.mic)}
-      </p>
-      <button type="button" onClick={props.onContinue}>
-        Precheck continue
-      </button>
-    </div>
-  ),
-}));
 vi.mock('../components/proctor/MediaProctorLayer', () => ({
   MediaProctorLayer: (props: Record<string, unknown>) => {
     media.layer = props;
@@ -328,29 +315,17 @@ describe('Play camera and microphone proctoring', () => {
     fake.fire('room:state', room);
   }
 
-  it('checks the devices before the lobby when the host turned the camera on', async () => {
-    await joinWith(WITH_CAMERA);
-    expect(screen.getByText('Precheck camera=true mic=false')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'You are in' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Precheck continue' }));
-    expect(screen.getByRole('heading', { name: 'You are in' })).toBeTruthy();
-  });
-
-  it('does not ask again once the student has been through the check', async () => {
-    markPrecheckDone('ABC234');
-    await joinWith(WITH_CAMERA);
+  it('never blocks a live quiz with a device check screen', async () => {
+    await joinWith({ ...WITH_CAMERA, status: 'running' } as RoomStatePayload);
     expect(screen.queryByText(/Precheck/)).toBeNull();
-    expect(screen.getByRole('heading', { name: 'You are in' })).toBeTruthy();
   });
 
-  it('skips the check when proctoring has no camera or microphone', async () => {
+  it('skips the layer when proctoring has no camera or microphone', async () => {
     await joinWith({ ...ROOM, proctored: true } as RoomStatePayload);
-    expect(screen.queryByText(/Precheck/)).toBeNull();
     expect(screen.queryByTestId('media-layer')).toBeNull();
   });
 
   it('runs the detection layer once the quiz is running', async () => {
-    markPrecheckDone('ABC234');
     await joinWith({ ...WITH_CAMERA, status: 'running' } as RoomStatePayload);
     expect(media.layer).toMatchObject({
       active: true,
@@ -359,7 +334,6 @@ describe('Play camera and microphone proctoring', () => {
   });
 
   it('keeps the detection layer idle in the lobby', async () => {
-    markPrecheckDone('ABC234');
     await joinWith(WITH_CAMERA);
     expect(media.layer).toMatchObject({ active: false });
   });

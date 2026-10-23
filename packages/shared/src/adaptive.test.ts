@@ -84,3 +84,31 @@ describe('showCorrectAnswers', () => {
     expect(quizSettingsSchema.parse({ showCorrectAnswers: false }).showCorrectAnswers).toBe(false);
   });
 });
+
+describe('proctoring setting', () => {
+  it('is absent until the host sets it, and fills in each field once present', () => {
+    expect(quizSettingsSchema.parse({}).proctoring).toBeUndefined();
+    expect(quizSettingsSchema.parse({ proctoring: { enabled: true } }).proctoring).toEqual({
+      enabled: true,
+      camera: false,
+      mic: false,
+      flagLimit: null,
+    });
+  });
+
+  it('keeps the flag limit between 3 and 50', () => {
+    const parse = (flagLimit: number) =>
+      quizSettingsSchema.safeParse({ proctoring: { enabled: true, camera: true, flagLimit } });
+    expect(parse(2).success).toBe(false);
+    expect(parse(51).success).toBe(false);
+    expect(parse(3).success).toBe(true);
+    expect(parse(50).success).toBe(true);
+  });
+
+  it('is kept for every assessment type', () => {
+    const proctoring = { enabled: true, camera: true, mic: true, flagLimit: 8 };
+    for (const settings of [{ mode: 'exam', durationMinutes: 20 }, { adaptive: true }, {}]) {
+      expect(quizSettingsSchema.parse({ ...settings, proctoring }).proctoring).toEqual(proctoring);
+    }
+  });
+});

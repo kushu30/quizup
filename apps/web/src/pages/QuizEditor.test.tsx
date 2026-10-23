@@ -251,6 +251,78 @@ describe('QuizEditor', () => {
     expect(api.createSession).not.toHaveBeenCalled();
   });
 
+  it('saves a yes to proctoring with the camera and microphone choices', async () => {
+    vi.mocked(api.updateQuiz).mockResolvedValue(quiz);
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect(screen.queryByRole('checkbox', { name: /Watch the camera/ })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Proctor this assessment/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    const [, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
+    expect(changes?.settings).toMatchObject({
+      proctoring: { enabled: true, camera: true, mic: false, flagLimit: null },
+    });
+  });
+
+  it('saves the auto-submit limit for an exam', async () => {
+    vi.mocked(api.getQuiz).mockResolvedValue({
+      ...quiz,
+      mode: 'exam',
+      settings: { mode: 'exam', durationMinutes: 40, adaptive: false },
+    });
+    vi.mocked(api.updateQuiz).mockResolvedValue(quiz);
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Proctor this assessment/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Listen to the microphone/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Submit the exam automatically/ }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Flags before submitting/ }), {
+      target: { value: '6' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    await waitFor(() => expect(api.updateQuiz).toHaveBeenCalledTimes(1));
+    const [, changes] = vi.mocked(api.updateQuiz).mock.calls[0] ?? [];
+    expect(changes?.settings).toMatchObject({
+      proctoring: { enabled: true, camera: false, mic: true, flagLimit: 6 },
+    });
+  });
+
+  it('shows the saved proctoring choices when the quiz loads', async () => {
+    vi.mocked(api.getQuiz).mockResolvedValue({
+      ...quiz,
+      settings: {
+        ...quiz.settings,
+        proctoring: { enabled: true, camera: true, mic: false, flagLimit: null },
+      },
+    });
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect(
+      (screen.getByRole('checkbox', { name: /Proctor this assessment/ }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('checkbox', { name: /Watch the camera/ }) as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
+  it('leaves proctoring off by default', async () => {
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect(
+      (screen.getByRole('checkbox', { name: /Proctor this assessment/ }) as HTMLInputElement)
+        .checked,
+    ).toBe(false);
+  });
+
+  it('points hosts to where proctoring, camera and microphone are chosen', async () => {
+    renderEditor();
+    await screen.findByDisplayValue('Fractions');
+    expect(screen.getByText(/you confirm the proctoring choices/i)).toBeTruthy();
+  });
+
   it('starts a live session with the chosen seconds per question', async () => {
     mockQuestions([approvedQuestion]);
     vi.mocked(api.createSession).mockResolvedValue({

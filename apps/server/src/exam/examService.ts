@@ -62,6 +62,8 @@ interface AttemptEntry {
   dropped: number;
   submitting: Promise<void> | null;
   autoSubmitted: boolean;
+  /** Why this service submitted the attempt, once it has. Not restored after a restart. */
+  submitReason: ExamSubmitReason | null;
 }
 
 type ExamViewResult = Ack<{ view: ExamStudentView }>;
@@ -173,6 +175,7 @@ export class ExamService implements ExamHooks {
         dropped: 0,
         submitting: null,
         autoSubmitted,
+        submitReason: null,
       };
       this.register(entry);
       const context = this.engine.getExamContext(sessionId);
@@ -394,6 +397,7 @@ export class ExamService implements ExamHooks {
         dropped: 0,
         submitting: null,
         autoSubmitted: false,
+        submitReason: null,
       });
       this.pushProctorRecord({
         sessionId: reference.sessionId,
@@ -513,6 +517,7 @@ export class ExamService implements ExamHooks {
       return;
     }
 
+    entry.submitReason = reason;
     await this.settleAttempt(entry, context, true);
     this.publisher.emitToParticipant(attempt.participantId, 'exam:submitted', { reason });
     this.emitProgress(attempt.sessionId);
@@ -766,6 +771,12 @@ export class ExamService implements ExamHooks {
     if (limit === null || count < limit || entry.autoSubmitted) {
       return;
     }
+    await this.performSubmit(entry, 'proctor_limit');
+    // Only claim the submit once it really happened and was ours: a failed save is retried by
+    // the next flag, and a submit the student or the clock had already started stays theirs.
+    if (entry.submitReason !== 'proctor_limit' || entry.autoSubmitted) {
+      return;
+    }
     entry.autoSubmitted = true;
     this.pushProctorRecord({
       sessionId: entry.attempt.sessionId,
@@ -776,7 +787,7 @@ export class ExamService implements ExamHooks {
       clientAt: Math.max(this.now(), flagClientAt) + 1,
       detail: { count, limit },
     });
-    await this.performSubmit(entry, 'proctor_limit');
+    await this.flushProctor();
   }
 
   private recordLiveProctorEvent(

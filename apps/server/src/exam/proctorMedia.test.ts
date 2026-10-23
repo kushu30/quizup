@@ -201,4 +201,67 @@ describe('camera and microphone flags on the server', () => {
     expect(flags.map((flag) => flag.count)).toEqual([3]);
     expect(submitted).toEqual([{ reason: 'proctor_limit' }]);
   });
+
+  it('retries the auto-submit on the next flag when saving the submit failed', async () => {
+    const { harness, summary, ada, flags, submitted } = await setup({
+      exam: true,
+      start: { proctored: true, proctorCamera: true, proctorFlagLimit: 3 },
+    });
+    const original = harness.repository.submitExamAttempt.bind(harness.repository);
+    let failures = 1;
+    harness.repository.submitExamAttempt = async (attemptId, submittedAtMs) => {
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error('database unavailable');
+      }
+      return original(attemptId, submittedAtMs);
+    };
+    for (let index = 0; index < 3; index += 1) {
+      await ada.socket.emitWithAck('proctor:event', event('face_missing'));
+    }
+    await sleep(60);
+    expect(submitted).toHaveLength(0);
+    let timeline = await timelineOf(harness, summary.session.id);
+    expect(timeline.events.map((entry) => entry.type)).not.toContain('auto_submitted');
+    expect(harness.exam.hostProgress(summary.session.id)?.[0]).toMatchObject({
+      status: 'in_progress',
+      autoSubmitted: false,
+    });
+
+    await ada.socket.emitWithAck('proctor:event', event('face_missing'));
+    await sleep(60);
+    expect(flags.map((flag) => flag.count)).toEqual([1, 2, 3, 4]);
+    expect(submitted).toEqual([{ reason: 'proctor_limit' }]);
+    timeline = await timelineOf(harness, summary.session.id);
+    expect(timeline.events.filter((entry) => entry.type === 'auto_submitted')).toHaveLength(1);
+    expect(harness.exam.hostProgress(summary.session.id)?.[0]).toMatchObject({
+      status: 'submitted',
+      autoSubmitted: true,
+    });
+  });
+
+  it('does not call it an auto-submit when the student was already submitting', async () => {
+    const { harness, summary, ada, submitted } = await setup({
+      exam: true,
+      start: { proctored: true, proctorCamera: true, proctorFlagLimit: 3 },
+    });
+    const original = harness.repository.submitExamAttempt.bind(harness.repository);
+    harness.repository.submitExamAttempt = async (attemptId, submittedAtMs) => {
+      await sleep(150);
+      return original(attemptId, submittedAtMs);
+    };
+    const studentSubmit = ada.socket.emitWithAck('exam:submit', {});
+    for (let index = 0; index < 3; index += 1) {
+      await ada.socket.emitWithAck('proctor:event', event('face_missing'));
+    }
+    await studentSubmit;
+    await sleep(60);
+    expect(submitted).toEqual([{ reason: 'student' }]);
+    const timeline = await timelineOf(harness, summary.session.id);
+    expect(timeline.events.map((entry) => entry.type)).not.toContain('auto_submitted');
+    expect(harness.exam.hostProgress(summary.session.id)?.[0]).toMatchObject({
+      status: 'submitted',
+      autoSubmitted: false,
+    });
+  });
 });

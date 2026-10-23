@@ -151,4 +151,37 @@ describe('ProctoringChoiceDialog', () => {
       proctorMic: false,
     });
   });
+
+  it('starts with the choices saved on the quiz, which the host can still change', () => {
+    const { onChoose } = renderDialog({
+      kind: 'exam',
+      initial: { camera: true, mic: false, flagLimit: 8 },
+    });
+    expect(
+      (screen.getByRole('checkbox', { name: /Watch the camera/ }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('checkbox', { name: /Listen to the microphone/ }) as HTMLInputElement)
+        .checked,
+    ).toBe(false);
+    expect(
+      (screen.getByRole('spinbutton', { name: /Flags before submitting/ }) as HTMLInputElement)
+        .value,
+    ).toBe('8');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Listen to the microphone/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: true,
+      proctorCamera: true,
+      proctorMic: true,
+      proctorFlagLimit: 8,
+    });
+  });
+
+  it('starts with nothing turned on when the quiz saved no choices', () => {
+    renderDialog({ kind: 'exam', initial: undefined });
+    expect(
+      (screen.getByRole('checkbox', { name: /Watch the camera/ }) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
 });

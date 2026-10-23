@@ -73,4 +73,9 @@ describe('ExamAttemptView camera and microphone', () => {
     renderView(undefined);
     expect(screen.queryByTestId('media-layer')).toBeNull();
   });
+
+  it('puts the warnings in the sticky header, where a scrolled student still sees them', () => {
+    renderView({ camera: true, mic: false, flagLimit: 10 });
+    expect(screen.getByTestId('media-layer').closest('.sticky')).not.toBeNull();
+  });
 });

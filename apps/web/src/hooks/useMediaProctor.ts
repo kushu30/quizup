@@ -9,6 +9,7 @@ import { acquireMedia, type DeviceState } from '../lib/proctorMedia/mediaStreamS
 import {
   AUDIO_INTERVAL_MS,
   CAMERA_BLOCKED_HOLD_MS,
+  EPISODE_CLEAR_MS,
   EPISODE_CONTINUE_MS,
   EPISODE_COOLDOWN_MS,
   FACE_MISSING_HOLD_MS,
@@ -37,6 +38,7 @@ function tracker(holdMs: number) {
     holdMs,
     continueMs: EPISODE_CONTINUE_MS,
     cooldownMs: EPISODE_COOLDOWN_MS,
+    clearMs: EPISODE_CLEAR_MS,
   });
 }
 

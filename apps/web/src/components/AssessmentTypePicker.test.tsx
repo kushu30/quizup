@@ -35,15 +35,17 @@ describe('AssessmentTypePicker', () => {
     expect(onChange).toHaveBeenCalledWith('exam');
   });
 
-  it('explains adaptive quizzes behind an info button', () => {
+  it('explains adaptive quizzes in a hover tooltip, not a button that opens a box', () => {
     renderPicker();
-    const info = screen.getByRole('button', { name: 'How adaptive quizzes work' });
-    expect(info.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByText(/matched to their level/)).toBeTruthy();
-    expect(screen.queryByText(/rating goes up/)).toBeNull();
+    const info = screen.getByLabelText('How adaptive quizzes work');
+    expect(info.tagName).not.toBe('BUTTON');
+    expect(info.getAttribute('aria-expanded')).toBeNull();
+    const tooltip = screen.getByRole('tooltip', { hidden: true });
+    expect(tooltip.textContent).toContain('rating goes up');
+    expect(info.getAttribute('aria-describedby')).toBe(tooltip.id);
     fireEvent.click(info);
-    expect(info.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByText(/rating goes up/)).toBeTruthy();
+    expect(screen.getAllByText(/rating goes up/)).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'How adaptive quizzes work' })).toBeNull();
   });
 
   it('asks for the exam length only for timed exams', () => {

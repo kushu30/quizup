@@ -207,18 +207,6 @@ export function ExamAttemptView({
 
   return (
     <PlayStage width="lg">
-      {proctored && media && (media.camera || media.mic) && (
-        <MediaProctorLayer
-          socket={socket}
-          room={{
-            proctorCamera: media.camera,
-            proctorMic: media.mic,
-            proctorFlagLimit: media.flagLimit,
-          }}
-          active={!submitting}
-          now={() => Date.now() + offsetRef.current}
-        />
-      )}
       {proctored && proctor.fullscreenLost && (
         <div
           role="alertdialog"
@@ -262,6 +250,21 @@ export function ExamAttemptView({
             {answeredCount} of {view.questions.length} answered
           </p>
         </div>
+        {proctored && media && (media.camera || media.mic) && (
+          <div className="px-3 pb-3 sm:px-4">
+            <MediaProctorLayer
+              socket={socket}
+              room={{
+                proctorCamera: media.camera,
+                proctorMic: media.mic,
+                proctorFlagLimit: media.flagLimit,
+              }}
+              active={!submitting}
+              connected={connected}
+              now={() => Date.now() + offsetRef.current}
+            />
+          </div>
+        )}
         <div aria-hidden="true" className="h-1 bg-night/[0.07]">
           <div
             className={`h-full transition-[width] duration-1000 ease-linear ${BAR_STYLES[urgency]}`}

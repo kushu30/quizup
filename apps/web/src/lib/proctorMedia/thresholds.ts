@@ -10,6 +10,8 @@ export const LOUD_AUDIO_HOLD_MS = 2000;
 
 /** While one episode goes on, it counts one more flag this often. */
 export const EPISODE_CONTINUE_MS = 30_000;
+/** The condition must stay false this long before an episode counts as over. */
+export const EPISODE_CLEAR_MS = 3000;
 /** After an episode clears, the same condition is ignored this long. */
 export const EPISODE_COOLDOWN_MS = 5000;
 

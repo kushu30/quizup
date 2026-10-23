@@ -11,6 +11,23 @@ import { Layout } from '../Layout';
 import { ExamPlay } from './ExamPlay';
 
 vi.mock('../SystemStatus', () => ({ SystemStatus: () => null }));
+
+const precheck = vi.hoisted(() => ({ shown: 0 }));
+vi.mock('../proctor/ProctorPrecheck', () => ({
+  ProctorPrecheck: (props: { camera: boolean; mic: boolean; onContinue: () => void }) => {
+    precheck.shown += 1;
+    return (
+      <div>
+        <p>
+          Precheck camera={String(props.camera)} mic={String(props.mic)}
+        </p>
+        <button type="button" onClick={props.onContinue}>
+          Precheck continue
+        </button>
+      </div>
+    );
+  },
+}));
 vi.mock('../../lib/AuthContext', () => ({
   useAuth: () => ({ session: null, canHost: false, isAdmin: false, signOut: vi.fn() }),
 }));
@@ -158,24 +175,39 @@ describe('ExamPlay camera and microphone', () => {
     return emit;
   }
 
-  it('accepts with the media consent version when the camera is on', () => {
+  it('checks the devices after consent and starts the exam only when the check is done', () => {
+    precheck.shown = 0;
     const emit = renderWith('consent', {
       media: { camera: true, mic: false, flagLimit: 10 },
     });
+    expect(
+      screen.getByText('If you are flagged 10 times, your exam is submitted automatically.'),
+    ).toBeTruthy();
+    expect(precheck.shown).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: /accept and start the exam/i }));
+    expect(screen.getByText('Precheck camera=true mic=false')).toBeTruthy();
+    expect(emit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Precheck continue' }));
     expect(emit).toHaveBeenCalledWith(
       'exam:start',
       { consentVersion: EXAM_CONSENT_MEDIA_VERSION },
       expect.any(Function),
     );
-    expect(
-      screen.getByText('If you are flagged 10 times, your exam is submitted automatically.'),
-    ).toBeTruthy();
+  });
+
+  it('never turns the devices on for a student who declines the terms', () => {
+    precheck.shown = 0;
+    const emit = renderWith('consent', { media: { camera: true, mic: true, flagLimit: null } });
+    fireEvent.click(screen.getByRole('button', { name: /decline and go back/i }));
+    expect(precheck.shown).toBe(0);
+    expect(emit).not.toHaveBeenCalled();
   });
 
   it('accepts with the ordinary consent version when no device is on', () => {
+    precheck.shown = 0;
     const emit = renderWith('consent');
     fireEvent.click(screen.getByRole('button', { name: /accept and start the exam/i }));
+    expect(precheck.shown).toBe(0);
     expect(emit).toHaveBeenCalledWith(
       'exam:start',
       { consentVersion: EXAM_CONSENT_VERSION },

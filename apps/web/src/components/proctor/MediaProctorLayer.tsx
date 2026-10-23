@@ -1,6 +1,11 @@
-import type { ProctorEventPayload, ProctorSeriousType } from '@quizup/shared';
-import { useEffect, useRef, useState } from 'react';
+import {
+  PROCTOR_CLIENT_QUEUE_LIMIT,
+  type ProctorEventPayload,
+  type ProctorSeriousType,
+} from '@quizup/shared';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMediaProctor } from '../../hooks/useMediaProctor';
+import { releaseMedia } from '../../lib/proctorMedia/mediaStreamStore';
 import { WARNING_REPEAT_MS } from '../../lib/proctorMedia/thresholds';
 import type { QuizSocket } from '../../lib/socket';
 import { ProctorIndicator } from './ProctorIndicator';
@@ -11,6 +16,8 @@ interface MediaProctorLayerProps {
   room: { proctorCamera: boolean; proctorMic: boolean; proctorFlagLimit: number | null };
   /** True while the session (or the student's exam attempt) is running. */
   active: boolean;
+  /** True once the student's seat is joined; flags wait here until then. */
+  connected: boolean;
   now: () => number;
 }
 
@@ -19,13 +26,46 @@ interface MediaProctorLayerProps {
  * and tells the student what is being watched and when something is flagged. The server decides
  * the count and any automatic submit; this only displays what it reports.
  */
-export function MediaProctorLayer({ socket, room, active, now }: MediaProctorLayerProps) {
+export function MediaProctorLayer({
+  socket,
+  room,
+  active,
+  connected,
+  now,
+}: MediaProctorLayerProps) {
   const anyDevice = room.proctorCamera || room.proctorMic;
+  // Flags raised while the connection is down wait here: the socket's own buffer would send them
+  // before the seat is joined again, and the server would refuse them.
+  const queueRef = useRef<ProctorEventPayload[]>([]);
+  const connectedRef = useRef(connected);
+  connectedRef.current = connected;
+  const send = useCallback(
+    (event: ProctorEventPayload) => {
+      if (connectedRef.current) {
+        socket.emit('proctor:event', event, () => undefined);
+        return;
+      }
+      const queue = queueRef.current;
+      if (queue.length >= PROCTOR_CLIENT_QUEUE_LIMIT) {
+        queue.shift();
+      }
+      queue.push(event);
+    },
+    [socket],
+  );
+  useEffect(() => {
+    if (!connected) {
+      return;
+    }
+    for (const event of queueRef.current.splice(0)) {
+      socket.emit('proctor:event', event, () => undefined);
+    }
+  }, [connected, socket]);
   const devices = useMediaProctor({
     enabled: active && anyDevice,
     camera: room.proctorCamera,
     mic: room.proctorMic,
-    send: (event: ProctorEventPayload) => socket.emit('proctor:event', event, () => undefined),
+    send,
     now,
   });
   const [flags, setFlags] = useState<{ count: number; limit: number | null } | null>(null);
@@ -34,6 +74,9 @@ export function MediaProctorLayer({ socket, room, active, now }: MediaProctorLay
   const nextId = useRef(0);
   const nowRef = useRef(now);
   nowRef.current = now;
+
+  // The camera and microphone go off as soon as the session (or the student's attempt) is over.
+  useEffect(() => () => releaseMedia(), []);
 
   useEffect(() => {
     const handler = (payload: {
@@ -73,7 +116,9 @@ export function MediaProctorLayer({ socket, room, active, now }: MediaProctorLay
         mic={room.proctorMic ? devices.mic : null}
         flags={flags}
       />
-      <ProctorWarningBanner warning={warning} />
+      <div data-testid="warning-slot" className="min-h-14">
+        <ProctorWarningBanner warning={warning} />
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import {
   hasBranding,
+  quizSettingsSchema,
   type AnalyticsSnapshot,
   type ExamProgressRow,
   type ProctorEventRecord,
@@ -51,12 +52,38 @@ export function HostConsole() {
   const [loadedTimelines, setLoadedTimelines] = useState<ProctorParticipantTimeline[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [choosingProctoring, setChoosingProctoring] = useState(false);
+  // What the host saved on the quiz, so the Start dialog opens with those choices.
+  const [savedProctoring, setSavedProctoring] = useState<{
+    camera: boolean;
+    mic: boolean;
+    flagLimit: number | null;
+  }>();
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [connected, setConnected] = useState(false);
   const [joinError, setJoinError] = useState<SocketErrorCode | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { offsetMs } = useClockSync(socket);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const summary = await api.getSession(sessionId);
+        const quiz = await api.getQuiz(summary.session.quiz_id);
+        const settings = quizSettingsSchema.safeParse(quiz.settings);
+        const saved = settings.success ? settings.data.proctoring : undefined;
+        if (!cancelled && saved?.enabled) {
+          setSavedProctoring({ camera: saved.camera, mic: saved.mic, flagLimit: saved.flagLimit });
+        }
+      } catch {
+        // The dialog simply opens with nothing turned on.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
   const serverNowMs = useServerNow(offsetMs);
 
   useEffect(() => {
@@ -794,6 +821,7 @@ export function HostConsole() {
         <ProctoringChoiceDialog
           kind={isExam ? 'exam' : 'live'}
           busy={busy}
+          initial={savedProctoring}
           onCancel={() => setChoosingProctoring(false)}
           onChoose={(choice) => {
             setChoosingProctoring(false);

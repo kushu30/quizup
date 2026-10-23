@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { brandingSchema } from './branding.js';
 import { poolRulesSchema } from './delivery.js';
+import { PROCTOR_FLAG_LIMIT } from './exam.js';
 
 export const DEFAULT_MAX_ADAPTIVE_ROUNDS = 10;
 export const MIN_ADAPTIVE_ROUNDS = 1;
@@ -15,6 +16,21 @@ export type AccessMode = z.infer<typeof accessModeSchema>;
 
 export const quizModeSettingSchema = z.enum(['live', 'exam']);
 export type QuizModeSetting = z.infer<typeof quizModeSettingSchema>;
+
+/** What the host wants when this quiz is opened: the Start dialog begins with these choices. */
+export const proctoringSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  camera: z.boolean().default(false),
+  mic: z.boolean().default(false),
+  flagLimit: z
+    .number()
+    .int()
+    .min(PROCTOR_FLAG_LIMIT.min)
+    .max(PROCTOR_FLAG_LIMIT.max)
+    .nullable()
+    .default(null),
+});
+export type ProctoringSettings = z.infer<typeof proctoringSettingsSchema>;
 
 const quizSettingsBaseSchema = z.object({
   mode: quizModeSettingSchema.default('live'),
@@ -31,6 +47,7 @@ const quizSettingsBaseSchema = z.object({
   shuffleOptions: z.boolean().optional(),
   pools: poolRulesSchema.default([]),
   showCorrectAnswers: z.boolean().optional(),
+  proctoring: proctoringSettingsSchema.optional(),
   branding: brandingSchema.optional(),
 });
 

@@ -25,7 +25,6 @@ import { ctaPrimary, ctaSize } from '../components/landing/cta';
 import { Texture } from '../components/landing/Texture';
 import { CARD, PlayStage, PlayerBar, WaitingDots } from '../components/play/PlayStage';
 import { MediaProctorLayer } from '../components/proctor/MediaProctorLayer';
-import { ProctorPrecheck } from '../components/proctor/ProctorPrecheck';
 import { Notice, PageLoader } from '../components/ui';
 import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
@@ -34,7 +33,6 @@ import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
 import { usePageBrand } from '../lib/brandContext';
 import { markIntroDone, readIntroDone, shouldShowIntro } from '../lib/introGate';
-import { markPrecheckDone, readPrecheckDone, shouldShowPrecheck } from '../lib/precheckGate';
 import { clearStoredJoin, readStoredJoin, writeStoredJoin } from '../lib/storedJoin';
 
 interface PlayState {
@@ -184,7 +182,6 @@ export function Play() {
   const [answerError, setAnswerError] = useState<string | null>(null);
   const { offsetMs, synced } = useClockSync(socket);
   const [introDone, setIntroDone] = useState(() => readIntroDone(joinCode));
-  const [precheckDone, setPrecheckDone] = useState(() => readPrecheckDone(joinCode));
   usePageBrand(
     state.branding ?? routeState?.joinInfo?.branding ?? null,
     shouldShowIntro({
@@ -460,27 +457,6 @@ export function Play() {
     );
   }
 
-  if (
-    shouldShowPrecheck({
-      precheckDone,
-      proctored: state.proctored,
-      camera: state.proctorCamera,
-      mic: state.proctorMic,
-      status: state.status,
-    })
-  ) {
-    return (
-      <ProctorPrecheck
-        camera={state.proctorCamera}
-        mic={state.proctorMic}
-        onContinue={() => {
-          markPrecheckDone(joinCode);
-          setPrecheckDone(true);
-        }}
-      />
-    );
-  }
-
   const media = {
     camera: state.proctorCamera,
     mic: state.proctorMic,
@@ -522,6 +498,7 @@ export function Play() {
             proctorFlagLimit: media.flagLimit,
           }}
           active={state.status === 'running'}
+          connected={state.connected}
           now={() => Date.now() + offsetMs}
         />
       )}

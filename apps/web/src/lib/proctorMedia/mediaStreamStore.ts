@@ -20,6 +20,9 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
   height: { ideal: 240 },
 };
 
+// Bumped on every release, so a permission prompt answered after the page has moved on does not
+// leave a live camera behind.
+let generation = 0;
 let current: { key: string; access: MediaAccess } | null = null;
 let pending: { key: string; promise: Promise<MediaAccess> } | null = null;
 
@@ -98,7 +101,22 @@ export async function acquireMedia(want: MediaWant): Promise<MediaAccess> {
   if (pending?.key === key) {
     return pending.promise;
   }
+  if (current) {
+    // A different set of devices replaces the old one; the old tracks must not keep running.
+    releaseMedia();
+  }
+  const startedAt = generation;
   const promise = openMedia(want).then((access) => {
+    if (startedAt !== generation) {
+      for (const track of access.stream?.getTracks() ?? []) {
+        track.stop();
+      }
+      return {
+        stream: null,
+        camera: want.camera ? ('lost' as const) : null,
+        mic: want.mic ? ('lost' as const) : null,
+      };
+    }
     current = { key, access };
     pending = null;
     return access;
@@ -112,6 +130,7 @@ export function currentMedia(): MediaAccess | null {
 }
 
 export function releaseMedia(): void {
+  generation += 1;
   for (const track of current?.access.stream?.getTracks() ?? []) {
     track.stop();
   }

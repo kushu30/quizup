@@ -11,6 +11,7 @@ import type { QuizSocket } from '../../lib/socket';
 import { ctaPrimary, ctaSize } from '../landing/cta';
 import { Texture } from '../landing/Texture';
 import { CARD, PlayStage, PlayerBar, WaitingDots } from '../play/PlayStage';
+import { ProctorPrecheck } from '../proctor/ProctorPrecheck';
 import { Notice, PageLoader } from '../ui';
 import { FeedbackForm } from '../FeedbackForm';
 import { ExamAttemptView } from './ExamAttemptView';
@@ -113,6 +114,9 @@ export function ExamPlay({
   onViewChange,
 }: ExamPlayProps) {
   const [declined, setDeclined] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const anyDevice = (media?.camera ?? false) || (media?.mic ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const examOver = view.phase === 'submitted' || view.phase === 'closed';
@@ -124,7 +128,17 @@ export function ExamPlay({
     }
   }, [examOver]);
 
+  // Accepting the terms comes first. The devices are only switched on afterwards, in a check the
+  // student passes before the timer starts.
   function accept() {
+    if (proctored && anyDevice && !checked) {
+      setChecking(true);
+      return;
+    }
+    startExam();
+  }
+
+  function startExam() {
     if (proctored) {
       void document.documentElement.requestFullscreen?.().catch(() => undefined);
     }
@@ -165,6 +179,19 @@ export function ExamPlay({
   }
 
   if (view.phase === 'consent') {
+    if (checking && media) {
+      return (
+        <ProctorPrecheck
+          camera={media.camera}
+          mic={media.mic}
+          onContinue={() => {
+            setChecked(true);
+            setChecking(false);
+            startExam();
+          }}
+        />
+      );
+    }
     if (declined) {
       return (
         <PlayStage width="sm">

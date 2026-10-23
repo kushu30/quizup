@@ -119,4 +119,44 @@ describe('acquireMedia', () => {
     }
     expect(currentMedia()).toBeNull();
   });
+
+  it('stops a stream that arrives after the page already released the devices', async () => {
+    const late = fakeStream(['video', 'audio']);
+    let grant: (stream: MediaStream) => void = () => undefined;
+    setMediaDevices(
+      vi.fn(
+        () =>
+          new Promise<MediaStream>((resolve) => {
+            grant = resolve;
+          }),
+      ),
+    );
+    const pending = acquireMedia({ camera: true, mic: true });
+    releaseMedia();
+    grant(late.stream);
+    const access = await pending;
+    expect(access.stream).toBeNull();
+    for (const track of late.tracks) {
+      expect(track.stop).toHaveBeenCalled();
+    }
+    expect(currentMedia()).toBeNull();
+  });
+
+  it('stops the old devices when a different set is asked for', async () => {
+    const first = fakeStream(['video', 'audio']);
+    const second = fakeStream(['video']);
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce(first.stream)
+      .mockResolvedValueOnce(second.stream);
+    setMediaDevices(getUserMedia);
+    await acquireMedia({ camera: true, mic: true });
+    await acquireMedia({ camera: true, mic: false });
+    for (const track of first.tracks) {
+      expect(track.stop).toHaveBeenCalled();
+    }
+    for (const track of second.tracks) {
+      expect(track.stop).not.toHaveBeenCalled();
+    }
+  });
 });

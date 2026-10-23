@@ -3,10 +3,11 @@ import {
   EXAM_MIN_DURATION_MINUTES,
   type AssessmentType,
 } from '@quizup/shared';
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { AuthField } from './landing/AuthField';
 import { ChoiceCard } from './landing/ChoiceCard';
 import { QuizTypeIcon } from './quizMeta';
+import { Tooltip } from './ui';
 
 interface AssessmentTypePickerProps {
   value: AssessmentType;
@@ -14,6 +15,9 @@ interface AssessmentTypePickerProps {
   durationMinutes: string;
   onDurationChange: (minutes: string) => void;
 }
+
+const ADAPTIVE_EXPLAINER =
+  'Every student has a rating. Their rating goes up when they answer correctly and down when they miss. Each next question is picked close to that rating, so strong students get stretched and nobody gets lost. Points are scored the same way as a live quiz.';
 
 const OPTIONS: { type: AssessmentType; title: string; summary: string }[] = [
   {
@@ -40,9 +44,7 @@ export function AssessmentTypePicker({
   onDurationChange,
 }: AssessmentTypePickerProps) {
   const labelId = useId();
-  const explainerId = useId();
   const name = useId();
-  const [explainerOpen, setExplainerOpen] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -62,38 +64,20 @@ export function AssessmentTypePicker({
             icon={<QuizTypeIcon type={option.type} />}
             trailing={
               option.type === 'adaptive' ? (
-                <button
-                  type="button"
-                  aria-label="How adaptive quizzes work"
-                  aria-expanded={explainerOpen}
-                  aria-controls={explainerId}
-                  onClick={() => setExplainerOpen((open) => !open)}
-                  className={`flex h-6 w-6 items-center justify-center rounded-full font-geist-mono text-xs font-medium transition-colors duration-200 ease-soft ${
-                    explainerOpen
-                      ? 'bg-night text-white'
-                      : 'bg-night/[0.06] text-night/55 hover:bg-night/10 hover:text-night'
-                  }`}
-                >
-                  i
-                </button>
+                <Tooltip label={ADAPTIVE_EXPLAINER} side="top" align="end">
+                  <span
+                    tabIndex={0}
+                    aria-label="How adaptive quizzes work"
+                    className="flex h-6 w-6 cursor-help items-center justify-center rounded-full bg-night/[0.06] font-geist-mono text-xs font-medium text-night/55 transition-colors duration-200 ease-soft hover:bg-night/10 hover:text-night focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                  >
+                    i
+                  </span>
+                </Tooltip>
               ) : undefined
             }
           />
         ))}
       </div>
-      {explainerOpen && (
-        <div
-          id={explainerId}
-          className="animate-fade-in rounded-xl bg-night/[0.03] p-4 text-sm leading-relaxed text-night/70 shadow-[inset_0_0_0_1px_rgba(17,16,20,0.06)]"
-        >
-          <p className="font-medium text-night">How adaptive quizzes work</p>
-          <p className="mt-1">
-            Every student has a rating. Their rating goes up when they answer correctly and down
-            when they miss. Each next question is picked close to that rating, so strong students
-            get stretched and nobody gets lost. Points are scored the same way as a live quiz.
-          </p>
-        </div>
-      )}
       {value === 'exam' && (
         <AuthField
           label="Exam length in minutes"

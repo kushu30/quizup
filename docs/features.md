@@ -247,7 +247,7 @@ Results are only ever viewed inside the app: no PDF export, nothing is emailed o
 
 ## Camera and microphone proctoring
 
-An opt-in extra for any proctored session. The Start dialog has two cards, **Watch the camera** and **Listen to the microphone**, and for exams an optional **Submit the exam automatically after repeated flags** switch with a limit of 3 to 50 (suggested 10).
+An opt-in extra for any proctored session. In the quiz editor, **Proctoring** is a yes or no (saved with the quiz); choosing yes reveals the camera, microphone and, for exams, auto-submit options. The Start dialog opens with those saved choices and the host can still change them for that session. It has two cards, **Watch the camera** and **Listen to the microphone**, and for exams an optional **Submit the exam automatically after repeated flags** switch with a limit of 3 to 50 (suggested 10).
 
 **Nothing is recorded, uploaded or streamed.** Detection runs in the student's browser. A small face detector (MediaPipe BlazeFace, served from our own site) looks at one frame per second, and a volume meter reads the microphone level every quarter second. Only a flag's type and time reach the server, through the same channel as the other proctor signals.
 
@@ -261,9 +261,9 @@ An opt-in extra for any proctored session. The Start dialog has two cards, **Wat
 | `camera_denied`, `mic_denied`, `camera_lost`, `mic_lost` | Permission refused, no device, or the device stopped | No (recorded only)      |
 | `auto_submitted`                                         | The exam was submitted at the limit                  | No (server-written)     |
 
-Each continuous problem is one flag, plus one more every 30 s while it goes on; after it clears, the same problem is ignored for 5 s. A hidden tab pauses detection and counts as nothing (a tab switch is already its own signal). All numbers live in `apps/web/src/lib/proctorMedia/thresholds.ts`.
+Each continuous problem is one flag, plus one more every 30 s while it goes on. A problem only counts as over once it has stayed clear for 3 s (a flickering detector does not split one absence into many flags), and then the same problem is ignored for 5 s. A hidden tab pauses detection and counts as nothing (a tab switch is already its own signal). All numbers live in `apps/web/src/lib/proctorMedia/thresholds.ts`.
 
-**The student sees it.** Before the session starts, a pre-check screen asks for permission and shows a local self-view and a level bar (never sent anywhere); **Continue** always works. During the session a dark "Camera on / Mic on" pill is shown, plus "Flags 2 of 10" when there is a limit. Each flag shows a short warning under the header (`aria-live`, never over the question); one flag before the limit it turns red: "One more and your exam will be submitted."
+**The student sees it.** In an exam, after accepting the terms and before the timer starts, a pre-check screen asks for permission and shows a local self-view and a level bar (never sent anywhere); **Continue** always works, and a student who declines the terms never has the camera turned on. In a live quiz there is no check screen (it would run while question 1 is on the clock); the browser's permission prompt appears when the quiz starts. During the session a dark "Camera on / Mic on" pill is shown, plus "Flags 2 of 10" when there is a limit. Each flag shows a short warning in a reserved space (in the sticky header during an exam, so it is visible however far the student has scrolled, and the page never jumps); one flag before the limit it turns red: "One more and your exam will be submitted." The camera and microphone are switched off as soon as the attempt or quiz is over. Flags raised while the connection is down are held and sent once the student is back in the session.
 
 **Refusal never blocks.** A student who denies access, has no device, or whose browser cannot run the detector still takes the session; the host sees `camera_denied` / `mic_denied`.
 
