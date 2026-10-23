@@ -62,7 +62,7 @@ describe('QuizHistoryPage', () => {
     const row = within(table).getAllByRole('row')[1] as HTMLElement;
     expect(row.textContent).toContain('Adaptive quiz');
     expect(row.textContent).toContain('28');
-    expect(row.textContent).toContain('1,840');
+    expect(row.textContent).not.toContain('1,840');
     expect(row.textContent).toContain('4.3');
     expect(
       within(row)

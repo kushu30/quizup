@@ -62,7 +62,6 @@ export function QuizHistoryPage() {
   }, [quizId]);
 
   const ran = rows ?? [];
-  const scored = ran.filter((row) => row.averageScore !== null);
   const rated = ran.filter((row) => row.averageRating !== null && row.feedbackCount > 0);
   const ratingVotes = rated.reduce((sum, row) => sum + row.feedbackCount, 0);
   const stats = [
@@ -70,14 +69,6 @@ export function QuizHistoryPage() {
     {
       label: 'Students reached',
       value: ran.reduce((sum, row) => sum + row.participantCount, 0).toLocaleString(),
-    },
-    {
-      label: 'Average score',
-      value: scored.length
-        ? Math.round(
-            scored.reduce((sum, row) => sum + (row.averageScore ?? 0), 0) / scored.length,
-          ).toLocaleString()
-        : '–',
     },
     {
       label: 'Rating',
@@ -114,13 +105,11 @@ export function QuizHistoryPage() {
 
       <section aria-label="Overview" className={`border-b ${RULE} ${BLEED}`}>
         <Frame flush>
-          <dl className="grid grid-cols-2 md:grid-cols-4">
+          <dl className="grid grid-cols-3">
             {stats.map((stat, index) => (
               <div
                 key={stat.label}
-                className={`px-4 py-5 sm:px-6 ${RULE} ${index % 2 ? 'border-l' : ''} ${
-                  index > 1 ? 'border-t md:border-t-0' : ''
-                } ${index === 2 ? 'md:border-l' : ''}`}
+                className={`px-4 py-5 sm:px-6 ${RULE} ${index > 0 ? 'border-l' : ''}`}
               >
                 <dt className="text-sm text-night/55">{stat.label}</dt>
                 <dd className="mt-1 font-geist-mono text-[1.625rem] font-medium tracking-tight text-night tabular-nums">
@@ -162,7 +151,7 @@ export function QuizHistoryPage() {
         )}
         {rows && rows.length > 0 && (
           <div className="overflow-x-auto">
-            <table aria-label="Sessions of this quiz" className="w-full min-w-[52rem] text-left">
+            <table aria-label="Sessions of this quiz" className="w-full min-w-[44rem] text-left">
               <thead>
                 <tr className={`border-b text-xs font-medium text-night/45 ${RULE}`}>
                   <th scope="col" className={`${CELL} pl-4 sm:pl-10`}>
@@ -176,9 +165,6 @@ export function QuizHistoryPage() {
                   </th>
                   <th scope="col" className={`${CELL} text-right`}>
                     Students
-                  </th>
-                  <th scope="col" className={`${CELL} text-right`}>
-                    Average score
                   </th>
                   <th scope="col" className={CELL}>
                     Feedback
@@ -208,13 +194,6 @@ export function QuizHistoryPage() {
                     </td>
                     <td className={`${ROW_CELL} text-right text-night/80 tabular-nums`}>
                       {row.participantCount}
-                    </td>
-                    <td className={`${ROW_CELL} text-right text-night/80 tabular-nums`}>
-                      {row.averageScore === null ? (
-                        <span className="text-night/35">–</span>
-                      ) : (
-                        row.averageScore.toLocaleString()
-                      )}
                     </td>
                     <td className={`${ROW_CELL} whitespace-nowrap`}>
                       {row.averageRating === null ? (

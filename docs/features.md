@@ -140,7 +140,7 @@ When a live quiz ends, or once a student submits their exam, students see a shor
 
 ## History
 
-Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:quizId/history`) listing every session: when it started, its type and status, how many students joined, the average score (from the stored session summary) and the average feedback rating. Ended sessions link to the full summary and CSV exports; sessions still open link back to the host console. Served by `GET /quizzes/:quizId/sessions` (quiz owner only).
+Each quiz has a **History** page (button in the quiz editor, `/host/quizzes/:quizId/history`) listing every session: when it started, its type and status, how many students joined and the average feedback rating. Ended sessions link to the full summary and CSV exports; sessions still open link back to the host console. Served by `GET /quizzes/:quizId/sessions` (quiz owner only).
 
 Signed-in students see **My results** in the top bar (`/me/results`, `GET /me/results`): each assessment they joined while signed in, with the institution brand, score and rank. Exam scores stay hidden until the host releases results. Students who join without signing in have no history, because nothing links their answers to an account.
 
