@@ -9,8 +9,8 @@ afterEach(() => {
 
 const URL = 'https://quizup.kushu30.me/join/K7M2QX';
 
-function renderZoom() {
-  return render(<JoinQrZoom url={URL} code="K7M2QX" />);
+function renderZoom(hint?: string) {
+  return render(<JoinQrZoom url={URL} code="K7M2QX" hint={hint} />);
 }
 
 describe('JoinQrZoom', () => {
@@ -63,5 +63,26 @@ describe('JoinQrZoom', () => {
     renderZoom();
     fireEvent.click(screen.getByRole('button', { name: 'Show the join QR code full screen' }));
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+  });
+
+  it('always shows that the QR can be enlarged, not only on hover', () => {
+    renderZoom();
+    const trigger = screen.getByRole('button', { name: 'Show the join QR code full screen' });
+    const icon = trigger.querySelector('[data-testid="enlarge-icon"]');
+    expect(icon).not.toBeNull();
+    expect(icon?.className).not.toMatch(/opacity-0/);
+  });
+
+  it('can say so in words under the QR, and clicking the words opens it too', () => {
+    renderZoom('Click to enlarge');
+    const trigger = screen.getByRole('button', { name: 'Show the join QR code full screen' });
+    expect(within(trigger).getByText('Click to enlarge')).toBeTruthy();
+    fireEvent.click(within(trigger).getByText('Click to enlarge'));
+    expect(screen.getByRole('dialog', { name: 'Join QR code' })).toBeTruthy();
+  });
+
+  it('shows no caption unless asked to', () => {
+    renderZoom();
+    expect(screen.queryByText('Click to enlarge')).toBeNull();
   });
 });

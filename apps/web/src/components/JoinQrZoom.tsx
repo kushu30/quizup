@@ -7,9 +7,15 @@ import { ctaLight, ctaSize } from './landing/cta';
 interface JoinQrZoomProps {
   url: string;
   code: string;
+  /** Words shown under the QR, such as "Click to enlarge". */
+  hint?: string;
 }
 
-function FullScreenQr({ url, code, onClose }: JoinQrZoomProps & { onClose: () => void }) {
+function FullScreenQr({
+  url,
+  code,
+  onClose,
+}: Omit<JoinQrZoomProps, 'hint'> & { onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -66,7 +72,7 @@ function FullScreenQr({ url, code, onClose }: JoinQrZoomProps & { onClose: () =>
 }
 
 /** The join QR, which opens a full-screen view for a projector or a back-row student when clicked. */
-export function JoinQrZoom({ url, code }: JoinQrZoomProps) {
+export function JoinQrZoom({ url, code, hint }: JoinQrZoomProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -87,12 +93,18 @@ export function JoinQrZoom({ url, code }: JoinQrZoomProps) {
         <JoinQr url={url} />
         <span
           aria-hidden="true"
-          className="absolute right-1 bottom-1 flex h-6 w-6 items-center justify-center rounded-md bg-night/80 text-white opacity-0 transition-opacity duration-200 ease-soft group-hover:opacity-100 group-focus-visible:opacity-100"
+          data-testid="enlarge-icon"
+          className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-md bg-night/80 text-white shadow-sm transition-transform duration-200 ease-soft group-hover:scale-110"
         >
           <AppIcon size={14}>
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
           </AppIcon>
         </span>
+        {hint && (
+          <span className="mt-1.5 block pb-0.5 text-center text-xs font-medium text-night/70">
+            {hint}
+          </span>
+        )}
       </button>
       {open && <FullScreenQr url={url} code={code} onClose={close} />}
     </>

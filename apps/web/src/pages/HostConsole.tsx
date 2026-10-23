@@ -755,7 +755,7 @@ export function HostConsole() {
                         {room.joinCode}
                       </p>
                       <div className="mx-auto mt-3 w-44 overflow-hidden rounded-xl bg-white p-1">
-                        <JoinQrZoom url={joinUrl} code={room.joinCode} />
+                        <JoinQrZoom url={joinUrl} code={room.joinCode} hint="Click to enlarge" />
                       </div>
                       <p className="mt-3 text-xs opacity-70">Scan, or open</p>
                       <p className="text-sm font-medium break-all select-all">
