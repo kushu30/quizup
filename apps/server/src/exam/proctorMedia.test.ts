@@ -264,4 +264,29 @@ describe('camera and microphone flags on the server', () => {
       autoSubmitted: false,
     });
   });
+
+  it('records the moment a face leaves the frame, shows it in the host total, and keeps it out of the limit', async () => {
+    const { harness, summary, ada, flags, submitted } = await setup({
+      exam: true,
+      start: { proctored: true, proctorCamera: true, proctorFlagLimit: 3 },
+    });
+    for (let index = 0; index < 5; index += 1) {
+      await ada.socket.emitWithAck('proctor:event', event('face_left'));
+    }
+    const timeline = await timelineOf(harness, summary.session.id);
+    expect(timeline.events.filter((entry) => entry.type === 'face_left')).toHaveLength(5);
+    expect(harness.exam.hostProgress(summary.session.id)?.[0]?.proctorEventCount).toBe(5);
+    expect(flags).toHaveLength(0);
+    expect(submitted).toHaveLength(0);
+  });
+
+  it('ignores face_left when the camera is off', async () => {
+    const { harness, summary, ada } = await setup({
+      exam: true,
+      start: { proctored: true, proctorMic: true },
+    });
+    await ada.socket.emitWithAck('proctor:event', event('face_left'));
+    const timeline = await timelineOf(harness, summary.session.id);
+    expect(timeline.events.map((entry) => entry.type)).not.toContain('face_left');
+  });
 });

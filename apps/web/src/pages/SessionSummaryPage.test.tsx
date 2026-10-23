@@ -172,6 +172,7 @@ describe('SessionSummaryPage proctor signals', () => {
             looking_away: 0,
             camera_blocked: 0,
             loud_audio: 0,
+            face_left: 0,
           },
         },
       ],

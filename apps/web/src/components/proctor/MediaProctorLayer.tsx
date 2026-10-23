@@ -11,6 +11,9 @@ import type { QuizSocket } from '../../lib/socket';
 import { ProctorIndicator } from './ProctorIndicator';
 import { ProctorWarningBanner, type ProctorWarning } from './ProctorWarningBanner';
 
+const RELEASE_DELAY_MS = 1000;
+let pendingRelease: ReturnType<typeof setTimeout> | null = null;
+
 interface MediaProctorLayerProps {
   socket: QuizSocket;
   room: { proctorCamera: boolean; proctorMic: boolean; proctorFlagLimit: number | null };
@@ -75,8 +78,22 @@ export function MediaProctorLayer({
   const nowRef = useRef(now);
   nowRef.current = now;
 
-  // The camera and microphone go off as soon as the session (or the student's attempt) is over.
-  useEffect(() => () => releaseMedia(), []);
+  // The camera and microphone go off once the session (or the student's attempt) is over. The
+  // release waits a moment and a re-mount cancels it, because React in development mounts,
+  // unmounts and re-mounts every component once, which would otherwise stop the stream the
+  // pre-check just obtained and ask for permission again.
+  useEffect(() => {
+    if (pendingRelease) {
+      clearTimeout(pendingRelease);
+      pendingRelease = null;
+    }
+    return () => {
+      pendingRelease = setTimeout(() => {
+        pendingRelease = null;
+        releaseMedia();
+      }, RELEASE_DELAY_MS);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (payload: {

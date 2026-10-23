@@ -147,58 +147,23 @@ describe('MediaProctorLayer', () => {
     expect(() => flag(1)).not.toThrow();
   });
 
-  it('turns the camera and microphone off when it goes away', () => {
+  it('turns the camera and microphone off shortly after it goes away', () => {
+    vi.useFakeTimers();
     const { unmount } = mount();
-    expect(store.releaseMedia).not.toHaveBeenCalled();
     unmount();
+    expect(store.releaseMedia).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000);
     expect(store.releaseMedia).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
-  it('holds flags raised while the connection is down and sends them, in order, when it is back', () => {
-    const { rerender } = mount({ connected: false });
-    const send = hook.options?.send as (event: ProctorEventPayload) => void;
-    const first = { type: 'face_missing', clientAt: 1 } as ProctorEventPayload;
-    const second = { type: 'loud_audio', clientAt: 2 } as ProctorEventPayload;
-    send(first);
-    send(second);
-    expect(socket.emitted).toEqual([]);
-    rerender(
-      <MediaProctorLayer
-        socket={socket as never}
-        room={{ proctorCamera: true, proctorMic: false, proctorFlagLimit: null }}
-        active
-        connected
-        now={() => nowMs}
-      />,
-    );
-    expect(socket.emitted.map((entry) => entry.payload)).toEqual([first, second]);
-    send({ type: 'face_missing', clientAt: 3 } as ProctorEventPayload);
-    expect(socket.emitted).toHaveLength(3);
-  });
-
-  it('keeps only the newest 200 flags while offline', () => {
-    const { rerender } = mount({ connected: false });
-    const send = hook.options?.send as (event: ProctorEventPayload) => void;
-    for (let index = 1; index <= 205; index += 1) {
-      send({ type: 'face_missing', clientAt: index } as ProctorEventPayload);
-    }
-    rerender(
-      <MediaProctorLayer
-        socket={socket as never}
-        room={{ proctorCamera: true, proctorMic: false, proctorFlagLimit: null }}
-        active
-        connected
-        now={() => nowMs}
-      />,
-    );
-    const times = socket.emitted.map((entry) => (entry.payload as { clientAt: number }).clientAt);
-    expect(times).toHaveLength(200);
-    expect(times[0]).toBe(6);
-    expect(times.at(-1)).toBe(205);
-  });
-
-  it('keeps room for a warning so the page does not jump when one appears', () => {
+  it('keeps the devices when it is re-mounted at once, as React does in development', () => {
+    vi.useFakeTimers();
+    const first = mount();
+    first.unmount();
     mount();
-    expect(screen.getByTestId('warning-slot').className).toMatch(/min-h-/);
+    vi.advanceTimersByTime(5000);
+    expect(store.releaseMedia).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

@@ -31,6 +31,7 @@ const TYPE_ICONS: Record<ProctorRecordType, string> = {
   looking_away: '↻',
   camera_blocked: '▬',
   loud_audio: '♪',
+  face_left: '◌',
   camera_lost: '⊘',
   camera_denied: '⊘',
   mic_lost: '⊘',

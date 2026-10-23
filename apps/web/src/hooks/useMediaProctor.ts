@@ -109,7 +109,11 @@ export function useMediaProctor(options: UseMediaProctorOptions): UseMediaProcto
 
       if (camera && access.camera === 'ready') {
         watchEnded('camera', 'camera_lost');
-        const sampler = await createFaceSampler(stream).catch(() => null);
+        const sampler = await createFaceSampler(stream).catch((error: unknown) => {
+          // Shown in the browser console so a failing detector can be diagnosed.
+          console.warn('Camera proctoring could not start the face detector', error);
+          return null;
+        });
         if (cancelled) {
           sampler?.stop();
           return;
@@ -122,6 +126,14 @@ export function useMediaProctor(options: UseMediaProctorOptions): UseMediaProcto
           const several = tracker(MULTIPLE_FACES_HOLD_MS);
           const away = tracker(LOOKING_AWAY_HOLD_MS);
           const blocked = tracker(CAMERA_BLOCKED_HOLD_MS);
+          // Told to the host at once, without waiting for the hold time that makes it a flag. It
+          // fires once per absence; the face has to be back for a while before it can fire again.
+          const left = createEpisodeTracker({
+            holdMs: 0,
+            continueMs: Number.POSITIVE_INFINITY,
+            cooldownMs: 0,
+            clearMs: EPISODE_CLEAR_MS,
+          });
           const timer = setInterval(() => {
             const at = nowRef.current();
             // A hidden tab is already reported as a tab switch; judging the camera then would
@@ -129,15 +141,19 @@ export function useMediaProctor(options: UseMediaProctorOptions): UseMediaProcto
             const sample = document.hidden ? null : sampler.sample();
             if (!sample) {
               if (document.hidden) {
-                for (const each of [missing, several, away, blocked]) {
+                for (const each of [missing, several, away, blocked, left]) {
                   each.update(false, at);
                 }
               }
               return;
             }
             const frame = classifyFrame(sample);
+            const absent = !frame.blocked && frame.faceCount === 0;
+            if (left.update(absent, at) === 'start') {
+              emit('face_left');
+            }
             raise('camera_blocked', blocked.update(frame.blocked, at));
-            raise('face_missing', missing.update(!frame.blocked && frame.faceCount === 0, at));
+            raise('face_missing', missing.update(absent, at));
             raise('multiple_faces', several.update(frame.faceCount >= 2, at));
             raise('looking_away', away.update(frame.turnedAway, at));
           }, FRAME_INTERVAL_MS);

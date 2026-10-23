@@ -135,14 +135,15 @@ describe('buildParticipantsCsv for exams', () => {
           looking_away: 0,
           camera_blocked: 0,
           loud_audio: 0,
+          face_left: 0,
         },
       })),
     };
     const lines = buildParticipantsCsv(exam).trim().split('\r\n');
     expect(lines[0]).toBe(
-      'Rank,Name,Final score,Answered,Correct,Accuracy,Avg response ms,Mastery: Algebra,Mastery: Geometry,Proctor: Tab switch,Proctor: Window focus lost,Proctor: Left full screen,Proctor: Copy or cut,Proctor: Paste,Proctor: Right-click,Proctor: Window resize,Proctor: No face in view,Proctor: Several faces,Proctor: Looking away,Proctor: Camera blocked,Proctor: Loud sound',
+      'Rank,Name,Final score,Answered,Correct,Accuracy,Avg response ms,Mastery: Algebra,Mastery: Geometry,Proctor: Tab switch,Proctor: Window focus lost,Proctor: Left full screen,Proctor: Copy or cut,Proctor: Paste,Proctor: Right-click,Proctor: Window resize,Proctor: No face in view,Proctor: Several faces,Proctor: Looking away,Proctor: Camera blocked,Proctor: Loud sound,Proctor: Face left the frame',
     );
-    expect(lines[1]).toBe('1,Ada,1800,2,2,1,900,0.7098,0.3,2,0,2,0,1,0,3,0,0,0,0,0');
+    expect(lines[1]).toBe('1,Ada,1800,2,2,1,900,0.7098,0.3,2,0,2,0,1,0,3,0,0,0,0,0,0');
   });
 });
 

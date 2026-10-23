@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXAM_CONSENT_VERSION,
+  PROCTOR_COUNTED_TYPES,
   PROCTOR_RECORD_TYPES,
   PROCTOR_SERIOUS_TYPES,
   PROCTOR_TYPE_LABELS,
@@ -93,5 +94,26 @@ describe('consent', () => {
     for (const type of PROCTOR_RECORD_TYPES) {
       expect(PROCTOR_TYPE_LABELS[type]).toBeTruthy();
     }
+  });
+});
+
+describe('face_left', () => {
+  it('is accepted from the browser as a plain event, and counted in the host totals', () => {
+    expect(proctorEventPayloadSchema.safeParse({ type: 'face_left', clientAt: 1 }).success).toBe(
+      true,
+    );
+    expect(
+      proctorEventPayloadSchema.safeParse({ type: 'face_left', clientAt: 1, detail: {} }).success,
+    ).toBe(false);
+    expect(PROCTOR_COUNTED_TYPES).toContain('face_left');
+    expect(PROCTOR_TYPE_LABELS.face_left).toBe('Face left the frame');
+  });
+
+  it('does not count toward the auto-submit limit', () => {
+    const counts = emptyProctorCounts();
+    counts.face_left = 9;
+    counts.face_missing = 1;
+    expect(seriousFlagCount(counts)).toBe(1);
+    expect(PROCTOR_SERIOUS_TYPES).not.toContain('face_left');
   });
 });

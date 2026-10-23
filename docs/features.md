@@ -251,15 +251,16 @@ An opt-in extra for any proctored session. In the quiz editor, **Proctoring** is
 
 **Nothing is recorded, uploaded or streamed.** Detection runs in the student's browser. A small face detector (MediaPipe BlazeFace, served from our own site) looks at one frame per second, and a volume meter reads the microphone level every quarter second. Only a flag's type and time reach the server, through the same channel as the other proctor signals.
 
-| Flag                                                     | Raised when                                          | Counts toward the limit |
-| -------------------------------------------------------- | ---------------------------------------------------- | ----------------------- |
-| `face_missing`                                           | No face for 3 s                                      | Yes                     |
-| `multiple_faces`                                         | Two or more faces for 2 s                            | Yes                     |
-| `looking_away`                                           | Head turned for 4 s (nose far off the eye midpoint)  | Yes                     |
-| `camera_blocked`                                         | A dark frame for 3 s                                 | Yes                     |
-| `loud_audio`                                             | Sound well above the room's quiet level for 2 s      | Yes                     |
-| `camera_denied`, `mic_denied`, `camera_lost`, `mic_lost` | Permission refused, no device, or the device stopped | No (recorded only)      |
-| `auto_submitted`                                         | The exam was submitted at the limit                  | No (server-written)     |
+| Flag                                                     | Raised when                                                     | Counts toward the limit                          |
+| -------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| `face_missing`                                           | No face for 3 s                                                 | Yes                                              |
+| `multiple_faces`                                         | Two or more faces for 2 s                                       | Yes                                              |
+| `looking_away`                                           | Head turned for 4 s (nose far off the eye midpoint)             | Yes                                              |
+| `camera_blocked`                                         | A dark frame for 3 s                                            | Yes                                              |
+| `loud_audio`                                             | Sound well above the room's quiet level for 2 s                 | Yes                                              |
+| `face_left`                                              | The first moment no face is seen (no waiting), once per absence | No (shows in the host's total, not in the limit) |
+| `camera_denied`, `mic_denied`, `camera_lost`, `mic_lost` | Permission refused, no device, or the device stopped            | No (recorded only)                               |
+| `auto_submitted`                                         | The exam was submitted at the limit                             | No (server-written)                              |
 
 Each continuous problem is one flag, plus one more every 30 s while it goes on. A problem only counts as over once it has stayed clear for 3 s (a flickering detector does not split one absence into many flags), and then the same problem is ignored for 5 s. A hidden tab pauses detection and counts as nothing (a tab switch is already its own signal). All numbers live in `apps/web/src/lib/proctorMedia/thresholds.ts`.
 

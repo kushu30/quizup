@@ -87,6 +87,9 @@ export const PROCTOR_COUNTED_TYPES = [
   'right_click',
   'resize',
   ...PROCTOR_SERIOUS_TYPES,
+  // Sent the moment a face leaves the frame, before the 3 s that make it a flag. It shows in the
+  // host's totals but does not count toward the auto-submit limit.
+  'face_left',
 ] as const;
 
 export const PROCTOR_FLAG_LIMIT = { min: 3, max: 50, suggested: 10 } as const;
@@ -137,6 +140,7 @@ export const PROCTOR_TYPE_LABELS: Record<ProctorRecordType, string> = {
   looking_away: 'Looking away',
   camera_blocked: 'Camera blocked',
   loud_audio: 'Loud sound',
+  face_left: 'Face left the frame',
   camera_lost: 'Camera lost',
   camera_denied: 'Camera denied',
   mic_lost: 'Microphone lost',
@@ -160,6 +164,7 @@ export function emptyProctorCounts(): ProctorCounts {
     looking_away: 0,
     camera_blocked: 0,
     loud_audio: 0,
+    face_left: 0,
   };
 }
 
@@ -181,6 +186,7 @@ export const proctorCountsSchema = z.object({
   looking_away: z.number().int().nonnegative().default(0),
   camera_blocked: z.number().int().nonnegative().default(0),
   loud_audio: z.number().int().nonnegative().default(0),
+  face_left: z.number().int().nonnegative().default(0),
 });
 
 export function totalProctorCount(counts: ProctorCounts): number {
@@ -202,7 +208,7 @@ export const proctorEventPayloadSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
-      type: z.enum(['camera_lost', 'camera_denied', 'mic_lost', 'mic_denied']),
+      type: z.enum(['camera_lost', 'camera_denied', 'mic_lost', 'mic_denied', 'face_left']),
       clientAt: clientAtSchema,
     })
     .strict(),

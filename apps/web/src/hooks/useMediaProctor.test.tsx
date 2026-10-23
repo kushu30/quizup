@@ -71,6 +71,9 @@ function access(overrides: Partial<MediaAccess> = {}): MediaAccess {
   return { stream: media.stream, camera: 'ready', mic: 'ready', ...overrides };
 }
 
+// Every event except the immediate face_left notice, which has its own tests.
+const flagsOnly = () => sent.filter((event) => event.type !== 'face_left');
+
 function mount(options: { enabled?: boolean; camera?: boolean; mic?: boolean } = {}) {
   return renderHook(
     (props) =>
@@ -180,13 +183,13 @@ describe('useMediaProctor camera flags', () => {
     sampleResult = { faces: [], brightness: 120 };
     mount();
     await run(2900);
-    expect(sent).toEqual([]);
+    expect(flagsOnly()).toEqual([]);
     await run(1100);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ type: 'face_missing', detail: { continued: false } });
+    expect(flagsOnly()).toHaveLength(1);
+    expect(flagsOnly()[0]).toMatchObject({ type: 'face_missing', detail: { continued: false } });
     await run(30_000);
-    expect(sent).toHaveLength(2);
-    expect(sent[1]).toMatchObject({ type: 'face_missing', detail: { continued: true } });
+    expect(flagsOnly()).toHaveLength(2);
+    expect(flagsOnly()[1]).toMatchObject({ type: 'face_missing', detail: { continued: true } });
   });
 
   // The hold time counts from the first sample that sees the condition, and samples come once a
@@ -195,25 +198,25 @@ describe('useMediaProctor camera flags', () => {
     sampleResult = { faces: [GOOD_FACE, GOOD_FACE], brightness: 120 };
     mount();
     await run(2900);
-    expect(sent).toEqual([]);
+    expect(flagsOnly()).toEqual([]);
     await run(1200);
-    expect(sent.map((event) => event.type)).toEqual(['multiple_faces']);
+    expect(flagsOnly().map((event) => event.type)).toEqual(['multiple_faces']);
   });
 
   it('flags a turned head once it has held for four seconds', async () => {
     sampleResult = { faces: [TURNED_FACE], brightness: 120 };
     mount();
     await run(4000);
-    expect(sent).toEqual([]);
+    expect(flagsOnly()).toEqual([]);
     await run(1100);
-    expect(sent.map((event) => event.type)).toEqual(['looking_away']);
+    expect(flagsOnly().map((event) => event.type)).toEqual(['looking_away']);
   });
 
   it('calls a black frame a blocked camera, not a missing face', async () => {
     sampleResult = { faces: [], brightness: 2 };
     mount();
     await run(8000);
-    expect(sent.map((event) => event.type)).toEqual(['camera_blocked']);
+    expect(flagsOnly().map((event) => event.type)).toEqual(['camera_blocked']);
   });
 
   it('does not flag anything while the tab is hidden, and starts fresh when it returns', async () => {
@@ -222,17 +225,60 @@ describe('useMediaProctor camera flags', () => {
     await run(2000);
     setHidden(true);
     await run(60_000);
-    expect(sent).toEqual([]);
+    expect(flagsOnly()).toEqual([]);
     setHidden(false);
     await run(1500);
-    expect(sent).toEqual([]);
+    expect(flagsOnly()).toEqual([]);
     await run(2500);
-    expect(sent.map((event) => event.type)).toEqual(['face_missing']);
+    expect(flagsOnly().map((event) => event.type)).toEqual(['face_missing']);
   });
 
   it('stays quiet for a face that is there', async () => {
     mount();
     await run(120_000);
+    expect(flagsOnly()).toEqual([]);
+  });
+});
+
+describe('useMediaProctor face_left', () => {
+  it('tells the host the moment the face leaves the frame, before it becomes a flag', async () => {
+    sampleResult = { faces: [], brightness: 120 };
+    mount();
+    await run(1100);
+    expect(sent.map((event) => event.type)).toEqual(['face_left']);
+    expect(sent[0]).not.toHaveProperty('detail');
+    await run(3000);
+    expect(sent.map((event) => event.type)).toEqual(['face_left', 'face_missing']);
+  });
+
+  it('says it once per absence, not on every sample', async () => {
+    sampleResult = { faces: [], brightness: 120 };
+    mount();
+    await run(60_000);
+    expect(sent.filter((event) => event.type === 'face_left')).toHaveLength(1);
+  });
+
+  it('says it again when the student comes back and leaves again', async () => {
+    sampleResult = { faces: [], brightness: 120 };
+    mount();
+    await run(2000);
+    sampleResult = { faces: [GOOD_FACE], brightness: 120 };
+    await run(5000);
+    sampleResult = { faces: [], brightness: 120 };
+    await run(2000);
+    expect(sent.filter((event) => event.type === 'face_left')).toHaveLength(2);
+  });
+
+  it('does not report a covered camera as a face leaving', async () => {
+    sampleResult = { faces: [], brightness: 2 };
+    mount();
+    await run(8000);
+    expect(sent.some((event) => event.type === 'face_left')).toBe(false);
+  });
+
+  it('stays quiet while a face is in view', async () => {
+    mount();
+    await run(30_000);
     expect(sent).toEqual([]);
   });
 });
@@ -268,7 +314,8 @@ describe('useMediaProctor cleanup', () => {
     unmount();
     expect(stopSampler).toHaveBeenCalled();
     expect(stopMeter).toHaveBeenCalled();
+    const before = sent.length;
     await run(120_000);
-    expect(sent).toEqual([]);
+    expect(sent).toHaveLength(before);
   });
 });

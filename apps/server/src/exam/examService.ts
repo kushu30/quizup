@@ -79,6 +79,7 @@ const CAMERA_EVENT_TYPES: readonly string[] = [
   'camera_blocked',
   'camera_lost',
   'camera_denied',
+  'face_left',
 ];
 const MIC_EVENT_TYPES: readonly string[] = ['loud_audio', 'mic_lost', 'mic_denied'];
 

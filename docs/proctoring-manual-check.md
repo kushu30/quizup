@@ -13,7 +13,8 @@ The detectors need a real camera and microphone, so CI cannot test them. Run thi
 ## Camera
 
 - [ ] Sit normally for a minute: no warnings.
-- [ ] Leave the frame for about 5 s: "We can't see your face" appears, the host timeline shows **No face in view**.
+- [ ] Leave the frame: within about a second the host timeline shows **Face left the frame** and the proctor total goes up by one.
+- [ ] Stay away for about 5 s: "We can't see your face" appears, and the timeline shows **No face in view**.
 - [ ] Have a second person (or a photo of one) in frame for 3 s: **Several faces**.
 - [ ] Turn your head well to the side for about 5 s: **Looking away**. A small natural movement should not flag.
 - [ ] Cover the lens: **Camera blocked**, and not also "No face".
