@@ -15,6 +15,28 @@ export const EXAM_PROGRESS_THROTTLE_MS = 250;
 export const EXAM_SWEEP_INTERVAL_MS = 1000;
 export const EXAM_POINTS_PER_QUESTION = 1;
 
+export const EXAM_CONSENT_MEDIA_VERSION = 'exam-consent-2026-10-media-v1';
+
+export function consentVersionFor(media: { camera: boolean; mic: boolean }): string {
+  return media.camera || media.mic ? EXAM_CONSENT_MEDIA_VERSION : EXAM_CONSENT_VERSION;
+}
+
+export function proctorLimitSentence(limit: number): string {
+  return `If you are flagged ${limit} times, your exam is submitted automatically.`;
+}
+
+/** Extra consent lines, shown only for the devices the host turned on. */
+export const EXAM_CONSENT_MEDIA_TEXT = {
+  camera: [
+    'Your camera is used on your device to notice no face in view, several faces, turning away or a blocked camera',
+  ],
+  mic: ['Your microphone is used on your device to notice loud or continuous sound'],
+  notRecorded: [
+    'No video or audio is recorded, uploaded or streamed',
+    'Only the type and time of a flag is sent to your host',
+  ],
+} as const;
+
 export const EXAM_CONSENT_TEXT = {
   title: 'Before you start this exam',
   monitoredHeading: 'What is monitored during the exam',
@@ -45,6 +67,17 @@ export const EXAM_CONSENT_TEXT = {
   declineLabel: 'Decline and go back',
 } as const;
 
+/** Camera and microphone flags. Only these count toward the auto-submit limit. */
+export const PROCTOR_SERIOUS_TYPES = [
+  'face_missing',
+  'multiple_faces',
+  'looking_away',
+  'camera_blocked',
+  'loud_audio',
+] as const;
+export const proctorSeriousTypeSchema = z.enum(PROCTOR_SERIOUS_TYPES);
+export type ProctorSeriousType = z.infer<typeof proctorSeriousTypeSchema>;
+
 export const PROCTOR_COUNTED_TYPES = [
   'tab_switch',
   'window_blur',
@@ -53,8 +86,24 @@ export const PROCTOR_COUNTED_TYPES = [
   'paste',
   'right_click',
   'resize',
+  ...PROCTOR_SERIOUS_TYPES,
 ] as const;
-export const sessionStartSchema = z.object({ proctored: z.boolean().optional() }).strict();
+
+export const PROCTOR_FLAG_LIMIT = { min: 3, max: 50, suggested: 10 } as const;
+
+export const sessionStartSchema = z
+  .object({
+    proctored: z.boolean().optional(),
+    proctorCamera: z.boolean().optional(),
+    proctorMic: z.boolean().optional(),
+    proctorFlagLimit: z
+      .number()
+      .int()
+      .min(PROCTOR_FLAG_LIMIT.min)
+      .max(PROCTOR_FLAG_LIMIT.max)
+      .optional(),
+  })
+  .strict();
 export type SessionStartInput = z.infer<typeof sessionStartSchema>;
 
 export const proctorCountedTypeSchema = z.enum(PROCTOR_COUNTED_TYPES);
@@ -64,6 +113,11 @@ export const PROCTOR_RECORD_TYPES = [
   ...PROCTOR_COUNTED_TYPES,
   'focus_return',
   'consent_given',
+  'camera_lost',
+  'camera_denied',
+  'mic_lost',
+  'mic_denied',
+  'auto_submitted',
 ] as const;
 export const proctorRecordTypeSchema = z.enum(PROCTOR_RECORD_TYPES);
 export type ProctorRecordType = z.infer<typeof proctorRecordTypeSchema>;
@@ -78,6 +132,16 @@ export const PROCTOR_TYPE_LABELS: Record<ProctorRecordType, string> = {
   resize: 'Window resize',
   focus_return: 'Returned',
   consent_given: 'Consent given',
+  face_missing: 'No face in view',
+  multiple_faces: 'Several faces',
+  looking_away: 'Looking away',
+  camera_blocked: 'Camera blocked',
+  loud_audio: 'Loud sound',
+  camera_lost: 'Camera lost',
+  camera_denied: 'Camera denied',
+  mic_lost: 'Microphone lost',
+  mic_denied: 'Microphone denied',
+  auto_submitted: 'Auto-submitted by proctoring',
 };
 
 export type ProctorCounts = Record<ProctorCountedType, number>;
@@ -91,7 +155,16 @@ export function emptyProctorCounts(): ProctorCounts {
     paste: 0,
     right_click: 0,
     resize: 0,
+    face_missing: 0,
+    multiple_faces: 0,
+    looking_away: 0,
+    camera_blocked: 0,
+    loud_audio: 0,
   };
+}
+
+export function seriousFlagCount(counts: ProctorCounts): number {
+  return PROCTOR_SERIOUS_TYPES.reduce((sum, type) => sum + counts[type], 0);
 }
 
 export const proctorCountsSchema = z.object({
@@ -102,6 +175,12 @@ export const proctorCountsSchema = z.object({
   paste: z.number().int().nonnegative(),
   right_click: z.number().int().nonnegative(),
   resize: z.number().int().nonnegative(),
+  // Optional in stored data from before camera and mic proctoring existed.
+  face_missing: z.number().int().nonnegative().default(0),
+  multiple_faces: z.number().int().nonnegative().default(0),
+  looking_away: z.number().int().nonnegative().default(0),
+  camera_blocked: z.number().int().nonnegative().default(0),
+  loud_audio: z.number().int().nonnegative().default(0),
 });
 
 export function totalProctorCount(counts: ProctorCounts): number {
@@ -114,6 +193,19 @@ const dimensionSchema = z.number().int().min(0).max(20_000);
 const awayDurationSchema = z.number().int().min(0).max(86_400_000);
 
 export const proctorEventPayloadSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: proctorSeriousTypeSchema,
+      clientAt: clientAtSchema,
+      detail: z.object({ continued: z.boolean() }).strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.enum(['camera_lost', 'camera_denied', 'mic_lost', 'mic_denied']),
+      clientAt: clientAtSchema,
+    })
+    .strict(),
   z.object({ type: z.literal('tab_switch'), clientAt: clientAtSchema }).strict(),
   z.object({ type: z.literal('window_blur'), clientAt: clientAtSchema }).strict(),
   z.object({ type: z.literal('fullscreen_exit'), clientAt: clientAtSchema }).strict(),
@@ -228,6 +320,7 @@ export const examProgressRowSchema = z.object({
   proctorEventCount: z.number().int().nonnegative(),
   droppedEvents: z.number().int().nonnegative(),
   score: z.number().int().nonnegative().nullable(),
+  autoSubmitted: z.boolean().default(false),
 });
 export type ExamProgressRow = z.infer<typeof examProgressRowSchema>;
 
@@ -239,7 +332,12 @@ export const examProgressPayloadSchema = z.object({
 });
 export type ExamProgressPayload = z.infer<typeof examProgressPayloadSchema>;
 
-export const examSubmitReasonSchema = z.enum(['student', 'deadline', 'host_ended']);
+export const examSubmitReasonSchema = z.enum([
+  'student',
+  'deadline',
+  'host_ended',
+  'proctor_limit',
+]);
 export type ExamSubmitReason = z.infer<typeof examSubmitReasonSchema>;
 
 export const examResultQuestionSchema = z.object({

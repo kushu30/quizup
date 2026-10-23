@@ -64,6 +64,9 @@ export interface SessionUpdate {
   started_at?: string;
   ended_at?: string;
   proctored?: boolean;
+  proctor_camera?: boolean;
+  proctor_mic?: boolean;
+  proctor_flag_limit?: number | null;
 }
 
 export interface LiveRepository extends ExamRepository {

@@ -12,6 +12,7 @@ import type {
   ExamStartPayload,
   ExamStudentView,
   ExamSubmitReason,
+  ProctorSeriousType,
   ProctorEventPayload,
   ProctorEventRecord,
 } from './exam.js';
@@ -188,6 +189,9 @@ export const roomStatePayloadSchema = z.object({
   branding: brandingSchema.nullable(),
   accessMode: accessModeSchema,
   proctored: z.boolean(),
+  proctorCamera: z.boolean().default(false),
+  proctorMic: z.boolean().default(false),
+  proctorFlagLimit: z.number().int().nullable().default(null),
   startedAtServerMs: z.number().nullable(),
   status: sessionStatusSchema,
   role: z.enum(['host', 'student']),
@@ -254,5 +258,10 @@ export interface ServerToClientEvents {
   'exam:progress': (payload: ExamProgressPayload) => void;
   'exam:released': (payload: Record<string, never>) => void;
   'exam:submitted': (payload: { reason: ExamSubmitReason }) => void;
+  'proctor:flags': (payload: {
+    count: number;
+    limit: number | null;
+    type: ProctorSeriousType;
+  }) => void;
   'proctor:timeline': (payload: ProctorEventRecord) => void;
 }

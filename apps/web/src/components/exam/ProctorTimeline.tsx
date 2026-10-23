@@ -26,6 +26,16 @@ const TYPE_ICONS: Record<ProctorRecordType, string> = {
   resize: '↔',
   focus_return: '↩',
   consent_given: '✓',
+  face_missing: '◌',
+  multiple_faces: '⚇',
+  looking_away: '↻',
+  camera_blocked: '▬',
+  loud_audio: '♪',
+  camera_lost: '⊘',
+  camera_denied: '⊘',
+  mic_lost: '⊘',
+  mic_denied: '⊘',
+  auto_submitted: '■',
 };
 
 function formatElapsed(serverAt: number, startedAt: number | null): string {

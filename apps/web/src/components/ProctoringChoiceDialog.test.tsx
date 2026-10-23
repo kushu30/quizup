@@ -24,16 +24,24 @@ describe('ProctoringChoiceDialog', () => {
     renderDialog();
     const dialog = screen.getByRole('dialog', { name: 'Proctor this session?' });
     expect(dialog.textContent).toContain('tab switches');
-    expect(dialog.textContent).toContain('no webcam');
+    expect(dialog.textContent).toMatch(/camera and microphone are off unless you turn them on/i);
     expect(dialog.textContent).toMatch(/students are told/i);
   });
 
   it('starts with proctoring, or without it', () => {
     const { onChoose } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
-    expect(onChoose).toHaveBeenLastCalledWith(true);
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: true,
+      proctorCamera: false,
+      proctorMic: false,
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Start without proctoring' }));
-    expect(onChoose).toHaveBeenLastCalledWith(false);
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: false,
+      proctorCamera: false,
+      proctorMic: false,
+    });
   });
 
   it('says exams also ask for full screen, quizzes do not', () => {
@@ -60,5 +68,87 @@ describe('ProctoringChoiceDialog', () => {
     expect(
       (screen.getByRole('button', { name: 'Start with proctoring' }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it('lets the host turn the camera and the microphone on separately', () => {
+    const { onChoose } = renderDialog();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: true,
+      proctorCamera: true,
+      proctorMic: false,
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Listen to the microphone/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: true,
+      proctorCamera: true,
+      proctorMic: true,
+    });
+  });
+
+  it('says plainly that nothing is recorded or sent', () => {
+    renderDialog();
+    expect(screen.getByRole('dialog').textContent).toMatch(/nothing is recorded/i);
+  });
+
+  it('keeps the camera and microphone off when starting without proctoring', () => {
+    const { onChoose } = renderDialog();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start without proctoring' }));
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: false,
+      proctorCamera: false,
+      proctorMic: false,
+    });
+  });
+
+  it('offers auto-submit only for an exam with the camera or microphone on', () => {
+    renderDialog({ kind: 'exam' });
+    expect(screen.queryByRole('checkbox', { name: /Submit the exam automatically/ })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Listen to the microphone/ }));
+    expect(screen.getByRole('checkbox', { name: /Submit the exam automatically/ })).toBeTruthy();
+    cleanup();
+    renderDialog({ kind: 'live' });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    expect(screen.queryByRole('checkbox', { name: /Submit the exam automatically/ })).toBeNull();
+  });
+
+  it('starts at 10 flags, keeps the limit between 3 and 50, and sends it', () => {
+    const { onChoose } = renderDialog({ kind: 'exam' });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Submit the exam automatically/ }));
+    const limit = screen.getByRole('spinbutton', { name: /Flags before submitting/ });
+    expect((limit as HTMLInputElement).value).toBe('10');
+    fireEvent.change(limit, { target: { value: '2' } });
+    fireEvent.blur(limit);
+    expect((limit as HTMLInputElement).value).toBe('3');
+    fireEvent.change(limit, { target: { value: '99' } });
+    fireEvent.blur(limit);
+    expect((limit as HTMLInputElement).value).toBe('50');
+    fireEvent.change(limit, { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose).toHaveBeenLastCalledWith({
+      proctored: true,
+      proctorCamera: true,
+      proctorMic: false,
+      proctorFlagLimit: 7,
+    });
+  });
+
+  it('leaves the limit out when auto-submit is off, or when both devices are turned off again', () => {
+    const { onChoose } = renderDialog({ kind: 'exam' });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose.mock.lastCall?.[0]).not.toHaveProperty('proctorFlagLimit');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Submit the exam automatically/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Watch the camera/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start with proctoring' }));
+    expect(onChoose.mock.lastCall?.[0]).toEqual({
+      proctored: true,
+      proctorCamera: false,
+      proctorMic: false,
+    });
   });
 });

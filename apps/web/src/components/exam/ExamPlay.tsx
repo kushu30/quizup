@@ -1,4 +1,9 @@
-import { EXAM_CONSENT_VERSION, type ExamResults, type ExamStudentView } from '@quizup/shared';
+import {
+  consentVersionFor,
+  type ExamResults,
+  type ExamStudentView,
+  type ExamSubmitReason,
+} from '@quizup/shared';
 import { useEffect, useState } from 'react';
 import { usePageFocus } from '../../lib/brandContext';
 import { exitFullscreenIfActive } from '../../lib/fullscreen';
@@ -6,7 +11,7 @@ import type { QuizSocket } from '../../lib/socket';
 import { ctaPrimary, ctaSize } from '../landing/cta';
 import { Texture } from '../landing/Texture';
 import { CARD, PlayStage, PlayerBar, WaitingDots } from '../play/PlayStage';
-import { PageLoader } from '../ui';
+import { Notice, PageLoader } from '../ui';
 import { FeedbackForm } from '../FeedbackForm';
 import { ExamAttemptView } from './ExamAttemptView';
 import { ExamConsent } from './ExamConsent';
@@ -18,6 +23,10 @@ interface ExamPlayProps {
   offsetMs: number;
   connected: boolean;
   proctored: boolean;
+  /** Which devices the host turned on, and the auto-submit limit, if any. */
+  media?: { camera: boolean; mic: boolean; flagLimit: number | null };
+  /** Why the exam was submitted, once it has been. */
+  submitReason?: ExamSubmitReason | null;
   onViewChange: (view: ExamStudentView) => void;
 }
 
@@ -99,6 +108,8 @@ export function ExamPlay({
   offsetMs,
   connected,
   proctored,
+  media,
+  submitReason = null,
   onViewChange,
 }: ExamPlayProps) {
   const [declined, setDeclined] = useState(false);
@@ -119,14 +130,23 @@ export function ExamPlay({
     }
     setBusy(true);
     setError(null);
-    socket.emit('exam:start', { consentVersion: EXAM_CONSENT_VERSION }, (ack) => {
-      setBusy(false);
-      if (ack.ok) {
-        onViewChange(ack.view);
-      } else {
-        setError('Could not start the exam. Reload the page and try again.');
-      }
-    });
+    socket.emit(
+      'exam:start',
+      {
+        consentVersion: consentVersionFor({
+          camera: media?.camera ?? false,
+          mic: media?.mic ?? false,
+        }),
+      },
+      (ack) => {
+        setBusy(false);
+        if (ack.ok) {
+          onViewChange(ack.view);
+        } else {
+          setError('Could not start the exam. Reload the page and try again.');
+        }
+      },
+    );
   }
 
   if (view.phase === 'waiting') {
@@ -169,6 +189,9 @@ export function ExamPlay({
       <ExamConsent
         durationMinutes={view.durationMinutes}
         proctored={proctored}
+        camera={media?.camera}
+        mic={media?.mic}
+        flagLimit={media?.flagLimit}
         busy={busy}
         error={error}
         onAccept={accept}
@@ -185,6 +208,7 @@ export function ExamPlay({
         offsetMs={offsetMs}
         connected={connected}
         proctored={proctored}
+        media={media}
         onViewChange={onViewChange}
       />
     );
@@ -193,6 +217,12 @@ export function ExamPlay({
   if (view.phase === 'submitted') {
     return (
       <PlayStage width="lg">
+        {submitReason === 'proctor_limit' && (
+          <Notice tone="warning">
+            Your exam was submitted because it reached the proctoring flag limit. Your answers up to
+            that point were saved. Your host can review what happened.
+          </Notice>
+        )}
         <ResultsPanel socket={socket} released={view.resultsReleased} />
         <FeedbackForm submit={(payload) => socket.emitWithAck('feedback:submit', payload)} />
       </PlayStage>

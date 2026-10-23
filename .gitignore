@@ -9,3 +9,4 @@ supabase/.temp
 .vercel
 decisions.md
 flow.md
+apps/web/public/proctor/wasm/

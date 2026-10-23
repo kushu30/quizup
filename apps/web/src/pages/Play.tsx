@@ -2,6 +2,7 @@ import type {
   Branding,
   ClientHints,
   ExamStudentView,
+  ExamSubmitReason,
   JoinInfo,
   LeaderboardEntry,
   QuestionResultPayload,
@@ -23,6 +24,8 @@ import { AppIcon, ICONS } from '../components/app/icons';
 import { ctaPrimary, ctaSize } from '../components/landing/cta';
 import { Texture } from '../components/landing/Texture';
 import { CARD, PlayStage, PlayerBar, WaitingDots } from '../components/play/PlayStage';
+import { MediaProctorLayer } from '../components/proctor/MediaProctorLayer';
+import { ProctorPrecheck } from '../components/proctor/ProctorPrecheck';
 import { Notice, PageLoader } from '../components/ui';
 import { useProctor } from '../hooks/useProctor';
 import { useClockSync } from '../hooks/useClockSync';
@@ -31,6 +34,7 @@ import { createQuizSocket, type QuizSocket } from '../lib/socket';
 import { supabase } from '../lib/supabase';
 import { usePageBrand } from '../lib/brandContext';
 import { markIntroDone, readIntroDone, shouldShowIntro } from '../lib/introGate';
+import { markPrecheckDone, readPrecheckDone, shouldShowPrecheck } from '../lib/precheckGate';
 import { clearStoredJoin, readStoredJoin, writeStoredJoin } from '../lib/storedJoin';
 
 interface PlayState {
@@ -52,6 +56,10 @@ interface PlayState {
   exam: ExamStudentView | null;
   adaptive: boolean;
   proctored: boolean;
+  proctorCamera: boolean;
+  proctorMic: boolean;
+  proctorFlagLimit: number | null;
+  examSubmitReason: ExamSubmitReason | null;
   quizTitle: string;
   branding: Branding | null;
 }
@@ -75,6 +83,10 @@ const INITIAL_STATE: PlayState = {
   exam: null,
   adaptive: false,
   proctored: false,
+  proctorCamera: false,
+  proctorMic: false,
+  proctorFlagLimit: null,
+  examSubmitReason: null,
   quizTitle: '',
   branding: null,
 };
@@ -172,6 +184,7 @@ export function Play() {
   const [answerError, setAnswerError] = useState<string | null>(null);
   const { offsetMs, synced } = useClockSync(socket);
   const [introDone, setIntroDone] = useState(() => readIntroDone(joinCode));
+  const [precheckDone, setPrecheckDone] = useState(() => readPrecheckDone(joinCode));
   usePageBrand(
     state.branding ?? routeState?.joinInfo?.branding ?? null,
     shouldShowIntro({
@@ -270,6 +283,9 @@ export function Play() {
           exam: room.exam,
           adaptive: room.adaptive,
           proctored: room.proctored,
+          proctorCamera: room.proctorCamera,
+          proctorMic: room.proctorMic,
+          proctorFlagLimit: room.proctorFlagLimit,
           quizTitle: room.quizTitle,
           branding: room.branding,
         }));
@@ -289,11 +305,12 @@ export function Play() {
           current.exam ? { ...current, exam: { ...current.exam, resultsReleased: true } } : current,
         );
       });
-      quizSocket.on('exam:submitted', () => {
+      quizSocket.on('exam:submitted', ({ reason }) => {
         setState((current) =>
           current.exam
             ? {
                 ...current,
+                examSubmitReason: reason,
                 exam: {
                   ...current.exam,
                   phase: 'submitted',
@@ -443,6 +460,33 @@ export function Play() {
     );
   }
 
+  if (
+    shouldShowPrecheck({
+      precheckDone,
+      proctored: state.proctored,
+      camera: state.proctorCamera,
+      mic: state.proctorMic,
+      status: state.status,
+    })
+  ) {
+    return (
+      <ProctorPrecheck
+        camera={state.proctorCamera}
+        mic={state.proctorMic}
+        onContinue={() => {
+          markPrecheckDone(joinCode);
+          setPrecheckDone(true);
+        }}
+      />
+    );
+  }
+
+  const media = {
+    camera: state.proctorCamera,
+    mic: state.proctorMic,
+    flagLimit: state.proctorFlagLimit,
+  };
+
   if (state.mode === 'exam' && state.exam && socket) {
     return (
       <ExamPlay
@@ -452,6 +496,8 @@ export function Play() {
         offsetMs={offsetMs}
         connected={state.connected}
         proctored={state.proctored}
+        media={media}
+        submitReason={state.examSubmitReason}
         onViewChange={(exam) => setState((current) => ({ ...current, exam }))}
       />
     );
@@ -465,6 +511,18 @@ export function Play() {
           socket={socket}
           active={state.status === 'running'}
           connected={state.connected}
+        />
+      )}
+      {state.proctored && (media.camera || media.mic) && state.status !== 'ended' && socket && (
+        <MediaProctorLayer
+          socket={socket}
+          room={{
+            proctorCamera: media.camera,
+            proctorMic: media.mic,
+            proctorFlagLimit: media.flagLimit,
+          }}
+          active={state.status === 'running'}
+          now={() => Date.now() + offsetMs}
         />
       )}
       <PlayerBar name={state.displayName} standing={state.standing} />

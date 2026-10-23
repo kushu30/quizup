@@ -166,6 +166,9 @@ export class InMemoryLiveRepository implements LiveRepository {
       exam_duration_minutes: input.examDurationMinutes,
       results_released_at: null,
       proctored: false,
+      proctor_camera: false,
+      proctor_mic: false,
+      proctor_flag_limit: null,
     };
     this.sessions.set(session.id, { session, hostId: quiz.hostId });
     return session;

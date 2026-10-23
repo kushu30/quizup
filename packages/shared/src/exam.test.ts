@@ -165,8 +165,8 @@ describe('consent text and counts', () => {
     }
   });
 
-  it('counts only the seven counted types', () => {
-    expect(PROCTOR_COUNTED_TYPES).toHaveLength(7);
+  it('counts the seven browser types and the five camera and mic types', () => {
+    expect(PROCTOR_COUNTED_TYPES).toHaveLength(12);
     const counts = emptyProctorCounts();
     counts.tab_switch = 2;
     counts.paste = 3;

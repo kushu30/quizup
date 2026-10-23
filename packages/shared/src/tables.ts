@@ -68,6 +68,9 @@ export const sessionSchema = z.object({
   exam_duration_minutes: z.number().int().nullable(),
   results_released_at: timestampSchema.nullable(),
   proctored: z.boolean().default(false),
+  proctor_camera: z.boolean().default(false),
+  proctor_mic: z.boolean().default(false),
+  proctor_flag_limit: z.number().int().nullable().default(null),
 });
 export type Session = z.infer<typeof sessionSchema>;
 

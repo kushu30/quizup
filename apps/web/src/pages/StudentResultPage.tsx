@@ -128,6 +128,14 @@ export function StudentResultPage() {
     };
   }, [sessionId, participantId]);
 
+  const autoEvent = timeline?.events.find((event) => event.type === 'auto_submitted');
+  const autoSubmit = autoEvent
+    ? {
+        count: Number(autoEvent.detail?.count ?? 0),
+        limit: Number(autoEvent.detail?.limit ?? 0),
+      }
+    : null;
+
   return (
     <section className="flex flex-1 flex-col">
       <PageHeader
@@ -142,6 +150,13 @@ export function StudentResultPage() {
       <PageBody>
         <div className="space-y-6 px-4 pt-6 pb-10 sm:px-10">
           {message && <Notice tone="danger">{message}</Notice>}
+          {autoSubmit && (
+            <Notice tone="warning">
+              Auto-submitted by proctoring after {autoSubmit.count} of {autoSubmit.limit} flags.
+              Answers given up to that point were graded as usual. Review the timeline below before
+              deciding anything.
+            </Notice>
+          )}
           {!result && !message && <PageLoader label="Loading the result" />}
           {result && <StudentResultView result={result} audience="host" />}
           {participant && (

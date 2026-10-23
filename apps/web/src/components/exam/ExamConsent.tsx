@@ -1,4 +1,4 @@
-import { EXAM_CONSENT_TEXT } from '@quizup/shared';
+import { EXAM_CONSENT_MEDIA_TEXT, EXAM_CONSENT_TEXT, proctorLimitSentence } from '@quizup/shared';
 import { ctaLight, ctaPrimary, ctaSize } from '../landing/cta';
 import { CARD, PlayStage } from '../play/PlayStage';
 import { Notice } from '../ui';
@@ -6,6 +6,10 @@ import { Notice } from '../ui';
 interface ExamConsentProps {
   durationMinutes: number;
   proctored: boolean;
+  /** Which devices the host turned on, and the auto-submit limit, if any. */
+  camera?: boolean;
+  mic?: boolean;
+  flagLimit?: number | null;
   busy: boolean;
   error: string | null;
   onAccept: () => void;
@@ -34,11 +38,30 @@ function Section({ heading, items }: { heading: string; items: readonly string[]
 export function ExamConsent({
   durationMinutes,
   proctored,
+  camera = false,
+  mic = false,
+  flagLimit = null,
   busy,
   error,
   onAccept,
   onDecline,
 }: ExamConsentProps) {
+  const anyDevice = camera || mic;
+  const monitored = [
+    ...EXAM_CONSENT_TEXT.monitored,
+    ...(camera ? EXAM_CONSENT_MEDIA_TEXT.camera : []),
+    ...(mic ? EXAM_CONSENT_MEDIA_TEXT.mic : []),
+  ];
+  const notCollected = [
+    ...EXAM_CONSENT_TEXT.notCollected.filter(
+      (item) => !(camera && item === 'No webcam') && !(mic && item === 'No microphone'),
+    ),
+    ...(anyDevice ? EXAM_CONSENT_MEDIA_TEXT.notRecorded : []),
+  ];
+  const statements = [
+    ...EXAM_CONSENT_TEXT.statements,
+    ...(flagLimit !== null ? [proctorLimitSentence(flagLimit)] : []),
+  ];
   return (
     <PlayStage width="lg">
       <div className={`${CARD} space-y-6 p-6 sm:p-8`}>
@@ -54,20 +77,11 @@ export function ExamConsent({
         {proctored ? (
           <>
             <div className="grid gap-6 sm:grid-cols-2">
-              <Section
-                heading={EXAM_CONSENT_TEXT.monitoredHeading}
-                items={EXAM_CONSENT_TEXT.monitored}
-              />
-              <Section
-                heading={EXAM_CONSENT_TEXT.notCollectedHeading}
-                items={EXAM_CONSENT_TEXT.notCollected}
-              />
+              <Section heading={EXAM_CONSENT_TEXT.monitoredHeading} items={monitored} />
+              <Section heading={EXAM_CONSENT_TEXT.notCollectedHeading} items={notCollected} />
             </div>
             <div className="border-t border-dashed border-night/15 pt-5">
-              <Section
-                heading={EXAM_CONSENT_TEXT.statementsHeading}
-                items={EXAM_CONSENT_TEXT.statements}
-              />
+              <Section heading={EXAM_CONSENT_TEXT.statementsHeading} items={statements} />
             </div>
           </>
         ) : (

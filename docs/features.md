@@ -55,7 +55,7 @@ What each signal means and how it is captured (all in the student's browser, onl
 
 Events are timestamped by the browser and again by the server. They are queued in the browser while offline (up to 200) and flagged "late" if delivered more than 5 seconds after they happened. The server accepts at most 20 events per second per connection and counts any it drops.
 
-Never collected: no webcam, no microphone, no screen recording, no keystrokes, no clipboard content (copy and paste record only a length). The consent screen says this, and the server stores which version of the text each student accepted.
+Never collected: no screen recording, no keystrokes, no clipboard content (copy and paste record only a length), and no video or audio of any kind (see _Camera and microphone proctoring_ for the opt-in camera and microphone checks, which analyse on the student's device and send only flags). The consent screen says this, and the server stores which version of the text each student accepted.
 
 Honest limits: these are browser-side signals. A determined student can evade or spoof them, for example by using a second device or a phone, a second monitor, a virtual machine, browser developer tools, or by blocking events. Missing signals do not mean no misconduct, and signals do not prove misconduct. Treat them as indicators for a human to review, with the student's context.
 
@@ -174,7 +174,7 @@ Sample files: the question import and the student list both have a **Download a 
 
 ## Proctoring for every assessment type
 
-When the host presses **Start** (or **Open the exam**), a dialog asks whether to proctor this session. Proctoring records tab switches, the window losing focus, copy and paste (lengths only), right-clicks and window resizes, and shows them to the host; exams also ask students to stay in full screen. It records no webcam, microphone, screen or keystrokes. Students are told before they begin: the intro lists it as the host's choice, a proctored quiz shows a notice on every question, and a proctored exam shows the monitoring list on the consent screen. If the host starts without proctoring, no signals are recorded or shown, the exam consent says so, and the exam asks for no full screen. When the start request does not say, exams default to proctored and quizzes to not proctored. The host console shows a **Proctoring** panel for proctored quizzes (counts, latest signal, a timeline per student) and the summary page shows the signals table whenever a session was proctored. Run `supabase db push` to apply migration 0013 (`sessions.proctored`, `participants.devices`; exam sessions already stored are marked proctored).
+When the host presses **Start** (or **Open the exam**), a dialog asks whether to proctor this session. Proctoring records tab switches, the window losing focus, copy and paste (lengths only), right-clicks and window resizes, and shows them to the host; exams also ask students to stay in full screen. It records no screen or keystrokes, and camera and microphone checks are off unless the host turns them on (see _Camera and microphone proctoring_). Students are told before they begin: the intro lists it as the host's choice, a proctored quiz shows a notice on every question, and a proctored exam shows the monitoring list on the consent screen. If the host starts without proctoring, no signals are recorded or shown, the exam consent says so, and the exam asks for no full screen. When the start request does not say, exams default to proctored and quizzes to not proctored. The host console shows a **Proctoring** panel for proctored quizzes (counts, latest signal, a timeline per student) and the summary page shows the signals table whenever a session was proctored. Run `supabase db push` to apply migration 0013 (`sessions.proctored`, `participants.devices`; exam sessions already stored are marked proctored).
 
 ## Where each student joined from
 
@@ -244,3 +244,35 @@ Results are only ever viewed inside the app: no PDF export, nothing is emailed o
 - **Host.** The session summary has a **Students** table; each name opens `/sessions/:sessionId/students/:participantId` with the same result view (always with correct answers), plus that student's proctor signal counts and timeline, and device. Only the quiz's own host (or an admin) can open it.
 - **Time taken.** Exams: from the student's start to submit. Live quizzes: the sum of the time spent on each answer.
 - **API.** `GET /me/results/:sessionId` (409 `session_not_finished` or `results_not_released` when not ready) and `GET /sessions/:sessionId/participants/:participantId/result` (host or admin). No database change.
+
+## Camera and microphone proctoring
+
+An opt-in extra for any proctored session. The Start dialog has two cards, **Watch the camera** and **Listen to the microphone**, and for exams an optional **Submit the exam automatically after repeated flags** switch with a limit of 3 to 50 (suggested 10).
+
+**Nothing is recorded, uploaded or streamed.** Detection runs in the student's browser. A small face detector (MediaPipe BlazeFace, served from our own site) looks at one frame per second, and a volume meter reads the microphone level every quarter second. Only a flag's type and time reach the server, through the same channel as the other proctor signals.
+
+| Flag                                                     | Raised when                                          | Counts toward the limit |
+| -------------------------------------------------------- | ---------------------------------------------------- | ----------------------- |
+| `face_missing`                                           | No face for 3 s                                      | Yes                     |
+| `multiple_faces`                                         | Two or more faces for 2 s                            | Yes                     |
+| `looking_away`                                           | Head turned for 4 s (nose far off the eye midpoint)  | Yes                     |
+| `camera_blocked`                                         | A dark frame for 3 s                                 | Yes                     |
+| `loud_audio`                                             | Sound well above the room's quiet level for 2 s      | Yes                     |
+| `camera_denied`, `mic_denied`, `camera_lost`, `mic_lost` | Permission refused, no device, or the device stopped | No (recorded only)      |
+| `auto_submitted`                                         | The exam was submitted at the limit                  | No (server-written)     |
+
+Each continuous problem is one flag, plus one more every 30 s while it goes on; after it clears, the same problem is ignored for 5 s. A hidden tab pauses detection and counts as nothing (a tab switch is already its own signal). All numbers live in `apps/web/src/lib/proctorMedia/thresholds.ts`.
+
+**The student sees it.** Before the session starts, a pre-check screen asks for permission and shows a local self-view and a level bar (never sent anywhere); **Continue** always works. During the session a dark "Camera on / Mic on" pill is shown, plus "Flags 2 of 10" when there is a limit. Each flag shows a short warning under the header (`aria-live`, never over the question); one flag before the limit it turns red: "One more and your exam will be submitted."
+
+**Refusal never blocks.** A student who denies access, has no device, or whose browser cannot run the detector still takes the session; the host sees `camera_denied` / `mic_denied`.
+
+**Auto-submit is decided by the server**, which counts serious flags per attempt (also after a restart), stores `auto_submitted`, and submits through the normal path, so answers given so far are graded as usual. Hosts see an **Auto-submitted by proctoring** marker in the progress table and on the student's result page. It applies to exams only. It never changes a score.
+
+**Consent.** When a device is on, the exam consent screen has a different version (`exam-consent-2026-10-media-v1`), lists what the camera and microphone are used for, says nothing is recorded or sent, and states the limit if there is one.
+
+**Honest limits.** A second person, a phone or an earpiece outside the frame, or a photo held up to the camera, defeats this. Face detectors can misfire in poor light, with glasses glare or head coverings, and loud sound is not cheating. Treat flags as hints for a person to review. The thresholds are deliberately a little strict, which is why the limit is off by default.
+
+**Setup.** `@mediapipe/tasks-vision` is pinned to 1.1.0. `npm run dev` and `npm run build` in `apps/web` first copy its wasm files into `apps/web/public/proctor/wasm` (git-ignored); the 230 KB face model is committed in `apps/web/public/proctor/`. A student's browser downloads one ~13 MB wasm file the first time camera proctoring runs, then caches it. Run `supabase db push` to apply migration 0017 (`sessions.proctor_camera`, `proctor_mic`, `proctor_flag_limit`). Do not run a plain `npm install <package>` in this repo without checking `git diff --stat package-lock.json`: it strips the `lightningcss` platform entries the Linux builds need.
+
+Manual checks that CI cannot do are in [proctoring-manual-check.md](proctoring-manual-check.md).

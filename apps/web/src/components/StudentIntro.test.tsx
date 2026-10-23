@@ -65,6 +65,7 @@ describe('StudentIntro', () => {
       renderIntro({ assessmentType, durationMinutes: 30 });
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText(/if your host turns on proctoring/i)).toBeTruthy();
+      expect(screen.getByText(/camera and microphone/i)).toBeTruthy();
       cleanup();
     }
   });

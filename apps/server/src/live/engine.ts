@@ -374,7 +374,12 @@ export class LiveEngine {
   async startSession(
     sessionId: string,
     hostId: string,
-    options: { proctored?: boolean } = {},
+    options: {
+      proctored?: boolean;
+      proctorCamera?: boolean;
+      proctorMic?: boolean;
+      proctorFlagLimit?: number;
+    } = {},
   ): Promise<SessionSummary> {
     const state = this.requireHostedSession(sessionId, hostId);
     if (state.record.status !== 'lobby') {
@@ -392,12 +397,31 @@ export class LiveEngine {
     }
     const startedAtIso = new Date(this.now()).toISOString();
     const proctored = options.proctored ?? state.exam !== null;
+    // Camera, microphone and the flag limit only mean something when proctoring is on, and only
+    // an exam has a per-student submit for the limit to trigger.
+    const proctorCamera = proctored && options.proctorCamera === true;
+    const proctorMic = proctored && options.proctorMic === true;
+    const proctorFlagLimit =
+      proctored && (proctorCamera || proctorMic) && state.exam !== null
+        ? (options.proctorFlagLimit ?? null)
+        : null;
     await this.repository.updateSession(state.record.id, {
       status: 'running',
       started_at: startedAtIso,
       proctored,
+      proctor_camera: proctorCamera,
+      proctor_mic: proctorMic,
+      proctor_flag_limit: proctorFlagLimit,
     });
-    state.record = { ...state.record, status: 'running', started_at: startedAtIso, proctored };
+    state.record = {
+      ...state.record,
+      status: 'running',
+      started_at: startedAtIso,
+      proctored,
+      proctor_camera: proctorCamera,
+      proctor_mic: proctorMic,
+      proctor_flag_limit: proctorFlagLimit,
+    };
     state.analytics.setProctored(proctored);
     if (state.exam) {
       this.pushRoomStateToParticipants(state);
@@ -1539,15 +1563,23 @@ export class LiveEngine {
     };
   }
 
-  getProctorInfo(
-    sessionId: string,
-  ): { proctored: boolean; status: SessionStatus; exam: boolean } | null {
+  getProctorInfo(sessionId: string): {
+    proctored: boolean;
+    status: SessionStatus;
+    exam: boolean;
+    camera: boolean;
+    mic: boolean;
+    flagLimit: number | null;
+  } | null {
     const state = this.sessionsById.get(sessionId);
     return state
       ? {
           proctored: state.record.proctored,
           status: state.record.status,
           exam: state.exam !== null,
+          camera: state.record.proctor_camera,
+          mic: state.record.proctor_mic,
+          flagLimit: state.record.proctor_flag_limit,
         }
       : null;
   }
@@ -1797,6 +1829,9 @@ export class LiveEngine {
       branding: state.branding,
       accessMode: state.accessMode,
       proctored: state.record.proctored,
+      proctorCamera: state.record.proctor_camera,
+      proctorMic: state.record.proctor_mic,
+      proctorFlagLimit: state.record.proctor_flag_limit,
       startedAtServerMs: state.record.started_at ? Date.parse(state.record.started_at) : null,
       status,
       role: viewer.role,

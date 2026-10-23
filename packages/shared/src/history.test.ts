@@ -18,6 +18,9 @@ function session(overrides: Partial<Session> = {}): Session {
     exam_duration_minutes: null,
     results_released_at: null,
     proctored: false,
+    proctor_camera: false,
+    proctor_mic: false,
+    proctor_flag_limit: null,
     ...overrides,
   };
 }

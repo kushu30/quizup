@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { useServerNow } from '../../hooks/useServerNow';
 import { useStableRows } from '../../lib/stableRows';
 import { StudentDevice } from '../StudentDevice';
-import { TableFrame } from '../ui';
+import { StatusPill, TableFrame } from '../ui';
 
 interface ExamProgressTableProps {
   rows: ExamProgressRow[];
@@ -70,7 +70,14 @@ const ProgressRowView = memo(function ProgressRowView({
           {row.displayName}
         </button>
       </td>
-      <td className="whitespace-nowrap">{STATUS_LABELS[row.status]}</td>
+      <td className="whitespace-nowrap">
+        {STATUS_LABELS[row.status]}
+        {row.autoSubmitted && (
+          <StatusPill status="ended" className="mt-1 flex w-fit">
+            Auto-submitted by proctoring
+          </StatusPill>
+        )}
+      </td>
       <td>
         <StudentDevice devices={devices} />
       </td>

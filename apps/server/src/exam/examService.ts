@@ -1,13 +1,15 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import {
   ANSWER_GRACE_MS,
-  EXAM_CONSENT_VERSION,
   EXAM_POINTS_PER_QUESTION,
   EXAM_PROGRESS_THROTTLE_MS,
   EXAM_SWEEP_INTERVAL_MS,
   PROCTOR_COUNTED_TYPES,
   PROCTOR_FLUSH_INTERVAL_MS,
   PROCTOR_LATE_AFTER_MS,
+  PROCTOR_SERIOUS_TYPES,
+  consentVersionFor,
+  seriousFlagCount,
   buildAttemptOrders,
   perStudentQuestionCount,
   displayedToOriginalIndex,
@@ -28,6 +30,7 @@ import {
   type ProctorEventRecord,
   type ProctorParticipantTimeline,
   type ProctorRecordType,
+  type ProctorSeriousType,
   questionImageOf,
 } from '@quizup/shared';
 import type { AnalyticsAccess } from '../analytics/analyticsService.js';
@@ -58,12 +61,27 @@ interface AttemptEntry {
   counts: ProctorCounts;
   dropped: number;
   submitting: Promise<void> | null;
+  autoSubmitted: boolean;
 }
 
 type ExamViewResult = Ack<{ view: ExamStudentView }>;
 
 function mayRead(hostId: string, user: MeResponse): boolean {
   return hostId === user.id || user.role === 'admin';
+}
+
+const CAMERA_EVENT_TYPES: readonly string[] = [
+  'face_missing',
+  'multiple_faces',
+  'looking_away',
+  'camera_blocked',
+  'camera_lost',
+  'camera_denied',
+];
+const MIC_EVENT_TYPES: readonly string[] = ['loud_audio', 'mic_lost', 'mic_denied'];
+
+function isSeriousType(type: ProctorRecordType): type is ProctorSeriousType {
+  return (PROCTOR_SERIOUS_TYPES as readonly string[]).includes(type);
 }
 
 function isCountedType(type: ProctorRecordType): type is ProctorCountedType {
@@ -137,9 +155,15 @@ export class ExamService implements ExamHooks {
     for (const attempt of attempts) {
       const answers = await this.repository.listExamAnswers(attempt.id);
       const counts = emptyProctorCounts();
+      let autoSubmitted = false;
       for (const event of events) {
-        if (event.participantId === attempt.participantId && isCountedType(event.type)) {
+        if (event.participantId !== attempt.participantId) {
+          continue;
+        }
+        if (isCountedType(event.type)) {
           counts[event.type] += 1;
+        } else if (event.type === 'auto_submitted') {
+          autoSubmitted = true;
         }
       }
       const entry: AttemptEntry = {
@@ -148,6 +172,7 @@ export class ExamService implements ExamHooks {
         counts,
         dropped: 0,
         submitting: null,
+        autoSubmitted,
       };
       this.register(entry);
       const context = this.engine.getExamContext(sessionId);
@@ -155,6 +180,11 @@ export class ExamService implements ExamHooks {
         await this.settleAttempt(entry, context, false);
       }
     }
+  }
+
+  private consentVersionOf(sessionId: string): string {
+    const info = this.engine.getProctorInfo(sessionId);
+    return consentVersionFor({ camera: info?.camera ?? false, mic: info?.mic ?? false });
   }
 
   private scoreOf(entry: AttemptEntry, context: ExamContext): number {
@@ -177,7 +207,7 @@ export class ExamService implements ExamHooks {
     const durationMinutes = Math.round(context.durationMs / 60_000);
     const base = {
       durationMinutes,
-      consentVersion: EXAM_CONSENT_VERSION,
+      consentVersion: this.consentVersionOf(sessionId),
       resultsReleased: context.resultsReleasedAtMs !== null,
     };
 
@@ -261,6 +291,7 @@ export class ExamService implements ExamHooks {
             : 0,
           droppedEvents: entry?.dropped ?? 0,
           score: entry && submitted ? this.scoreOf(entry, context) : null,
+          autoSubmitted: entry?.autoSubmitted ?? false,
         };
       })
       .sort((first, second) => first.displayName.localeCompare(second.displayName));
@@ -321,7 +352,7 @@ export class ExamService implements ExamHooks {
       return { ok: false, error: 'not_exam' };
     }
     const { reference, context } = resolved;
-    if (consentVersion !== EXAM_CONSENT_VERSION) {
+    if (consentVersion !== this.consentVersionOf(reference.sessionId)) {
       return { ok: false, error: 'consent_version_mismatch' };
     }
     if (context.status === 'lobby') {
@@ -362,6 +393,7 @@ export class ExamService implements ExamHooks {
         counts: emptyProctorCounts(),
         dropped: 0,
         submitting: null,
+        autoSubmitted: false,
       });
       this.pushProctorRecord({
         sessionId: reference.sessionId,
@@ -674,6 +706,13 @@ export class ExamService implements ExamHooks {
     if (!info.proctored) {
       return { ok: true };
     }
+    // A camera or microphone event for a device the host did not turn on is ignored.
+    if (
+      (CAMERA_EVENT_TYPES.includes(payload.type) && !info.camera) ||
+      (MIC_EVENT_TYPES.includes(payload.type) && !info.mic)
+    ) {
+      return { ok: true };
+    }
     if (!info.exam) {
       return this.recordLiveProctorEvent(participantId, reference.sessionId, payload);
     }
@@ -705,7 +744,39 @@ export class ExamService implements ExamHooks {
       entry.counts[record.type] += 1;
     }
     this.scheduleProgress(entry.attempt.sessionId);
+    if (isSeriousType(record.type)) {
+      await this.afterSeriousFlag(entry, record.type, record.clientAt, info.flagLimit);
+    }
     return { ok: true };
+  }
+
+  /** Tells the student their count and, at the host's limit, submits the exam once. */
+  private async afterSeriousFlag(
+    entry: AttemptEntry,
+    type: ProctorSeriousType,
+    flagClientAt: number,
+    limit: number | null,
+  ): Promise<void> {
+    const count = seriousFlagCount(entry.counts);
+    this.publisher.emitToParticipant(entry.attempt.participantId, 'proctor:flags', {
+      count,
+      limit,
+      type,
+    });
+    if (limit === null || count < limit || entry.autoSubmitted) {
+      return;
+    }
+    entry.autoSubmitted = true;
+    this.pushProctorRecord({
+      sessionId: entry.attempt.sessionId,
+      participantId: entry.attempt.participantId,
+      attemptId: entry.attempt.id,
+      type: 'auto_submitted',
+      // Just after the flag that triggered it, so the timeline never shows it earlier.
+      clientAt: Math.max(this.now(), flagClientAt) + 1,
+      detail: { count, limit },
+    });
+    await this.performSubmit(entry, 'proctor_limit');
   }
 
   private recordLiveProctorEvent(
@@ -726,6 +797,13 @@ export class ExamService implements ExamHooks {
       counts[record.type] += 1;
       this.liveCounts.set(participantId, counts);
       this.engine.getSessionAnalytics(sessionId)?.setProctorCounts(participantId, { ...counts });
+      if (isSeriousType(record.type)) {
+        this.publisher.emitToParticipant(participantId, 'proctor:flags', {
+          count: seriousFlagCount(counts),
+          limit: null,
+          type: record.type,
+        });
+      }
     }
     return { ok: true };
   }

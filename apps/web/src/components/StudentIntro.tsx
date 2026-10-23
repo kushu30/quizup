@@ -15,7 +15,7 @@ const TYPE_LABELS: Record<AssessmentType, string> = {
 };
 
 const PROCTORING_RULE =
-  'If your host turns on proctoring, you are told before you begin. Switching tabs, copying and pasting and similar actions are then recorded and shown to your host.';
+  'If your host turns on proctoring, you are told before you begin. Switching tabs, copying and pasting and similar actions are then recorded and shown to your host. Your host may also use your camera and microphone to notice things like no face in view or loud sound; nothing is recorded or sent.';
 
 function rulesFor(type: AssessmentType, durationMinutes?: number): string[] {
   if (type === 'exam') {

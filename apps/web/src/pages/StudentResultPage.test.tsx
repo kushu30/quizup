@@ -100,4 +100,35 @@ describe('StudentResultPage (host)', () => {
     renderPage();
     expect(await screen.findByText('Result not found')).toBeTruthy();
   });
+
+  it('marks an attempt that proctoring submitted automatically, with the count', async () => {
+    vi.mocked(api.getStudentResult).mockResolvedValue(result);
+    vi.mocked(api.getSessionSummary).mockResolvedValue({
+      participants: [{ participantId: STUDENT, proctorCounts: emptyProctorCounts(), devices: [] }],
+    } as never);
+    vi.mocked(api.getProctorTimeline).mockResolvedValue([
+      {
+        participantId: STUDENT,
+        displayName: 'Asha',
+        attemptStartedAtMs: 1000,
+        counts: emptyProctorCounts(),
+        droppedEvents: 0,
+        events: [
+          {
+            id: '40000000-0000-4000-8000-000000000002',
+            participantId: STUDENT,
+            attemptId: null,
+            type: 'auto_submitted',
+            clientAt: 90_000,
+            serverAt: 90_000,
+            late: false,
+            detail: { count: 10, limit: 10 },
+          },
+        ],
+      },
+    ] as never);
+    renderPage();
+    const notice = await screen.findByText(/after 10 of 10 flags/);
+    expect(notice.textContent).toContain('Auto-submitted by proctoring');
+  });
 });

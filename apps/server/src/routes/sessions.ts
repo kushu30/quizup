@@ -86,6 +86,9 @@ export function createSessionsRouter(dependencies: {
       response.json(
         await engine.startSession(params.sessionId, getAuthUser(request).id, {
           proctored: body.proctored,
+          proctorCamera: body.proctorCamera,
+          proctorMic: body.proctorMic,
+          proctorFlagLimit: body.proctorFlagLimit,
         }),
       );
     }),

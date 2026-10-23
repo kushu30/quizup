@@ -8,6 +8,7 @@ import { ConnectionBanner } from '../ConnectionBanner';
 import { QuestionImage } from '../QuestionImage';
 import { ctaLight, ctaPrimary, ctaSize } from '../landing/cta';
 import { CARD, PlayStage } from '../play/PlayStage';
+import { MediaProctorLayer } from '../proctor/MediaProctorLayer';
 import { Notice } from '../ui';
 
 interface ExamAttemptViewProps {
@@ -16,6 +17,8 @@ interface ExamAttemptViewProps {
   offsetMs: number;
   connected: boolean;
   proctored: boolean;
+  /** Which devices the host turned on, and the auto-submit limit, if any. */
+  media?: { camera: boolean; mic: boolean; flagLimit: number | null };
   onViewChange: (view: ExamStudentView) => void;
 }
 
@@ -39,6 +42,7 @@ export function ExamAttemptView({
   offsetMs,
   connected,
   proctored,
+  media,
   onViewChange,
 }: ExamAttemptViewProps) {
   const attempt = view.attempt;
@@ -203,6 +207,18 @@ export function ExamAttemptView({
 
   return (
     <PlayStage width="lg">
+      {proctored && media && (media.camera || media.mic) && (
+        <MediaProctorLayer
+          socket={socket}
+          room={{
+            proctorCamera: media.camera,
+            proctorMic: media.mic,
+            proctorFlagLimit: media.flagLimit,
+          }}
+          active={!submitting}
+          now={() => Date.now() + offsetRef.current}
+        />
+      )}
       {proctored && proctor.fullscreenLost && (
         <div
           role="alertdialog"

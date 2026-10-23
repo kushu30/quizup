@@ -22,6 +22,7 @@ function row(participantId: string, displayName: string): ExamProgressRow {
     proctorEventCount: 0,
     droppedEvents: 0,
     score: null,
+    autoSubmitted: false,
   };
 }
 
@@ -59,5 +60,24 @@ describe('ExamProgressTable device column', () => {
     );
     expect(screen.queryByRole('columnheader', { name: 'Proctor events' })).toBeNull();
     expect(screen.getByRole('columnheader', { name: 'Score' })).toBeTruthy();
+  });
+});
+
+describe('ExamProgressTable auto-submit marker', () => {
+  it('marks an exam that proctoring submitted, and only that one', () => {
+    render(
+      <ExamProgressTable
+        rows={[
+          { ...row(ADA, 'Ada'), status: 'submitted', autoSubmitted: true },
+          { ...row(GRACE, 'Grace'), status: 'submitted' },
+        ]}
+        devicesById={{}}
+        proctored
+        offsetMs={0}
+        selectedId={null}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.getAllByText('Auto-submitted by proctoring')).toHaveLength(1);
   });
 });

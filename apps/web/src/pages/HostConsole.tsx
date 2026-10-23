@@ -795,9 +795,9 @@ export function HostConsole() {
           kind={isExam ? 'exam' : 'live'}
           busy={busy}
           onCancel={() => setChoosingProctoring(false)}
-          onChoose={(proctored) => {
+          onChoose={(choice) => {
             setChoosingProctoring(false);
-            void runCommand(() => api.startSession(sessionId, { proctored }));
+            void runCommand(() => api.startSession(sessionId, choice));
           }}
         />
       )}

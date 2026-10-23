@@ -1,5 +1,9 @@
-import type { ExamStudentView } from '@quizup/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import {
+  EXAM_CONSENT_MEDIA_VERSION,
+  EXAM_CONSENT_VERSION,
+  type ExamStudentView,
+} from '@quizup/shared';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QuizSocket } from '../../lib/socket';
@@ -129,5 +133,65 @@ describe('ExamPlay navigation', () => {
     cleanup();
     renderInLayout(viewIn('submitted'));
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeTruthy();
+  });
+});
+
+describe('ExamPlay camera and microphone', () => {
+  function renderWith(
+    phase: ExamStudentView['phase'],
+    extra: Partial<React.ComponentProps<typeof ExamPlay>> = {},
+  ) {
+    const emit = vi.fn();
+    const socket = { emit, on: vi.fn(), off: vi.fn() } as unknown as QuizSocket;
+    render(
+      <ExamPlay
+        socket={socket}
+        view={viewIn(phase)}
+        displayName="Ada"
+        offsetMs={0}
+        connected
+        proctored
+        onViewChange={() => undefined}
+        {...extra}
+      />,
+    );
+    return emit;
+  }
+
+  it('accepts with the media consent version when the camera is on', () => {
+    const emit = renderWith('consent', {
+      media: { camera: true, mic: false, flagLimit: 10 },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /accept and start the exam/i }));
+    expect(emit).toHaveBeenCalledWith(
+      'exam:start',
+      { consentVersion: EXAM_CONSENT_MEDIA_VERSION },
+      expect.any(Function),
+    );
+    expect(
+      screen.getByText('If you are flagged 10 times, your exam is submitted automatically.'),
+    ).toBeTruthy();
+  });
+
+  it('accepts with the ordinary consent version when no device is on', () => {
+    const emit = renderWith('consent');
+    fireEvent.click(screen.getByRole('button', { name: /accept and start the exam/i }));
+    expect(emit).toHaveBeenCalledWith(
+      'exam:start',
+      { consentVersion: EXAM_CONSENT_VERSION },
+      expect.any(Function),
+    );
+  });
+
+  it('explains an exam that proctoring submitted', () => {
+    renderWith('submitted', { submitReason: 'proctor_limit' });
+    expect(
+      screen.getByText(/submitted because it reached the proctoring flag limit/i),
+    ).toBeTruthy();
+  });
+
+  it('says nothing special for an ordinary submit', () => {
+    renderWith('submitted', { submitReason: 'student' });
+    expect(screen.queryByText(/flag limit/i)).toBeNull();
   });
 });
