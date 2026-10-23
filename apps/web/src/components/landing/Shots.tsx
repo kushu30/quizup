@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { JoinQr } from '../JoinQr';
 
 // Stand-ins for product screenshots in the "How it works" cards: small, static renderings of
 // the editor, the host's join screen and the session summary, cropped like a screenshot.
@@ -90,38 +91,24 @@ export function EditorShot() {
   );
 }
 
-// A QR-looking grid, drawn from a fixed pattern so it never changes between renders.
-function QrMock() {
-  const size = 11;
-  const cells = Array.from({ length: size * size }, (_, index) => {
-    const row = Math.floor(index / size);
-    const col = index % size;
-    const finder = (row < 3 && col < 3) || (row < 3 && col > 7) || (row > 7 && col < 3);
-    return finder || (row * 7 + col * 13 + row * col) % 3 === 0;
-  });
-  return (
-    <div
-      className="grid gap-px rounded-md bg-white p-1.5 shadow-[inset_0_0_0_1px_rgba(17,16,20,0.1)]"
-      style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
-    >
-      {cells.map((on, index) => (
-        <span key={index} className={`aspect-square ${on ? 'bg-night' : 'bg-transparent'}`} />
-      ))}
-    </div>
-  );
-}
+const SAMPLE_CODE = 'K7M2QX';
+
+// The site shown in the sample link and encoded in the QR. Fixed, so the illustration reads the
+// same in local development and in production.
+const SAMPLE_SITE = 'quizup.kushu30.me';
 
 export function CodeShot() {
+  const joinUrl = `https://${SAMPLE_SITE}/join/${SAMPLE_CODE}`;
   return (
     <Window title="Live session, lobby">
-      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] items-center gap-5 p-4 sm:p-5">
+      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-5 p-4 sm:p-5">
         <div>
           <p className="text-[11px] text-night/45">Join code</p>
           <p className="mt-1 font-geist-mono text-[2rem] leading-none font-medium tracking-[0.16em]">
-            K7M2QX
+            {SAMPLE_CODE}
           </p>
           <p className="mt-3 flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[11px] text-night/55 shadow-[inset_0_0_0_1px_rgba(17,16,20,0.1)]">
-            <span className="truncate">quizup.app/join/K7M2QX</span>
+            <span className="truncate">{joinUrl.replace(/^https?:\/\//, '')}</span>
             <span className="font-medium text-night">Copy</span>
           </p>
           <p className="mt-4 text-[11px] text-night/45">4 in the lobby</p>
@@ -133,7 +120,9 @@ export function CodeShot() {
             ))}
           </ul>
         </div>
-        <QrMock />
+        <div className="overflow-hidden rounded-md bg-white shadow-[inset_0_0_0_1px_rgba(17,16,20,0.1)]">
+          <JoinQr url={joinUrl} />
+        </div>
       </div>
     </Window>
   );

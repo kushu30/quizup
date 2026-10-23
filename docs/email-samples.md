@@ -27,9 +27,9 @@ Hello Asha Rao,
 You have been invited to take Database systems mid-term. Use your personal link below to join. It works for you only.
 
 Open your personal link:
-https://quizup-khaki.vercel.app/join/K7M2QX#token=K5B8J-AH9JV
+https://quizup.kushu30.me/join/K7M2QX#token=K5B8J-AH9JV
 
-Or go to https://quizup-khaki.vercel.app/join and enter:
+Or go to https://quizup.kushu30.me/join and enter:
 Join code: K7M2QX
 Access token: K5B8J-AH9JV
 
@@ -37,7 +37,7 @@ This link and token are personal to you. Please do not share them. Each admits o
 
 Optional: create a free account
 A QuizUp account keeps your results in one place. Sign in before you join and each assessment appears under My results, with your score and rank. You can take this assessment without one.
-Create an account: https://quizup-khaki.vercel.app/login?mode=sign-up&email=asha.rao%40example.com
+Create an account: https://quizup.kushu30.me/login?mode=sign-up&email=asha.rao%40example.com
 
 Sent on behalf of Dayananda Sagar College of Engineering using QuizUp.
 ```
@@ -55,9 +55,9 @@ Hello Ben Cole,
 You have been invited to take Fractions review. Use your personal link below to join. It works for you only.
 
 Open your personal link:
-https://quizup-khaki.vercel.app/join/P4T9WD#token=QD7MN-X2K4R
+https://quizup.kushu30.me/join/P4T9WD#token=QD7MN-X2K4R
 
-Or go to https://quizup-khaki.vercel.app/join and enter:
+Or go to https://quizup.kushu30.me/join and enter:
 Join code: P4T9WD
 Access token: QD7MN-X2K4R
 
@@ -65,7 +65,7 @@ This link and token are personal to you. Please do not share them. Each admits o
 
 You already have a QuizUp account
 Sign in before you join and this result is saved under My results.
-Sign in: https://quizup-khaki.vercel.app/login?email=ben.cole%40example.com
+Sign in: https://quizup.kushu30.me/login?email=ben.cole%40example.com
 
 Sent by QuizUp.
 ```
@@ -83,9 +83,9 @@ Hello Priya Nair,
 You have been invited to take Operating systems quiz. Use your personal link below to join. It works for you only.
 
 Open your personal link:
-https://quizup-khaki.vercel.app/join/B6H3ZE#token=M8C2F-PW5TG
+https://quizup.kushu30.me/join/B6H3ZE#token=M8C2F-PW5TG
 
-Or go to https://quizup-khaki.vercel.app/join and enter:
+Or go to https://quizup.kushu30.me/join and enter:
 Join code: B6H3ZE
 Access token: M8C2F-PW5TG
 
@@ -93,7 +93,7 @@ This link and token are personal to you. Please do not share them. Each admits o
 
 Optional: create a free account
 A QuizUp account keeps your results in one place. Sign in before you join and each assessment appears under My results, with your score and rank. You can take this assessment without one.
-Create an account: https://quizup-khaki.vercel.app/login?mode=sign-up&email=priya.nair%40example.com
+Create an account: https://quizup.kushu30.me/login?mode=sign-up&email=priya.nair%40example.com
 
 Sent on behalf of Lincoln High School using QuizUp.
 ```
@@ -110,12 +110,12 @@ Dear Chen Wei,
 
 The mid-term takes place on Friday at 10:00 in Lab 3. Please bring a charged laptop and your college ID.
 
-Your personal link is https://quizup-khaki.vercel.app/join/K7M2QX#token=W3R7T-NB6YH. Open it when the exam starts.
+Your personal link is https://quizup.kushu30.me/join/K7M2QX#token=W3R7T-NB6YH. Open it when the exam starts.
 
 Open your personal link:
-https://quizup-khaki.vercel.app/join/K7M2QX#token=W3R7T-NB6YH
+https://quizup.kushu30.me/join/K7M2QX#token=W3R7T-NB6YH
 
-Or go to https://quizup-khaki.vercel.app/join and enter:
+Or go to https://quizup.kushu30.me/join and enter:
 Join code: K7M2QX
 Access token: W3R7T-NB6YH
 
@@ -140,7 +140,7 @@ As a host you can:
 - Invite students with personal access tokens and review results, feedback and exports
 
 To use it, create your account with this email address (meera.iyer@school.org). Host access is tied to the same email address, so please do not use another. You choose your name and a password on the next page.
-https://quizup-khaki.vercel.app/login?mode=sign-up&email=meera.iyer%40school.org&invite=host
+https://quizup.kushu30.me/login?mode=sign-up&email=meera.iyer%40school.org&invite=host
 
 If you were not expecting this, you can ignore this email.
 
@@ -163,7 +163,7 @@ As a host you can:
 - Invite students with personal access tokens and review results, feedback and exports
 
 Sign in with this email address to open your dashboard.
-https://quizup-khaki.vercel.app/login?email=arjun.mehta%40school.org&invite=host
+https://quizup.kushu30.me/login?email=arjun.mehta%40school.org&invite=host
 
 If you were not expecting this, you can ignore this email.
 

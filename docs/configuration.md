@@ -79,3 +79,19 @@ Utilities (not part of CI):
 `npm test` runs unit tests and integration tests that boot the real server with an in-memory repository and several socket clients, so no database is needed. CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and build, and applies every migration to a fresh Supabase.
 
 Live session state (current question, timers, who answered) lives in the memory of one server process, so run a single instance. On boot every session that is not ended is marked ended, so a restart ends any running session.
+
+## Domains
+
+The production address is **https://quizup.kushu30.me**. The Vercel address (`quizup-khaki.vercel.app`) stays as a backup and `http://localhost:5173` is for local development. The app has no address hardcoded; set these in each place:
+
+| Where                                        | Setting                       | Value                                                                             |
+| -------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| Vercel (project, Domains)                    | Add domain                    | `quizup.kushu30.me`                                                               |
+| DNS (Namecheap)                              | `CNAME` record, host `quizup` | the target Vercel shows (usually `cname.vercel-dns.com`)                          |
+| Render (server env)                          | `CORS_ORIGINS`                | `https://quizup.kushu30.me,https://quizup-khaki.vercel.app,http://localhost:5173` |
+| Render (server env)                          | `APP_URL`                     | `https://quizup.kushu30.me`                                                       |
+| Supabase (Authentication, URL Configuration) | Site URL                      | `https://quizup.kushu30.me`                                                       |
+| Supabase (same page)                         | Redirect URLs                 | the three addresses above, each with `/**`                                        |
+| Web env (Vercel)                             | `VITE_SERVER_URL`             | unchanged (the API address)                                                       |
+
+`CORS_ORIGINS` also governs the live socket connection. List addresses exactly as the browser shows them, with `https://` and no trailing slash. The first entry is the fallback when `APP_URL` is empty. `APP_URL` decides the links and logos in emails, so set it to the production domain only once it opens.

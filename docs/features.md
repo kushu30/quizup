@@ -155,7 +155,7 @@ Brevo (free tier, no domain needed; check Brevo's page for the current daily lim
 1. Create a Brevo account, then open **SMTP & API** and the **SMTP** tab.
 2. Note the SMTP server (`smtp-relay.brevo.com`), the port (587) and the login Brevo shows you, and generate an **SMTP key** to use as the password.
 3. Under **Senders, domains and dedicated IPs** add and verify the address you want to send from; use it as `MAIL_FROM`.
-4. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, optionally `MAIL_FROM_NAME` and `MAIL_REPLY_TO`, and `APP_URL` (the public address of the web app, for example `https://quizup-khaki.vercel.app`). Restart the server.
+4. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, optionally `MAIL_FROM_NAME` and `MAIL_REPLY_TO`, and `APP_URL` (the public address of the web app, for example `https://quizup.kushu30.me`). Restart the server.
 
 Gmail also works for small classes: `smtp.gmail.com`, port 465 or 587, your address as user and sender, and an app password (not your normal password).
 
