@@ -123,7 +123,8 @@ describe('Host dashboard', () => {
   it('marks a quiz with an open session and lets the host copy its join link', async () => {
     renderHost();
     const fractions = await screen.findByRole('article', { name: 'Fractions' });
-    expect(within(fractions).getByText('Live now')).toBeTruthy();
+    expect(within(fractions).getByText('Waiting')).toBeTruthy();
+    expect(within(fractions).queryByText('Live now')).toBeNull();
     await act(async () => {
       fireEvent.click(within(fractions).getByRole('button', { name: 'Copy link' }));
     });
@@ -131,6 +132,16 @@ describe('Host dashboard', () => {
       `${window.location.origin}/join/K7M2QX`,
     );
     expect(within(card('Unit exam')).queryByRole('button', { name: 'Copy link' })).toBeNull();
+  });
+
+  it('shows Live now once the open session is running', async () => {
+    vi.mocked(api.getQuizActivity).mockResolvedValue([
+      { ...activity[0]!, latest: { ...activity[0]!.latest, status: 'running' } },
+    ]);
+    renderHost();
+    const fractions = await screen.findByRole('article', { name: 'Fractions' });
+    expect(within(fractions).getByText('Live now')).toBeTruthy();
+    expect(within(fractions).queryByText('Waiting')).toBeNull();
   });
 
   it('links to the editor and the history of each quiz', async () => {

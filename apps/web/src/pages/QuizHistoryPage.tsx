@@ -7,6 +7,7 @@ import { AuthNotice } from '../components/landing/AuthField';
 import { ctaLight, ctaSize, ctaSoft } from '../components/landing/cta';
 import { Frame, RULE } from '../components/landing/frame';
 import { QuizTypeIcon } from '../components/quizMeta';
+import { StatusPill } from '../components/ui';
 import { api, describeError } from '../lib/api';
 
 const STATUS_LABELS: Record<QuizSessionHistoryRow['status'], string> = {
@@ -261,14 +262,8 @@ export function QuizHistoryPage() {
 const CELL = 'px-3 py-3 font-medium';
 const ROW_CELL = 'px-3 py-4';
 
+const PILL_STATUS = { lobby: 'waiting', running: 'live', ended: 'ended' } as const;
+
 function StatusBadge({ status }: { status: QuizSessionHistoryRow['status'] }) {
-  if (status === 'ended') {
-    return <span className="text-night/55">{STATUS_LABELS.ended}</span>;
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-800 shadow-[inset_0_0_0_1px_var(--color-accent-200)]">
-      <span aria-hidden="true" className="h-1.5 w-1.5 animate-live rounded-full bg-accent-500" />
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <StatusPill status={PILL_STATUS[status]}>{STATUS_LABELS[status]}</StatusPill>;
 }

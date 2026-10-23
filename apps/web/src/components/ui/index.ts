@@ -4,3 +4,4 @@ export { Badge, Notice, type BadgeTone, type NoticeTone } from './feedback';
 export { PageHeader, Panel, TableFrame } from './layout';
 export { PageLoader, Skeleton, SkeletonList } from './Loader';
 export { Tooltip } from './Tooltip';
+export { StatusPill, type PillStatus } from './StatusPill';

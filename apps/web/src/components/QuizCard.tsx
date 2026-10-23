@@ -3,7 +3,7 @@ import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import { AppIcon, ICONS } from './app/icons';
 import { CopyButton } from './CopyButton';
-import { Tooltip } from './ui';
+import { StatusPill, Tooltip } from './ui';
 import { ctaLight, ctaQuiet, ctaSize, ctaSoft } from './landing/cta';
 import { Institution, QuizTypeIcon, TYPE_LABELS, quizTypeOf } from './quizMeta';
 
@@ -26,12 +26,11 @@ function runSummary(activity: QuizActivity | undefined): string {
     : sessions;
 }
 
-function LiveBadge() {
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-800 shadow-[inset_0_0_0_1px_var(--color-accent-200)]">
-      <span aria-hidden="true" className="h-1.5 w-1.5 animate-live rounded-full bg-accent-500" />
-      Live now
-    </span>
+function LiveBadge({ waiting }: { waiting: boolean }) {
+  return waiting ? (
+    <StatusPill status="waiting">Waiting</StatusPill>
+  ) : (
+    <StatusPill status="live">Live now</StatusPill>
   );
 }
 
@@ -57,7 +56,7 @@ export function QuizCard({ quiz, activity, running, onRun, onDelete }: QuizCardP
             >
               {quiz.title}
             </h2>
-            {open && <LiveBadge />}
+            {open && <LiveBadge waiting={activity.latest.status === 'lobby'} />}
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-night/55">
             <span>{TYPE_LABELS[type]}</span>
